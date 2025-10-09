@@ -5,12 +5,7 @@
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
-  import {
-    fetchNoaaTable,
-    parseNoaaTable,
-    buildNoaaDepthUrl,
-    type NoaaTable
-  } from './lib/noaaClient'
+  import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
   import { saveCsv, savePcswmmDat } from './lib/export'
 
@@ -32,9 +27,6 @@
 
   let lat = 40.4406
   let lon = -79.9959
-  let searchQuery = ''
-  let isSearching = false
-  let searchError = ''
 
   let autoFetch = true
   let fetchTimer: ReturnType<typeof setTimeout> | null = null
@@ -110,47 +102,6 @@
     fetchTimer = setTimeout(() => {
       void loadNoaa()
     }, delay)
-  }
-
-  async function searchLocation() {
-    if (isSearching) return
-    const query = searchQuery.trim()
-    if (!query) {
-      searchError = 'Enter a place to search.'
-      return
-    }
-    searchError = ''
-    isSearching = true
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
-        query
-      )}`
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error('Location search failed.')
-      }
-      const results: Array<{ lat: string; lon: string }> = await response.json()
-      if (!results.length) {
-        searchError = 'No results found for that query.'
-        return
-      }
-      const result = results[0]
-      const newLat = parseFloat(result.lat)
-      const newLon = parseFloat(result.lon)
-      if (!Number.isFinite(newLat) || !Number.isFinite(newLon)) {
-        searchError = 'Unable to use the selected location.'
-        return
-      }
-      lat = newLat
-      lon = newLon
-      lastFetchKey = ''
-      map?.setView([lat, lon], Math.max(map?.getZoom() ?? 9, 9))
-      searchError = ''
-    } catch (err: any) {
-      searchError = err?.message ?? 'Unable to search for that location.'
-    } finally {
-      isSearching = false
-    }
   }
 
   async function loadNoaa() {
@@ -437,40 +388,11 @@
 
   <div class="layout">
     <section class="column">
-      <div class="panel location-panel" class:has-table={!!table}>
+      <div class="panel">
         <h2 class="section-title">Location &amp; NOAA Depths</h2>
         <div class="map" bind:this={mapDiv}></div>
 
-        <div class="grid cols-3 location-inputs">
-          <div class="search-container">
-            <label for="location-search">Search</label>
-            <div class="search-controls">
-              <input
-                id="location-search"
-                type="text"
-                placeholder="City, address, or landmark"
-                bind:value={searchQuery}
-                on:input={() => (searchError = '')}
-                on:keydown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void searchLocation()
-                  }
-                }}
-              />
-              <button
-                type="button"
-                class="primary"
-                on:click={() => void searchLocation()}
-                disabled={isSearching}
-              >
-                {isSearching ? 'Searching…' : 'Search'}
-              </button>
-            </div>
-            {#if searchError}
-              <div class="search-error">{searchError}</div>
-            {/if}
-          </div>
+        <div class="grid cols-2">
           <div>
             <label for="lat">Latitude</label>
             <input id="lat" type="number" step="0.0001" bind:value={lat} on:change={() => (lastFetchKey = '')} />
@@ -494,19 +416,7 @@
           {#if isLoadingNoaa}
             <span>Fetching rainfall frequencies from NOAA Atlas 14…</span>
           {:else if noaaError}
-            <span class="error">
-              {noaaError}
-              {#if Number.isFinite(lat) && Number.isFinite(lon)}
-                <br />
-                <a
-                  href={buildNoaaDepthUrl(lat, lon)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open NOAA table directly
-                </a>
-              {/if}
-            </span>
+            <span class="error">{noaaError}</span>
           {:else if table}
             <span>Depths pulled for Atlas 14 (Partial Duration Series).</span>
           {:else}
@@ -562,15 +472,15 @@
         <div class="grid cols-3">
           <div>
             <label for="depth">Depth (in)</label>
-            <input id="depth" type="number" min="0" step="0.1" bind:value={selectedDepth} />
+            <input id="depth" type="number" min="0" step="0.001" bind:value={selectedDepth} />
           </div>
           <div>
             <label for="duration">Duration (hr)</label>
-            <input id="duration" type="number" min="0.1" step="0.5" bind:value={selectedDurationHr} />
+            <input id="duration" type="number" min="0.1" step="0.1" bind:value={selectedDurationHr} />
           </div>
           <div>
             <label for="timestep">Timestep (min)</label>
-            <input id="timestep" type="number" min="0.1" step="1" bind:value={timestepMin} />
+            <input id="timestep" type="number" min="0.1" step="0.1" bind:value={timestepMin} />
           </div>
         </div>
 
@@ -691,7 +601,7 @@
 </div>
 
 {#if showHelp}
-  <div class="modal-backdrop" role="presentation" on:click={closeHelp}>
+  <div class="modal-backdrop" role="presentation" on:click={closeHelp} on:keydown={handleKeydown}>
     <div
       class="modal"
       role="dialog"
@@ -782,10 +692,8 @@
   .layout {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: minmax(0, 1fr);
     gap: 16px;
     flex: 1;
-    min-height: 0;
   }
 
   .column {
@@ -810,56 +718,6 @@
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 12px;
-  }
-
-  .location-panel {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .location-panel.has-table {
-    flex: 1;
-  }
-
-  .grid.location-inputs {
-    grid-template-columns: minmax(260px, 1.6fr) repeat(2, minmax(120px, 1fr));
-    align-items: end;
-  }
-
-  .search-container {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .search-controls {
-    display: flex;
-    gap: 8px;
-  }
-
-  .search-controls button {
-    white-space: nowrap;
-  }
-
-  .search-error {
-    font-size: 12px;
-    color: var(--err);
-  }
-
-  @media (max-width: 880px) {
-    .grid.location-inputs {
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    }
-
-    .search-controls {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .search-controls button {
-      width: 100%;
-    }
   }
 
   .options-row {
@@ -897,10 +755,6 @@
     margin-top: 16px;
     padding: 0;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
   }
 
   .table-header,
@@ -921,8 +775,7 @@
   }
 
   .table-body {
-    flex: 1;
-    min-height: 0;
+    max-height: 320px;
     overflow: auto;
   }
 
@@ -1163,21 +1016,6 @@
   @media (max-width: 1024px) {
     .layout {
       grid-template-columns: 1fr;
-      grid-template-rows: auto;
-    }
-
-    .location-panel.has-table {
-      flex: 0 0 auto;
-    }
-
-    .noaa-table {
-      flex: 0 0 auto;
-      min-height: 0;
-    }
-
-    .table-body {
-      flex: 0 0 auto;
-      max-height: 320px;
     }
 
     .plot-area {
