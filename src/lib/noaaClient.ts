@@ -8,7 +8,7 @@ export interface NoaaTable {
 }
 
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
-  // Use the direct proxy path
+  // Use the local proxy server, note the updated path
   const url = `/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
