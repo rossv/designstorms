@@ -104,9 +104,35 @@
   <div class="panel" style="display:flex; flex-direction:column; gap:12px;">
     <div id="map" bind:this={mapDiv} style="height:300px; border-radius:12px; overflow:hidden;"></div>
     <div class="grid cols-3">
-      <div><label>Lat</label><input type="number" step="0.000001" bind:value={lat}></div>
-      <div><label>Lon</label><input type="number" step="0.000001" bind:value={lon}></div>
-      <div style="display:flex; align-items:end;"><button class="primary" on:click={loadNoaa}>Get NOAA Table</button></div>
+      <div>
+        <label for="depth">Depth (in)</label>
+        <input id="depth" type="number" min="0" step="0.001" bind:value={selectedDepth} />
+      </div>
+      <div>
+        <label for="dur">Duration (hr)</label>
+        <input id="dur" type="number" min="0.1" step="0.1" bind:value={selectedDurationHr} />
+      </div>
+      <div>
+        <label for="step">Timestep (min)</label>
+        <input id="step" type="number" min="0.1" step="0.1" bind:value={timestepMin} />
+      </div>
+    </div>
+    
+    <div class="grid cols-3">
+      <div>
+        <label for="dist">Distribution</label>
+        <select id="dist" bind:value={distribution}>
+          ...
+        </select>
+      </div>
+      <div>
+        <label for="start">Start (ISO)</label>
+        <input id="start" type="datetime-local" bind:value={startISO} />
+      </div>
+      <div>
+        <label for="curve">Custom Curve CSV</label>
+        <input id="curve" placeholder="t (0..1), cum (0..1)" bind:value={customCurveCsv} />
+      </div>
     </div>
 
     {#if table}
