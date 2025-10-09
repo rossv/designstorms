@@ -1,7 +1,7 @@
 /* Auto-generated or hand-authored SCS/Huff curve data */
 
 export const SCS_TABLES: Record<string, number[]> = {
-  // Optional: you can leave these empty to rely on Beta fallback.
+  // Tables must contain data points; empty arrays will cause interpolation to fail.
   scs_type_i:   [
         0.0000, 0.0017, 0.0035, 0.0052, 0.0070, 0.0087, 0.0105, 0.0122, 0.0139,
         0.0157, 0.0174, 0.0192, 0.0210, 0.0227, 0.0245, 0.0262, 0.0280, 0.0297,
