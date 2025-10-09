@@ -591,8 +591,8 @@
     if (!lastStorm) return
     const startDate = startISO ? new Date(startISO) : null
     const start = startDate && !Number.isNaN(startDate.getTime())
-      ? startDate.toISOString()
-      : '2003-01-01T00:00:00Z'
+      ? startISO
+      : '2003-01-01T00:00'
     savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat', 'System', start)
   }
 
