@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import * as L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
@@ -43,6 +43,8 @@
   let distribution: DistributionName = 'scs_type_ii'
   let startISO = '2003-01-01T00:00'
   let customCurveCsv = ''
+  let showHelp = false
+  let helpDialog: HTMLDivElement | null = null
 
   let isLoadingNoaa = false
   let noaaError = ''
@@ -231,6 +233,23 @@
     savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat')
   }
 
+  async function openHelp() {
+    showHelp = true
+    await tick()
+    helpDialog?.focus()
+  }
+
+  function closeHelp() {
+    showHelp = false
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && showHelp) {
+      event.preventDefault()
+      closeHelp()
+    }
+  }
+
   onMount(() => {
     map = L.map(mapDiv, { attributionControl: false, zoomControl: true }).setView(
       [lat, lon],
@@ -274,6 +293,8 @@
     }
   }
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <div class="page">
   <header class="panel header">
@@ -429,6 +450,7 @@
           <button class="primary" on:click={makeStorm}>Generate Storm</button>
           <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
           <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
+          <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
 
         <div class="stats">
@@ -458,6 +480,56 @@
     </section>
   </div>
 </div>
+
+{#if showHelp}
+  <div class="modal-backdrop" role="presentation" on:click={closeHelp}>
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="help-title"
+      tabindex="-1"
+      bind:this={helpDialog}
+      on:click|stopPropagation
+    >
+      <div class="modal-content">
+        <h2 id="help-title">Design Storm Generator</h2>
+        <p>
+          <strong>Purpose.</strong>
+          Build synthetic hyetographs from NOAA Atlas 14 depths and temporal patterns. SCS storm types use
+          official NRCS dimensionless cumulative rainfall tables; other presets rely on Beta(α,β) shapes.
+          Optionally, supply a custom cumulative curve (CSV).
+        </p>
+        <h3>Workflow</h3>
+        <ol>
+          <li>Pick a location on the map (NOAA table refreshes automatically).</li>
+          <li>Click a cell in the NOAA table to set <em>Return period</em>, <em>Depth</em>, and <em>Duration</em>.</li>
+          <li>
+            Choose a distribution (SCS types use dimensionless tables; Huff quartiles use Beta
+            approximations).
+          </li>
+          <li>Export CSV / DAT (DAT always in in/hr).</li>
+        </ol>
+        <h3>Interpolation</h3>
+        <p>
+          NOAA table selections populate the inputs with matching depth, duration, and ARI. Adjusting the ARI
+          dropdown re-applies the NOAA depth for the chosen duration when data is available, while manual
+          edits always remain editable.
+        </p>
+        <h3>Methods</h3>
+        <p>
+          Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
+          II, III) resampled to the storm duration or from predefined Beta(α,β) distributions on [0,1] for the
+          remaining presets. No circular shifting is applied. User-supplied curves are normalized and
+          resampled.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" on:click={closeHelp}>Close</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   :global(.leaflet-pane) {
@@ -664,6 +736,8 @@
     display: flex;
     gap: 10px;
     margin: 14px 0;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .plot {
@@ -699,6 +773,72 @@
     margin-top: 6px;
     font-size: 20px;
     font-weight: 600;
+  }
+
+  button.ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: inherit;
+  }
+
+  button.ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .help-button {
+    margin-left: auto;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 12, 18, 0.78);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    z-index: 1000;
+  }
+
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    max-width: 720px;
+    width: min(720px, 100%);
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    padding: 24px 24px 16px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+    outline: none;
+  }
+
+  .modal-content h2 {
+    margin-top: 0;
+  }
+
+  .modal-content h3 {
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+
+  .modal-content p {
+    line-height: 1.6;
+  }
+
+  .modal-content ol {
+    padding-left: 20px;
+  }
+
+  .modal-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .modal-actions button {
+    min-width: 90px;
   }
 
   @media (max-width: 1024px) {
