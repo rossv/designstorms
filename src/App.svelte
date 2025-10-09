@@ -732,46 +732,51 @@
         </div>
 
         {#if table}
-          <div class="noaa-table panel">
-            <div class="table-header">
-              <div>
-                <strong>Duration</strong>
+          <div class="noaa-table-scroll">
+            <div class="noaa-table panel">
+              <div class="table-header">
+                <div>
+                  <strong>Duration</strong>
+                </div>
+                <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
+                  {#each aris as a}
+                    <div><strong>{a}</strong></div>
+                  {/each}
+                </div>
               </div>
-              <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
-                {#each aris as a}
-                  <div><strong>{a}</strong></div>
-                {/each}
-              </div>
-            </div>
-            <div class="table-body">
-              {#each table.rows as row}
-                <div class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''}`}>
-                  <div>
-                    <button
-                      type="button"
-                      class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
-                      on:click={() => pickCell(row.label, String(selectedAri))}
-                    >
-                      {row.label}
-                    </button>
-                  </div>
-                  <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
-                    {#each aris as a}
+              <div class="table-body">
+                {#each table.rows as row}
+                  <div class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''}`}>
+                    <div>
                       <button
                         type="button"
-                        class={`table-button cell ${
-                          selectedDurationLabel === row.label && String(selectedAri) === a
-                            ? 'selected'
-                            : ''
-                        } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
-                        on:click={() => pickCell(row.label, a)}
+                        class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
+                        on:click={() => pickCell(row.label, String(selectedAri))}
                       >
-                        {Number.isFinite(row.values[a]) ? row.values[a].toFixed(3) : ''}
+                        {row.label}
                       </button>
-                    {/each}
+                    </div>
+                    <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
+                      {#each aris as a}
+                        {@const depth = Number.isFinite(row.values[a]) ? row.values[a].toFixed(3) : ''}
+                        <button
+                          type="button"
+                          class={`table-button cell ${
+                            selectedDurationLabel === row.label && String(selectedAri) === a
+                              ? 'selected'
+                              : ''
+                          } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
+                          data-ari={a}
+                          aria-label={`${a}-year ARI depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
+                          on:click={() => pickCell(row.label, a)}
+                        >
+                        {depth}
+                        </button>
+                      {/each}
+                    </div>
                   </div>
-                </div>
-              {/each}
+                {/each}
+              </div>
             </div>
           </div>
           <div class="small">Tip: Click a table cell to apply the depth, duration, and ARI to the storm parameters.</div>
@@ -1171,16 +1176,24 @@
     color: var(--err);
   }
 
-  .noaa-table {
+  .noaa-table-scroll {
     margin-top: 16px;
+    border-radius: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .noaa-table {
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    width: max-content;
+    min-width: 100%;
   }
 
   .table-header,
   .table-row {
     display: grid;
-    grid-template-columns: 120px 1fr;
+    grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
   }
 
   .table-header {
@@ -1196,7 +1209,7 @@
 
   .table-body {
     max-height: 320px;
-    overflow: auto;
+    overflow-y: auto;
   }
 
   .table-row {
@@ -1243,6 +1256,7 @@
   .aris {
     gap: 0;
     border-left: 1px solid rgba(255, 255, 255, 0.04);
+    min-width: max-content;
   }
 
   .table-button.cell {
@@ -1280,6 +1294,98 @@
 
   textarea {
     resize: vertical;
+  }
+
+  @media (max-width: 600px) {
+    .noaa-table-scroll {
+      overflow-x: visible;
+    }
+
+    .noaa-table {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .table-header {
+      display: none;
+    }
+
+    .table-body {
+      max-height: none;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .table-row {
+      grid-template-columns: 1fr;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.02);
+      overflow: hidden;
+    }
+
+    .table-row > div {
+      padding: 0;
+    }
+
+    .table-row > div:first-child {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .table-row.active {
+      background: rgba(110, 231, 255, 0.06);
+    }
+
+    .duration-btn {
+      text-align: center;
+      padding: 14px;
+    }
+
+    .duration-btn.active {
+      background: rgba(110, 231, 255, 0.12);
+    }
+
+    .aris {
+      border-left: none;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .table-button.cell {
+      border-left: none;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      text-align: left;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .table-button.cell::before {
+      content: attr(data-ari) ' yr ARI';
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .table-button.cell.selected,
+    .table-button.cell.interpolated {
+      color: #04131c;
+    }
+
+    .table-button.cell.selected::before,
+    .table-button.cell.interpolated::before {
+      color: rgba(4, 19, 28, 0.7);
+    }
   }
 
   .actions {
