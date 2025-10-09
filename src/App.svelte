@@ -353,9 +353,7 @@
           <div class="small">Tip: Click a table cell to apply the depth, duration, and ARI to the storm parameters.</div>
         {/if}
       </div>
-    </section>
 
-    <section class="column">
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
         <div class="grid cols-3">
@@ -437,7 +435,9 @@
           </div>
         </div>
       </div>
+    </section>
 
+    <section class="column">
       <div class="panel plot">
         <div bind:this={plotDiv1} class="plot-area"></div>
       </div>
@@ -489,7 +489,7 @@
 
   .layout {
     display: grid;
-    grid-template-columns: minmax(320px, 420px) 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     flex: 1;
   }
