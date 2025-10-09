@@ -8,19 +8,12 @@ export interface NoaaTable {
 }
 
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
-  // The original URL for the NOAA API
   const noaaApiUrl = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
-
   let fetchUrl = '';
 
-  // Vite's `import.meta.env.DEV` is true when running `npm run dev`
-  // and false when running `npm run build`
   if (import.meta.env.DEV) {
-    // In development, use the local proxy path from vite.config.ts
     fetchUrl = `/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
   } else {
-    // In production (GitHub Pages), use a public CORS proxy
-    // This service wraps our request and adds the required CORS headers
     fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(noaaApiUrl)}`;
   }
   
@@ -32,6 +25,9 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
 const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*:?$/i;
 
 export function parseNoaaTable(txt: string): NoaaTable | null {
+  // Log the raw text to the browser console for debugging
+  console.log("Raw NOAA Data:", txt);
+
   const lines = txt
     .split(/\r?\n/)
     .map((line) => line.trim())
