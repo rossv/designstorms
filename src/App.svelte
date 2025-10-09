@@ -437,7 +437,7 @@
 
   <div class="layout">
     <section class="column">
-      <div class="panel">
+      <div class="panel location-panel" class:has-table={!!table}>
         <h2 class="section-title">Location &amp; NOAA Depths</h2>
         <div class="map" bind:this={mapDiv}></div>
 
@@ -747,11 +747,18 @@
 
   .page {
     min-height: 100vh;
+    height: 100vh;
     padding: 18px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  @supports (height: 100dvh) {
+    .page {
+      height: 100dvh;
+    }
   }
 
   .header {
@@ -782,8 +789,11 @@
   .layout {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
     gap: 16px;
     flex: 1;
+    min-height: 0;
+    height: 100%;
   }
 
   .column {
@@ -808,6 +818,16 @@
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 12px;
+  }
+
+  .location-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .location-panel.has-table {
+    flex: 1;
   }
 
   .grid.location-inputs {
@@ -885,6 +905,10 @@
     margin-top: 16px;
     padding: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .table-header,
@@ -905,7 +929,8 @@
   }
 
   .table-body {
-    max-height: 320px;
+    flex: 1;
+    min-height: 0;
     overflow: auto;
   }
 
@@ -1144,8 +1169,28 @@
   }
 
   @media (max-width: 1024px) {
+    .page {
+      height: auto;
+    }
+
     .layout {
       grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      height: auto;
+    }
+
+    .location-panel.has-table {
+      flex: 0 0 auto;
+    }
+
+    .noaa-table {
+      flex: 0 0 auto;
+      min-height: 0;
+    }
+
+    .table-body {
+      flex: 0 0 auto;
+      max-height: 320px;
     }
 
     .plot-area {
