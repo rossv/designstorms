@@ -780,7 +780,7 @@
 
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
-        <div class="grid cols-3">
+        <div class="grid cols-3 form-grid">
           <div>
             <label for="depth">Depth (in)</label>
             <input
@@ -809,7 +809,7 @@
           </div>
         </div>
 
-        <div class="grid cols-3">
+        <div class="grid cols-3 form-grid">
           <div>
             <label for="dist">Distribution</label>
             <select id="dist" bind:value={distribution}>
@@ -866,7 +866,7 @@
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
 
-        <div class="stats">
+        <div class="stats grid cols-3">
           <div class="stat-box">
             <div class="stat-title">Total Depth</div>
             <div class="stat-value">{totalDepth.toFixed(3)} in</div>
@@ -1098,6 +1098,10 @@
     margin-top: 12px;
   }
 
+  .form-grid {
+    gap: 14px;
+  }
+
   .checkbox {
     display: flex;
     align-items: center;
@@ -1301,9 +1305,6 @@
   }
 
   .stats {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
     margin-top: 12px;
   }
 
@@ -1339,6 +1340,12 @@
 
   .help-button {
     margin-left: auto;
+  }
+
+  @media (max-width: 720px) {
+    .form-grid {
+      gap: 18px;
+    }
   }
 
   .modal-backdrop {
