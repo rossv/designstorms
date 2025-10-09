@@ -5,7 +5,12 @@
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
-  import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
+  import {
+    fetchNoaaTable,
+    parseNoaaTable,
+    buildNoaaDepthUrl,
+    type NoaaTable
+  } from './lib/noaaClient'
   import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
   import { saveCsv, savePcswmmDat } from './lib/export'
 
@@ -489,7 +494,19 @@
           {#if isLoadingNoaa}
             <span>Fetching rainfall frequencies from NOAA Atlas 14…</span>
           {:else if noaaError}
-            <span class="error">{noaaError}</span>
+            <span class="error">
+              {noaaError}
+              {#if Number.isFinite(lat) && Number.isFinite(lon)}
+                <br />
+                <a
+                  href={buildNoaaDepthUrl(lat, lon)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open NOAA table directly
+                </a>
+              {/if}
+            </span>
           {:else if table}
             <span>Depths pulled for Atlas 14 (Partial Duration Series).</span>
           {:else}

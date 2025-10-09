@@ -60,7 +60,8 @@ The app calls NOAA's free-text CSV endpoint directly from the browser:
 ```
 https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=<lat>&lon=<lon>&series=pds&units=english
 ```
-If CORS ever breaks, add a manual "Download CSV" flow or a tiny proxy.
+If CORS ever breaks, the app now falls back to a couple of public CORS proxies and
+links directly to the NOAA table so users can download it manually if needed.
 
 ## License
 MIT

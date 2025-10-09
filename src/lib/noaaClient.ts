@@ -7,11 +7,58 @@ export interface NoaaTable {
   rows: NoaaTableRow[]
 }
 
+export function buildNoaaDepthUrl(lat: number, lon: number): string {
+  const base = 'https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv'
+  const query = new URLSearchParams({
+    data: 'depth',
+    lat: lat.toFixed(6),
+    lon: lon.toFixed(6),
+    series: 'pds',
+    units: 'english'
+  })
+  return `${base}?${query.toString()}`
+}
+
+type UrlMutator = (url: string) => string
+
+const PROXY_CHAIN: UrlMutator[] = [
+  (url) => url,
+  (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url) => `https://r.jina.ai/https://${url.replace(/^https?:\/\//, '')}`
+]
+
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
-  const url = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`
-  const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-  return await resp.text()
+  const targetUrl = buildNoaaDepthUrl(lat, lon)
+  let lastError: Error | null = null
+
+  for (const mutate of PROXY_CHAIN) {
+    const url = mutate(targetUrl)
+    try {
+      const resp = await fetch(url, { cache: 'no-store' })
+      if (!resp.ok) {
+        lastError = new Error(`HTTP ${resp.status}`)
+        continue
+      }
+      const text = await resp.text()
+      if (!text.trim()) {
+        lastError = new Error('Empty response')
+        continue
+      }
+      return text
+    } catch (err: any) {
+      if (err instanceof Error) {
+        lastError = err
+      } else {
+        lastError = new Error(String(err))
+      }
+    }
+  }
+
+  throw new Error(
+    lastError?.message
+      ? `Unable to reach NOAA Atlas 14 service (${lastError.message}).`
+      : 'Unable to reach NOAA Atlas 14 service.'
+  )
 }
 
 const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*$/i
