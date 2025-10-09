@@ -8,7 +8,7 @@ export function saveCsv(storm: StormResult, filename='design_storm.csv') {
 
 export function savePcswmmDat(storm: StormResult, timestepMin: number, filename='design_storm.dat', gauge='System', startISO='2003-01-01T00:00:00Z') {
   const start = new Date(startISO)
-  let txt = ';Rainfall (in/hr)\n;PCSWMM generated rain gages file (please do not edit)\n'
+  let txt = ';Rainfall (in/hr)\n;PCSWMM generated rain gauges file (please do not edit)\n'
   for (let i=0;i<storm.intensityInHr.length;i++) {
     const ts = new Date(start.getTime() + (i+1)*timestepMin*60*1000)
     const y=ts.getUTCFullYear(), mo=ts.getUTCMonth()+1, d=ts.getUTCDate(), h=ts.getUTCHours(), m=ts.getUTCMinutes()

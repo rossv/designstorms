@@ -9,7 +9,7 @@ export interface NoaaTable {
 
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
   const url = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`
-  const resp = await fetch(url, { headers: { 'User-Agent': 'design-storm-web' } })
+  const resp = await fetch(url)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return await resp.text()
 }
