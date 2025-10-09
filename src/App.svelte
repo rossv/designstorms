@@ -1405,7 +1405,7 @@
   }
 
   .plot-area {
-    height: 260px;
+    height: clamp(220px, 40vh, 320px);
   }
 
   .results {
@@ -1418,7 +1418,8 @@
   .table-scroll {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: auto;
     max-height: none;
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -1598,7 +1599,26 @@
     }
 
     .plot-area {
-      height: 220px;
+      height: clamp(200px, 45vh, 280px);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .column {
+      gap: 14px;
+    }
+
+    .panel.plot {
+      padding: 10px;
+    }
+
+    .data-table {
+      font-size: 11px;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 6px 8px;
     }
   }
 </style>
