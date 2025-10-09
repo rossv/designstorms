@@ -7,6 +7,7 @@ export default defineConfig({
   base: '/designstorms/',
   server: {
     proxy: {
+      // Proxy requests to the NOAA API
       '/cgi-bin': {
         target: 'https://hdsc.nws.noaa.gov',
         changeOrigin: true,
