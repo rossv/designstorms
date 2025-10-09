@@ -28,6 +28,11 @@
   let lat = 40.4406
   let lon = -79.9959
 
+  let searchQuery = ''
+  let isSearchingLocation = false
+  let searchFeedback = ''
+  let searchHasError = false
+
   let autoFetch = true
   let fetchTimer: ReturnType<typeof setTimeout> | null = null
   let lastFetchKey = ''
@@ -102,6 +107,75 @@
     fetchTimer = setTimeout(() => {
       void loadNoaa()
     }, delay)
+  }
+
+  type NominatimResult = {
+    lat: string
+    lon: string
+    display_name?: string
+  }
+
+  async function searchLocation(event?: SubmitEvent) {
+    event?.preventDefault()
+    const query = searchQuery.trim()
+    if (!query) {
+      searchFeedback = 'Enter a city, address, or ZIP code to search.'
+      searchHasError = true
+      return
+    }
+
+    searchFeedback = ''
+    searchHasError = false
+    isSearchingLocation = true
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            Accept: 'application/json'
+          }
+        }
+      )
+      if (!response.ok) {
+        throw new Error('Search request failed')
+      }
+
+      const results: NominatimResult[] = await response.json()
+      const match = results[0]
+
+      if (!match) {
+        searchFeedback = 'No results found for that search.'
+        searchHasError = true
+        return
+      }
+
+      const nextLat = parseFloat(match.lat)
+      const nextLon = parseFloat(match.lon)
+
+      if (!Number.isFinite(nextLat) || !Number.isFinite(nextLon)) {
+        searchFeedback = 'Location data was returned in an unexpected format.'
+        searchHasError = true
+        return
+      }
+
+      lat = nextLat
+      lon = nextLon
+      lastFetchKey = ''
+      if (map) {
+        const zoom = map.getZoom()
+        map.setView([nextLat, nextLon], Math.max(zoom, 10))
+      }
+
+      searchFeedback = match.display_name
+        ? `Centered on ${match.display_name}`
+        : 'Location found. Map centered on the result.'
+    } catch (error) {
+      searchFeedback = 'Unable to search for that location right now.'
+      searchHasError = true
+    } finally {
+      isSearchingLocation = false
+    }
   }
 
   async function loadNoaa() {
@@ -390,6 +464,32 @@
     <section class="column">
       <div class="panel">
         <h2 class="section-title">Location &amp; NOAA Depths</h2>
+        <div class="location-search">
+          <form class="search-form" on:submit|preventDefault={searchLocation}>
+            <label for="location-query">Search for a city</label>
+            <div class="search-controls">
+              <input
+                id="location-query"
+                type="text"
+                placeholder="City, address, or ZIP"
+                bind:value={searchQuery}
+                on:input={() => {
+                  searchFeedback = ''
+                  searchHasError = false
+                }}
+              />
+              <button type="submit" disabled={isSearchingLocation}>
+                {isSearchingLocation ? 'Searching…' : 'Search'}
+              </button>
+            </div>
+          </form>
+          {#if searchFeedback}
+            <div class={`search-feedback ${searchHasError ? 'error' : ''}`}>
+              {searchFeedback}
+            </div>
+          {/if}
+        </div>
+
         <div class="map" bind:this={mapDiv}></div>
 
         <div class="grid cols-2">
@@ -711,6 +811,44 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted);
+  }
+
+  .location-search {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .location-search label {
+    font-size: 12px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .search-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .search-controls input[type='text'] {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .location-search button[type='submit'] {
+    white-space: nowrap;
+  }
+
+  .search-feedback {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .search-feedback.error {
+    color: var(--err);
   }
 
   .map {
