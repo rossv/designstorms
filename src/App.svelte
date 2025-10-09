@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import * as L from 'leaflet'
+  import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
+  import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
+  import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
@@ -12,6 +15,14 @@
 
   let map: L.Map
   let marker: L.Marker
+
+  const defaultMarkerIcons: Partial<L.IconOptions> = {
+    iconRetinaUrl: markerIcon2xUrl,
+    iconUrl: markerIconUrl,
+    shadowUrl: markerShadowUrl
+  }
+
+  L.Icon.Default.mergeOptions(defaultMarkerIcons)
 
   let lat = 40.4406
   let lon = -79.9959
