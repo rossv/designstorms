@@ -8,6 +8,7 @@
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
   import { saveCsv, savePcswmmDat } from './lib/export'
+  import NumericStepper from './lib/components/NumericStepper.svelte'
 
   let mapDiv: HTMLDivElement
   let plotDiv1: HTMLDivElement
@@ -495,11 +496,33 @@
         <div class="grid cols-2">
           <div>
             <label for="lat">Latitude</label>
-            <input id="lat" type="number" step="0.0001" bind:value={lat} on:change={() => (lastFetchKey = '')} />
+            <NumericStepper
+              inputId="lat"
+              label="Latitude"
+              bind:value={lat}
+              min={-90}
+              max={90}
+              step={0.0001}
+              on:change={() => {
+                lastFetchKey = ''
+                scheduleNoaaFetch()
+              }}
+            />
           </div>
           <div>
             <label for="lon">Longitude</label>
-            <input id="lon" type="number" step="0.0001" bind:value={lon} on:change={() => (lastFetchKey = '')} />
+            <NumericStepper
+              inputId="lon"
+              label="Longitude"
+              bind:value={lon}
+              min={-180}
+              max={180}
+              step={0.0001}
+              on:change={() => {
+                lastFetchKey = ''
+                scheduleNoaaFetch()
+              }}
+            />
           </div>
         </div>
 
@@ -572,15 +595,33 @@
         <div class="grid cols-3">
           <div>
             <label for="depth">Depth (in)</label>
-            <input id="depth" type="number" min="0" step="0.001" bind:value={selectedDepth} />
+            <NumericStepper
+              inputId="depth"
+              label="Depth"
+              bind:value={selectedDepth}
+              min={0}
+              step={0.001}
+            />
           </div>
           <div>
             <label for="duration">Duration (hr)</label>
-            <input id="duration" type="number" min="0.1" step="0.1" bind:value={selectedDurationHr} />
+            <NumericStepper
+              inputId="duration"
+              label="Duration"
+              bind:value={selectedDurationHr}
+              min={0.1}
+              step={0.1}
+            />
           </div>
           <div>
             <label for="timestep">Timestep (min)</label>
-            <input id="timestep" type="number" min="0.1" step="0.1" bind:value={timestepMin} />
+            <NumericStepper
+              inputId="timestep"
+              label="Timestep"
+              bind:value={timestepMin}
+              min={0.1}
+              step={0.1}
+            />
           </div>
         </div>
 
