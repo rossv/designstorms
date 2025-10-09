@@ -361,7 +361,6 @@
   <header class="panel header">
     <div>
       <h1>Design Storm Generator</h1>
-      <p class="small">Ported from the original Python tool. Adjust the map or inputs to refresh NOAA Atlas 14 rainfall depths and generate storm hyetographs.</p>
     </div>
     <div class="badge">Beta</div>
   </header>
