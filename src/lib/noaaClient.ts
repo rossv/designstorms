@@ -8,12 +8,15 @@ export interface NoaaTable {
 }
 
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
-  const noaaApiUrl = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+  // CORRECTED: The endpoint should be fe_text_mean.csv, not fe_text_depth.csv
+  const noaaApiUrl = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+
   let fetchUrl = '';
 
   if (import.meta.env.DEV) {
     // In development, use the local proxy path from vite.config.ts
-    fetchUrl = `/noaa-api/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+    // This now correctly points to the proxied version of fe_text_mean.csv
+    fetchUrl = `/noaa-api/fe_text_mean.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
   } else {
     // In production (GitHub Pages), use a public CORS proxy
     fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(noaaApiUrl)}`;
@@ -21,15 +24,17 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
   
   const resp = await fetch(fetchUrl);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: Failed to fetch`);
-  return await resp.text();
+  const txt = await resp.text();
+  
+  // Keep this log for now to confirm we are getting CSV data
+  console.log("Raw NOAA Data:", txt);
+
+  return txt;
 }
 
 const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*:?$/i;
 
 export function parseNoaaTable(txt: string): NoaaTable | null {
-  // This log is great for debugging. We can leave it for now.
-  console.log("Raw NOAA Data:", txt);
-
   const lines = txt
     .split(/\r?\n/)
     .map((line) => line.trim())
