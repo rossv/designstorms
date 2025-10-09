@@ -12,8 +12,10 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
   let fetchUrl = '';
 
   if (import.meta.env.DEV) {
-    fetchUrl = `/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+    // In development, use the local proxy path from vite.config.ts
+    fetchUrl = `/noaa-api/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
   } else {
+    // In production (GitHub Pages), use a public CORS proxy
     fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(noaaApiUrl)}`;
   }
   
@@ -25,7 +27,7 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
 const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*:?$/i;
 
 export function parseNoaaTable(txt: string): NoaaTable | null {
-  // Log the raw text to the browser console for debugging
+  // This log is great for debugging. We can leave it for now.
   console.log("Raw NOAA Data:", txt);
 
   const lines = txt
