@@ -1063,6 +1063,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   .search-controls input[type='text'] {
@@ -1084,7 +1085,7 @@
   }
 
   .map {
-    height: 260px;
+    height: clamp(240px, 32vh, 360px);
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 12px;
@@ -1096,6 +1097,7 @@
     justify-content: space-between;
     gap: 12px;
     margin-top: 12px;
+    flex-wrap: wrap;
   }
 
   .checkbox {
@@ -1391,6 +1393,42 @@
 
   .modal-actions button {
     min-width: 90px;
+  }
+
+  @media (max-width: 640px) {
+    .page {
+      padding: 16px;
+    }
+
+    .search-controls {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .search-controls button[type='submit'] {
+      align-self: flex-start;
+    }
+
+    .grid.cols-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .options-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .options-row button {
+      align-self: flex-start;
+    }
+
+    .map {
+      height: clamp(260px, 48vh, 420px);
+    }
   }
 
   @media (max-width: 1024px) {
