@@ -700,6 +700,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
   }
 
   .section-title {
@@ -860,7 +861,7 @@
   }
 
   .plot {
-    flex: 1;
+    flex: 0 0 auto;
   }
 
   .plot-area {
@@ -870,11 +871,15 @@
   .results {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .table-scroll {
-    max-height: 260px;
+    flex: 1;
+    min-height: 0;
     overflow: auto;
+    max-height: none;
     border: 1px solid var(--border);
     border-radius: 10px;
   }
