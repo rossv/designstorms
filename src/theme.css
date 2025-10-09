@@ -1,0 +1,54 @@
+:root {
+  --bg: #0f1115;
+  --panel: #161a22;
+  --text: #e7e7e7;
+  --muted: #9aa4b2;
+  --accent: #6ee7ff;
+  --ok: #22c55e;
+  --warn: #eab308;
+  --err: #ef4444;
+  --border: #2a2f3a;
+}
+
+html, body, #app { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+label { font-size: 12px; color: var(--muted); }
+input, select, button, textarea {
+  background: #0f131a;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+button.primary { background: var(--accent); color: #05121a; border: none; }
+.grid { display: grid; gap: 12px; }
+.grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th, .table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.table tr:hover { background: rgba(255,255,255,0.03); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.small { font-size: 12px; color: var(--muted); }
