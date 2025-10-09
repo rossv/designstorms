@@ -993,7 +993,7 @@
             Choose a distribution (SCS types use dimensionless tables; Huff quartiles use Beta
             approximations).
           </li>
-          <li>Export CSV / DAT (DAT always in in/hr).</li>
+          <li>Export CSV / DAT (DAT exports use in/hr rates).</li>
         </ol>
         <h3>Interpolation</h3>
         <p>

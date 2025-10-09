@@ -16,6 +16,9 @@ describe('generateStorm', () => {
     expect(storm.cumulativeIn.at(-1)).toBeCloseTo(3.25, 6)
     expect(storm.timeMin[0]).toBe(0)
     expect(storm.timeMin.at(-1)).toBe(minutes(2))
+    expect(storm.incrementalIn.reduce((sum, step) => sum + step, 0)).toBeCloseTo(3.25, 6)
+    expect(storm.incrementalIn.every((step) => step >= 0)).toBe(true)
+    expect(storm.intensityInHr.every((intensity) => intensity >= 0)).toBe(true)
   })
 
   it('interpolates custom user curve by timestep', () => {
