@@ -27,6 +27,9 @@
 
   let lat = 40.4406
   let lon = -79.9959
+  let searchQuery = ''
+  let isSearching = false
+  let searchError = ''
 
   let autoFetch = true
   let fetchTimer: ReturnType<typeof setTimeout> | null = null
@@ -102,6 +105,47 @@
     fetchTimer = setTimeout(() => {
       void loadNoaa()
     }, delay)
+  }
+
+  async function searchLocation() {
+    if (isSearching) return
+    const query = searchQuery.trim()
+    if (!query) {
+      searchError = 'Enter a place to search.'
+      return
+    }
+    searchError = ''
+    isSearching = true
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+        query
+      )}`
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error('Location search failed.')
+      }
+      const results: Array<{ lat: string; lon: string }> = await response.json()
+      if (!results.length) {
+        searchError = 'No results found for that query.'
+        return
+      }
+      const result = results[0]
+      const newLat = parseFloat(result.lat)
+      const newLon = parseFloat(result.lon)
+      if (!Number.isFinite(newLat) || !Number.isFinite(newLon)) {
+        searchError = 'Unable to use the selected location.'
+        return
+      }
+      lat = newLat
+      lon = newLon
+      lastFetchKey = ''
+      map?.setView([lat, lon], Math.max(map?.getZoom() ?? 9, 9))
+      searchError = ''
+    } catch (err: any) {
+      searchError = err?.message ?? 'Unable to search for that location.'
+    } finally {
+      isSearching = false
+    }
   }
 
   async function loadNoaa() {
@@ -392,7 +436,36 @@
         <h2 class="section-title">Location &amp; NOAA Depths</h2>
         <div class="map" bind:this={mapDiv}></div>
 
-        <div class="grid cols-2">
+        <div class="grid cols-3 location-inputs">
+          <div class="search-container">
+            <label for="location-search">Search</label>
+            <div class="search-controls">
+              <input
+                id="location-search"
+                type="text"
+                placeholder="City, address, or landmark"
+                bind:value={searchQuery}
+                on:input={() => (searchError = '')}
+                on:keydown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void searchLocation()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                class="primary"
+                on:click={() => void searchLocation()}
+                disabled={isSearching}
+              >
+                {isSearching ? 'Searching…' : 'Search'}
+              </button>
+            </div>
+            {#if searchError}
+              <div class="search-error">{searchError}</div>
+            {/if}
+          </div>
           <div>
             <label for="lat">Latitude</label>
             <input id="lat" type="number" step="0.0001" bind:value={lat} on:change={() => (lastFetchKey = '')} />
@@ -717,6 +790,46 @@
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 12px;
+  }
+
+  .grid.location-inputs {
+    grid-template-columns: minmax(260px, 1.6fr) repeat(2, minmax(120px, 1fr));
+    align-items: end;
+  }
+
+  .search-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .search-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .search-controls button {
+    white-space: nowrap;
+  }
+
+  .search-error {
+    font-size: 12px;
+    color: var(--err);
+  }
+
+  @media (max-width: 880px) {
+    .grid.location-inputs {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    .search-controls {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .search-controls button {
+      width: 100%;
+    }
   }
 
   .options-row {
