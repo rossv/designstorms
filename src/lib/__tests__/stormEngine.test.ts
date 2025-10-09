@@ -49,4 +49,19 @@ describe('generateStorm', () => {
       2
     ])
   })
+
+  it('handles zero-duration storms without NaNs', () => {
+    const storm = generateStorm({
+      depthIn: 1,
+      durationHr: 0,
+      timestepMin: 5,
+      distribution: 'scs_type_i',
+      customCurveCsv: ''
+    })
+
+    expect(storm.timeMin).toEqual([0])
+    expect(storm.cumulativeIn).toEqual([0])
+    expect(storm.incrementalIn).toEqual([0])
+    expect(storm.intensityInHr).toEqual([0])
+  })
 })
