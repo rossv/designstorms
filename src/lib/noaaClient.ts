@@ -8,42 +8,56 @@ export interface NoaaTable {
 }
 
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
-  // Use the local proxy server, note the updated path
-  const url = `/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`
-  const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-  return await resp.text()
+  // The original URL for the NOAA API
+  const noaaApiUrl = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+
+  let fetchUrl = '';
+
+  // Vite's `import.meta.env.DEV` is true when running `npm run dev`
+  // and false when running `npm run build`
+  if (import.meta.env.DEV) {
+    // In development, use the local proxy path from vite.config.ts
+    fetchUrl = `/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+  } else {
+    // In production (GitHub Pages), use a public CORS proxy
+    // This service wraps our request and adds the required CORS headers
+    fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(noaaApiUrl)}`;
+  }
+  
+  const resp = await fetch(fetchUrl);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: Failed to fetch`);
+  return await resp.text();
 }
 
-const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*:?$/i
+const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*:?$/i;
 
 export function parseNoaaTable(txt: string): NoaaTable | null {
   const lines = txt
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean)
-  const header = lines.find((line) => line.includes('ARI (years)'))
-  if (!header) return null
-  const headerTail = header.split('ARI (years)').pop() ?? ''
-  const aris = (headerTail.match(/\b\d+\b/g) ?? []).map((ari) => ari)
-  if (aris.length === 0) return null
+    .filter(Boolean);
+  const header = lines.find((line) => line.includes('ARI (years)'));
+  if (!header) return null;
+  const headerTail = header.split('ARI (years)').pop() ?? '';
+  const aris = (headerTail.match(/\b\d+\b/g) ?? []).map((ari) => ari);
+  if (aris.length === 0) return null;
 
-  const rows: NoaaTableRow[] = []
+  const rows: NoaaTableRow[] = [];
   for (const line of lines) {
-    const match = line.match(/^([^:]+):\s*(.*)$/)
-    if (!match) continue
-    const label = match[1].trim().replace(/:+$/, '')
-    if (!DURATION_RE.test(label)) continue
+    const match = line.match(/^([^:]+):\s*(.*)$/);
+    if (!match) continue;
+    const label = match[1].trim().replace(/:+$/, '');
+    if (!DURATION_RE.test(label)) continue;
 
-    const nums = (match[2].match(/[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g) ?? []).map(Number)
-    const values: Record<string, number> = {}
+    const nums = (match[2].match(/[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g) ?? []).map(Number);
+    const values: Record<string, number> = {};
     for (let i = 0; i < aris.length; i += 1) {
-      const val = nums[i]
-      values[aris[i]] = Number.isFinite(val) ? val : Number.NaN
+      const val = nums[i];
+      values[aris[i]] = Number.isFinite(val) ? val : Number.NaN;
     }
-    rows.push({ label, values })
+    rows.push({ label, values });
   }
 
-  if (rows.length === 0) return null
-  return { aris, rows }
+  if (rows.length === 0) return null;
+  return { aris, rows };
 }
