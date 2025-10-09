@@ -14,25 +14,35 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
   return await resp.text()
 }
 
-export function parseNoaaTable(txt: string) /*: NoaaTable | null*/ {
-  const lines = txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean)
-  const header = lines.find(l => l.includes('ARI (years)'))
-  if (!header) return null as any
-  const aris = (header.split('ARI (years)')[1] || '').match(/\b\d+\b/g) || []
-  if (aris.length === 0) return null as any
+const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*$/i
+
+export function parseNoaaTable(txt: string): NoaaTable | null {
+  const lines = txt
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const header = lines.find((line) => line.includes('ARI (years)'))
+  if (!header) return null
+  const headerTail = header.split('ARI (years)').pop() ?? ''
+  const aris = (headerTail.match(/\b\d+\b/g) ?? []).map((ari) => ari)
+  if (aris.length === 0) return null
+
   const rows: NoaaTableRow[] = []
-  for (const ln of lines) {
-    const m = ln.match(/^([^,;:]+?)\s*[:,-]\s*(.*)$/)
-    if (!m) continue
-    const label = m[1].trim().replace(/:+$/,'')
-    if (!/^\d+(?:\.\d+)?\s*(?:min|minutes|hr|hour|hours|day|days)$/i.test(label)) continue
-    const nums = (m[2].match(/[-+]?\d*\.\d+|[-+]?\d+/g) || []).map(Number)
-    const vals: Record<string, number> = {}
-    for (let i=0;i<aris.length;i++) {
-      vals[aris[i]] = Number.isFinite(nums[i]) ? nums[i] : NaN
+  for (const line of lines) {
+    const match = line.match(/^([^:]+):\s*(.*)$/)
+    if (!match) continue
+    const label = match[1].trim().replace(/:+$/, '')
+    if (!DURATION_RE.test(label)) continue
+
+    const nums = (match[2].match(/[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g) ?? []).map(Number)
+    const values: Record<string, number> = {}
+    for (let i = 0; i < aris.length; i += 1) {
+      const val = nums[i]
+      values[aris[i]] = Number.isFinite(val) ? val : Number.NaN
     }
-    rows.push({ label, values: vals })
+    rows.push({ label, values })
   }
-  if (rows.length === 0) return null as any
-  return { aris, rows } as any
+
+  if (rows.length === 0) return null
+  return { aris, rows }
 }
