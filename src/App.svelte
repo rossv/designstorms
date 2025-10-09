@@ -545,15 +545,15 @@
         <div class="grid cols-3">
           <div>
             <label for="depth">Depth (in)</label>
-            <input id="depth" type="number" min="0" step="0.001" bind:value={selectedDepth} />
+            <input id="depth" type="number" min="0" step="0.1" bind:value={selectedDepth} />
           </div>
           <div>
             <label for="duration">Duration (hr)</label>
-            <input id="duration" type="number" min="0.1" step="0.1" bind:value={selectedDurationHr} />
+            <input id="duration" type="number" min="0.1" step="0.5" bind:value={selectedDurationHr} />
           </div>
           <div>
             <label for="timestep">Timestep (min)</label>
-            <input id="timestep" type="number" min="0.1" step="0.1" bind:value={timestepMin} />
+            <input id="timestep" type="number" min="0.1" step="1" bind:value={timestepMin} />
           </div>
         </div>
 
