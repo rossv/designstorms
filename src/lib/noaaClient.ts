@@ -8,15 +8,14 @@ export interface NoaaTable {
 }
 
 export async function fetchNoaaTable(lat: number, lon: number): Promise<string> {
-  // CORRECTED: The endpoint should be fe_text_mean.csv, not fe_text_depth.csv
-  const noaaApiUrl = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+  // NOAA Atlas 14 depth tables live at fe_text_depth.csv; request the depth dataset directly.
+  const noaaApiUrl = `https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
 
   let fetchUrl = '';
 
   if (import.meta.env.DEV) {
-    // In development, use the local proxy path from vite.config.ts
-    // This now correctly points to the proxied version of fe_text_mean.csv
-    fetchUrl = `/noaa-api/fe_text_mean.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
+    // In development, use the local proxy path from vite.config.ts for the depth endpoint.
+    fetchUrl = `/noaa-api/fe_text_depth.csv?data=depth&lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&series=pds&units=english`;
   } else {
     // In production (GitHub Pages), use a public CORS proxy
     fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(noaaApiUrl)}`;
