@@ -40,6 +40,9 @@
   let selectedDepth = 1.0
   let selectedDurationHr = 24
 
+  let interpolatedCells: { duration: string; ari: string }[] = []
+  type NoaaRow = NoaaTable['rows'][number]
+
   let timestepMin = 5
   let distribution: DistributionName = 'scs_type_ii'
   let startISO = '2003-01-01T00:00'
@@ -128,7 +131,7 @@
       durations = parsed.rows.map((r) => r.label)
       aris = parsed.aris
       if (!aris.includes(String(selectedAri)) && aris.length) {
-        selectedAri = parseInt(aris[0], 10)
+        selectedAri = Number(aris[0])
       }
       if (
         !selectedDurationLabel ||
@@ -156,12 +159,13 @@
     if (!table) return
     selectedDurationLabel = durLabel
     selectedDurationHr = toHours(durLabel)
-    selectedAri = parseInt(ari, 10)
+    selectedAri = Number(ari)
     const row = table.rows.find((r) => r.label === durLabel)
     const depth = row?.values[ari]
     if (Number.isFinite(depth)) {
       selectedDepth = Number(depth)
     }
+    interpolatedCells = []
     makeStorm()
   }
 
@@ -176,13 +180,24 @@
   function applyNoaaSelection() {
     if (!table || !selectedDurationLabel) return
     const row = table.rows.find((r) => r.label === selectedDurationLabel)
+    if (!row) return
+    selectedDurationHr = toHours(selectedDurationLabel)
     const ariKey = String(selectedAri)
-    const depth = row?.values[ariKey]
-    if (Number.isFinite(depth)) {
-      selectedDepth = Number(depth)
-      selectedDurationHr = toHours(selectedDurationLabel)
+    const exactDepth = row.values[ariKey]
+    if (Number.isFinite(exactDepth)) {
+      selectedDepth = Number(exactDepth)
+      interpolatedCells = []
+      makeStorm()
+      return
     }
-    selectedAri = parseInt(ariKey, 10)
+    const interpolated = interpolateDepthFromAri(row, selectedAri)
+    if (interpolated) {
+      selectedDepth = interpolated.depth
+      interpolatedCells = interpolated.highlight ?? []
+      makeStorm()
+      return
+    }
+    interpolatedCells = []
     makeStorm()
   }
 
@@ -299,6 +314,198 @@
         plotConfig
       )
     }
+  }
+
+  function getRowForCalculation() {
+    if (!table) {
+      return { row: null as NoaaRow | null, label: null as string | null }
+    }
+    if (selectedDurationLabel) {
+      const existing = table.rows.find((r) => r.label === selectedDurationLabel)
+      if (existing) {
+        return { row: existing, label: existing.label }
+      }
+    }
+    return findClosestRow(selectedDurationHr)
+  }
+
+  function findClosestRow(durationHr: number) {
+    if (!table || !Number.isFinite(durationHr)) {
+      return { row: null as NoaaRow | null, label: null as string | null }
+    }
+    let bestRow: NoaaRow | null = null
+    let bestLabel: string | null = null
+    let bestDiff = Number.POSITIVE_INFINITY
+    for (const r of table.rows) {
+      const diff = Math.abs(toHours(r.label) - durationHr)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestRow = r
+        bestLabel = r.label
+      }
+    }
+    return { row: bestRow, label: bestLabel }
+  }
+
+  function getRowPoints(row: NoaaRow) {
+    if (!table) return [] as { key: string; ari: number; depth: number }[]
+    return table.aris
+      .map((key) => ({
+        key,
+        ari: Number.parseFloat(key),
+        depth: row.values[key]
+      }))
+      .filter((pt) => Number.isFinite(pt.ari) && Number.isFinite(pt.depth))
+      .sort((a, b) => a.ari - b.ari)
+  }
+
+  function interpolateAriFromDepth(
+    row: NoaaRow,
+    targetDepth: number
+  ) {
+    const points = getRowPoints(row)
+    if (!points.length || !Number.isFinite(targetDepth)) return null
+    if (targetDepth <= points[0].depth) {
+      return { ari: points[0].ari, highlight: null as { duration: string; ari: string }[] | null }
+    }
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i]
+      const b = points[i + 1]
+      const low = Math.min(a.depth, b.depth)
+      const high = Math.max(a.depth, b.depth)
+      if (targetDepth >= low && targetDepth <= high) {
+        const span = b.depth - a.depth
+        if (Math.abs(span) < 1e-9) {
+          return { ari: b.ari, highlight: null }
+        }
+        const ratio = (targetDepth - a.depth) / span
+        const interpolatedAri = a.ari + ratio * (b.ari - a.ari)
+        const highlight =
+          ratio > 0 && ratio < 1
+            ? [
+                { duration: row.label, ari: a.key },
+                { duration: row.label, ari: b.key }
+              ]
+            : null
+        return { ari: interpolatedAri, highlight }
+      }
+    }
+    const last = points[points.length - 1]
+    return { ari: last.ari, highlight: null }
+  }
+
+  function interpolateDepthFromAri(
+    row: NoaaRow,
+    targetAri: number
+  ) {
+    const points = getRowPoints(row)
+    if (!points.length || !Number.isFinite(targetAri)) return null
+    if (targetAri <= points[0].ari) {
+      return { depth: points[0].depth, highlight: null as { duration: string; ari: string }[] | null }
+    }
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i]
+      const b = points[i + 1]
+      if (targetAri >= a.ari && targetAri <= b.ari) {
+        const span = b.ari - a.ari
+        if (Math.abs(span) < 1e-9) {
+          return { depth: b.depth, highlight: null }
+        }
+        const ratio = (targetAri - a.ari) / span
+        const interpolatedDepth = a.depth + ratio * (b.depth - a.depth)
+        const highlight =
+          ratio > 0 && ratio < 1
+            ? [
+                { duration: row.label, ari: a.key },
+                { duration: row.label, ari: b.key }
+              ]
+            : null
+        return { depth: interpolatedDepth, highlight }
+      }
+    }
+    const last = points[points.length - 1]
+    return { depth: last.depth, highlight: null }
+  }
+
+  function cellIsInterpolated(durationLabel: string, ari: string) {
+    return interpolatedCells.some(
+      (cell) => cell.duration === durationLabel && cell.ari === ari
+    )
+  }
+
+  function recalcFromDepthOrDuration() {
+    if (!Number.isFinite(selectedDepth) || !Number.isFinite(selectedDurationHr)) {
+      return
+    }
+    if (!table) {
+      interpolatedCells = []
+      makeStorm()
+      return
+    }
+    const { row, label } = getRowForCalculation()
+    if (!row || !label) {
+      interpolatedCells = []
+      makeStorm()
+      return
+    }
+    if (selectedDurationLabel !== label) {
+      selectedDurationLabel = label
+    }
+    const result = interpolateAriFromDepth(row, selectedDepth)
+    if (result) {
+      const newAri = Number(result.ari.toFixed(3))
+      if (selectedAri !== newAri) {
+        selectedAri = newAri
+      }
+      interpolatedCells = result.highlight ?? []
+    } else {
+      interpolatedCells = []
+    }
+    makeStorm()
+  }
+
+  function recalcFromAri() {
+    if (!Number.isFinite(selectedAri) || !Number.isFinite(selectedDurationHr)) {
+      return
+    }
+    if (!table) {
+      interpolatedCells = []
+      return
+    }
+    const { row, label } = getRowForCalculation()
+    if (!row || !label) {
+      interpolatedCells = []
+      return
+    }
+    if (selectedDurationLabel !== label) {
+      selectedDurationLabel = label
+    }
+    const result = interpolateDepthFromAri(row, selectedAri)
+    if (result) {
+      const newDepth = Number(result.depth.toFixed(3))
+      if (selectedDepth !== newDepth) {
+        selectedDepth = newDepth
+        makeStorm()
+      } else {
+        makeStorm()
+      }
+      interpolatedCells = result.highlight ?? []
+    } else {
+      interpolatedCells = []
+      makeStorm()
+    }
+  }
+
+  function handleDepthInput() {
+    recalcFromDepthOrDuration()
+  }
+
+  function handleDurationInput() {
+    recalcFromDepthOrDuration()
+  }
+
+  function handleAriInput() {
+    recalcFromAri()
   }
 
   function doCsv() {
@@ -452,7 +659,11 @@
                     {#each aris as a}
                       <button
                         type="button"
-                        class={`table-button cell ${selectedDurationLabel === row.label && String(selectedAri) === a ? 'selected' : ''}`}
+                        class={`table-button cell ${
+                          selectedDurationLabel === row.label && String(selectedAri) === a
+                            ? 'selected'
+                            : ''
+                        } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
                         on:click={() => pickCell(row.label, a)}
                       >
                         {Number.isFinite(row.values[a]) ? row.values[a].toFixed(3) : ''}
@@ -472,11 +683,25 @@
         <div class="grid cols-3">
           <div>
             <label for="depth">Depth (in)</label>
-            <input id="depth" type="number" min="0" step="0.001" bind:value={selectedDepth} />
+            <input
+              id="depth"
+              type="number"
+              min="0"
+              step="0.001"
+              bind:value={selectedDepth}
+              on:input={handleDepthInput}
+            />
           </div>
           <div>
             <label for="duration">Duration (hr)</label>
-            <input id="duration" type="number" min="0.1" step="0.1" bind:value={selectedDurationHr} />
+            <input
+              id="duration"
+              type="number"
+              min="0.1"
+              step="0.1"
+              bind:value={selectedDurationHr}
+              on:input={handleDurationInput}
+            />
           </div>
           <div>
             <label for="timestep">Timestep (min)</label>
@@ -501,15 +726,22 @@
           </div>
           <div>
             <label for="ari">ARI (years)</label>
-            <select id="ari" bind:value={selectedAri} on:change={applyNoaaSelection}>
-              {#if aris.length}
+            <input
+              id="ari"
+              type="number"
+              min="0"
+              step="0.1"
+              bind:value={selectedAri}
+              on:input={handleAriInput}
+              list="ari-options"
+            />
+            {#if aris.length}
+              <datalist id="ari-options">
                 {#each aris as a}
-                  <option value={parseInt(a, 10)}>{a}</option>
+                  <option value={a}>{a}</option>
                 {/each}
-              {:else}
-                <option value={selectedAri}>{selectedAri}</option>
-              {/if}
-            </select>
+              </datalist>
+            {/if}
           </div>
           <div>
             <label for="start">Start (ISO)</label>
@@ -846,6 +1078,16 @@
 
   .table-button.cell.selected:hover {
     background: var(--accent);
+  }
+
+  .table-button.cell.interpolated {
+    background: rgba(249, 115, 22, 0.4);
+    color: #04131c;
+    font-weight: 600;
+  }
+
+  .table-button.cell.interpolated:hover {
+    background: rgba(249, 115, 22, 0.55);
   }
 
   textarea {
