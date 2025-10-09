@@ -12,6 +12,7 @@
   let mapDiv: HTMLDivElement
   let plotDiv1: HTMLDivElement
   let plotDiv2: HTMLDivElement
+  let plotDiv3: HTMLDivElement
 
   let map: L.Map
   let marker: L.Marker
@@ -72,6 +73,25 @@
 
   let peakIntensity = 0
   let totalDepth = 0
+  let timeAxis: number[] = []
+  let timeColumnLabel = 'Time (hr)'
+  let tableRows: {
+    time: number
+    intensity: number
+    incremental: number
+    cumulative: number
+    timestamp?: string
+  }[] = []
+  let hasTimestamp = false
+
+  function formatTimestamp(date: Date) {
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const year = date.getFullYear()
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    return `${month}-${day}-${year} ${hour}:${minute}`
+  }
 
   function scheduleNoaaFetch(delay = 700) {
     if (!autoFetch) return
@@ -177,49 +197,106 @@
     totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
     peakIntensity = Math.max(...lastStorm.intensityInHr)
 
-    Plotly.react(
-      plotDiv1,
-      [
-        {
-          x: lastStorm.timeMin,
-          y: lastStorm.intensityInHr,
-          type: 'scatter',
-          mode: 'lines',
-          name: 'Intensity (in/hr)',
-          line: { color: '#6ee7ff', width: 3 },
-          fill: 'tozeroy',
-          fillcolor: 'rgba(110, 231, 255, 0.2)'
-        }
-      ],
-      {
-        ...plotLayoutBase,
-        title: 'Hyetograph',
-        xaxis: { ...plotLayoutBase.xaxis, title: 'Time (minutes)' },
-        yaxis: { ...plotLayoutBase.yaxis, title: 'Intensity (in/hr)' }
-      },
-      plotConfig
-    )
+    const totalMinutes = lastStorm.timeMin[lastStorm.timeMin.length - 1] ?? 0
+    const useHours = totalMinutes >= 120
+    const timeFactor = useHours ? 1 / 60 : 1
+    const axisTitle = useHours ? 'Time (hours)' : 'Time (minutes)'
+    const columnLabel = useHours ? 'Time (hr)' : 'Time (min)'
+    const hoverTimeLabel = useHours ? 'Time (hr)' : 'Time (min)'
+    const stepMinutes =
+      lastStorm.timeMin.length > 1
+        ? lastStorm.timeMin[1] - lastStorm.timeMin[0]
+        : timestepMin
+    const barWidth = stepMinutes * timeFactor
+    timeAxis = lastStorm.timeMin.map((t) => t * timeFactor)
+    timeColumnLabel = columnLabel
 
-    Plotly.react(
-      plotDiv2,
-      [
+    const startDate = startISO ? new Date(startISO) : null
+    hasTimestamp = Boolean(startDate && !Number.isNaN(startDate.getTime()))
+    tableRows = lastStorm.timeMin.map((t, i) => {
+      const timestamp = hasTimestamp
+        ? formatTimestamp(new Date((startDate as Date).getTime() + t * 60000))
+        : undefined
+      return {
+        time: t * timeFactor,
+        intensity: lastStorm.intensityInHr[i],
+        incremental: lastStorm.incrementalIn[i],
+        cumulative: lastStorm.cumulativeIn[i],
+        timestamp
+      }
+    })
+
+    if (plotDiv1) {
+      Plotly.react(
+        plotDiv1,
+        [
+          {
+            x: timeAxis,
+            y: lastStorm.intensityInHr,
+            type: 'bar',
+            name: 'Intensity (in/hr)',
+            marker: { color: '#6ee7ff' },
+            hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
+            width: barWidth
+          }
+        ],
         {
-          x: lastStorm.timeMin,
-          y: lastStorm.cumulativeIn,
-          type: 'scatter',
-          mode: 'lines',
-          name: 'Cumulative (in)',
-          line: { color: '#a855f7', width: 3 }
-        }
-      ],
-      {
-        ...plotLayoutBase,
-        title: 'Cumulative Depth',
-        xaxis: { ...plotLayoutBase.xaxis, title: 'Time (minutes)' },
-        yaxis: { ...plotLayoutBase.yaxis, title: 'Depth (in)' }
-      },
-      plotConfig
-    )
+          ...plotLayoutBase,
+          title: 'Hyetograph (Intensity)',
+          xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
+          yaxis: { ...plotLayoutBase.yaxis, title: 'Intensity (in/hr)' }
+        },
+        plotConfig
+      )
+    }
+
+    if (plotDiv2) {
+      Plotly.react(
+        plotDiv2,
+        [
+          {
+            x: timeAxis,
+            y: lastStorm.incrementalIn,
+            type: 'bar',
+            name: 'Incremental Volume (in)',
+            marker: { color: '#a855f7' },
+            hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Incremental: %{y:.3f} in<extra></extra>`,
+            width: barWidth
+          }
+        ],
+        {
+          ...plotLayoutBase,
+          title: 'Incremental Volume',
+          xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
+          yaxis: { ...plotLayoutBase.yaxis, title: 'Volume (in)' }
+        },
+        plotConfig
+      )
+    }
+
+    if (plotDiv3) {
+      Plotly.react(
+        plotDiv3,
+        [
+          {
+            x: timeAxis,
+            y: lastStorm.cumulativeIn,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Cumulative (in)',
+            line: { color: '#f97316', width: 3 },
+            hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Cumulative: %{y:.3f} in<extra></extra>`
+          }
+        ],
+        {
+          ...plotLayoutBase,
+          title: 'Cumulative Mass Curve',
+          xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
+          yaxis: { ...plotLayoutBase.yaxis, title: 'Cumulative Depth (in)' }
+        },
+        plotConfig
+      )
+    }
   }
 
   function doCsv() {
@@ -228,7 +305,11 @@
   }
   function doDat() {
     if (!lastStorm) return
-    savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat')
+    const startDate = startISO ? new Date(startISO) : null
+    const start = startDate && !Number.isNaN(startDate.getTime())
+      ? startDate.toISOString()
+      : '2003-01-01T00:00:00Z'
+    savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat', 'System', start)
   }
 
   onMount(() => {
@@ -261,6 +342,7 @@
     if (map) map.remove()
     if (plotDiv1) Plotly.purge(plotDiv1)
     if (plotDiv2) Plotly.purge(plotDiv2)
+    if (plotDiv3) Plotly.purge(plotDiv3)
   })
 
   $: if (marker) {
@@ -454,6 +536,44 @@
       </div>
       <div class="panel plot">
         <div bind:this={plotDiv2} class="plot-area"></div>
+      </div>
+      <div class="panel plot">
+        <div bind:this={plotDiv3} class="plot-area"></div>
+      </div>
+      <div class="panel results">
+        <h2 class="section-title">Storm Table</h2>
+        {#if tableRows.length}
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="left">{timeColumnLabel}</th>
+                  <th>Intensity (in/hr)</th>
+                  <th>Incremental (in)</th>
+                  <th>Cumulative (in)</th>
+                  {#if hasTimestamp}
+                    <th class="left">Datetime</th>
+                  {/if}
+                </tr>
+              </thead>
+              <tbody>
+                {#each tableRows as row}
+                  <tr>
+                    <td class="left">{row.time.toFixed(2)}</td>
+                    <td>{row.intensity.toFixed(2)}</td>
+                    <td>{row.incremental.toFixed(3)}</td>
+                    <td>{row.cumulative.toFixed(3)}</td>
+                    {#if hasTimestamp}
+                      <td class="left">{row.timestamp}</td>
+                    {/if}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else}
+          <p class="empty">Generate a storm to see the time series table.</p>
+        {/if}
       </div>
     </section>
   </div>
@@ -672,6 +792,54 @@
 
   .plot-area {
     height: 260px;
+  }
+
+  .results {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .table-scroll {
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 100%;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .data-table th {
+    background: rgba(255, 255, 255, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .data-table tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .data-table .left {
+    text-align: left;
+  }
+
+  .empty {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0;
   }
 
   .stats {
