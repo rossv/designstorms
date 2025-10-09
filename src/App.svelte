@@ -989,18 +989,20 @@
 
   .page {
     min-height: 100vh;
-    padding: 18px;
+    padding: clamp(1.25rem, 2.5vw + 1rem, 2.75rem);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: clamp(1.25rem, 1.5vw + 1rem, 2rem);
   }
 
   .header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    justify-content: center;
+    gap: clamp(0.75rem, 1.2vw + 0.5rem, 1.25rem);
+    text-align: center;
   }
 
   .header h1 {
@@ -1021,11 +1023,57 @@
     letter-spacing: 0.08em;
   }
 
+  .header > * {
+    flex: 1 1 100%;
+  }
+
+  .header .badge {
+    flex: 0 0 auto;
+    margin-inline: auto;
+  }
+
   .layout {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(1.25rem, 1.5vw + 1rem, 2rem);
     flex: 1;
+  }
+
+  @media (min-width: 600px) {
+    .layout {
+      gap: clamp(1.5rem, 1vw + 1.25rem, 2.25rem);
+    }
+
+    .header {
+      gap: clamp(0.75rem, 0.6vw + 0.75rem, 1.5rem);
+    }
+  }
+
+  @media (min-width: 768px) {
+    .header {
+      justify-content: space-between;
+      text-align: left;
+    }
+
+    .header > * {
+      flex: 0 0 auto;
+    }
+
+    .header .badge {
+      margin-inline: 0 0;
+      margin-left: auto;
+    }
+  }
+
+  @media (min-width: 900px) {
+    .layout {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(1.75rem, 1.5vw + 1.5rem, 2.5rem);
+    }
+
+    .header {
+      flex-wrap: nowrap;
+    }
   }
 
   .column {
