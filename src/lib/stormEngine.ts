@@ -2,10 +2,14 @@ import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
 function linspace(n: number): number[] {
-  return Array.from({length: n}, (_, i) => i/(n-1))
+  if (n <= 0) return []
+  if (n === 1) return [0]
+  return Array.from({ length: n }, (_, i) => i / (n - 1))
 }
 
-function clamp01(x: number) { return Math.max(0, Math.min(1, x)) }
+function clamp01(x: number) {
+  return Math.max(0, Math.min(1, x))
+}
 
 function betaCDF(x: number, a: number, b: number): number {
   // Simpson integration of Beta PDF to approximate CDF
@@ -38,8 +42,9 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
     const base = (SCS_TABLES as any)[name] as number[]
     const m = base.length
     const out: number[] = []
-    for (let i=0;i<n;i++){
-      const t = i/(n-1)
+    const denom = Math.max(1, n - 1)
+    for (let i = 0; i < n; i++) {
+      const t = i / denom
       const idx = t*(m-1)
       const i0 = Math.floor(idx)
       const i1 = Math.min(m-1, i0+1)
@@ -57,8 +62,10 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
     }
     if (pts.length>=2){
       pts.sort((a,b)=>a[0]-b[0])
-      const out:number[]=[]; for (let i=0;i<n;i++){
-        const t = i/(n-1)
+      const out:number[]=[]
+      const denom = Math.max(1, n - 1)
+      for (let i=0;i<n;i++){
+        const t = i/denom
         let j=1; while (j<pts.length && pts[j][0]<t) j++
         const [x0,y0] = pts[Math.max(0,j-1)]; const [x1,y1] = pts[Math.min(pts.length-1, j)]
         const frac = (t - x0) / Math.max(1e-9, (x1 - x0))
