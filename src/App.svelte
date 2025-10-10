@@ -61,6 +61,12 @@
   let noaaError = ''
 
   let lastStorm: ReturnType<typeof generateStorm> | null = null
+  
+  let lockedParameter: 'ari' | 'depth' | 'duration' | null = null;
+  let lastChangedBy: 'user' | 'system' = 'user';
+  let recentlyRecalculated: 'ari' | 'depth' | 'duration' | null = null;
+  let recalculationTimer: ReturnType<typeof setTimeout> | null = null;
+
 
   const plotConfig = { responsive: true, displaylogo: false, displayModeBar: false }
   const plotLayoutBase = {
@@ -711,15 +717,34 @@
   }
 
   function handleDepthInput() {
-    recalcFromDepthOrDuration()
+    lastChangedBy = 'user';
+    if(lockedParameter === 'depth') return;
+    if(lockedParameter === 'ari'){
+        // ToDo recalculate duration
+    } else { // duration or null
+        recalcFromDepthOrDuration()
+    }
   }
 
   function handleDurationInput() {
-    recalcFromDepthOrDuration()
+    lastChangedBy = 'user';
+    if(lockedParameter === 'duration') return;
+
+    if(lockedParameter === 'ari'){
+        // ToDo recalculate depth
+    } else { // depth or null
+        recalcFromDepthOrDuration()
+    }
   }
 
   function handleAriInput() {
-    recalcFromAri()
+    lastChangedBy = 'user';
+    if(lockedParameter === 'ari') return;
+    if(lockedParameter === 'depth'){
+        // ToDo recalculate duration
+    } else { // duration or null
+        recalcFromAri()
+    }
   }
 
   function handleTimestepInput() {
@@ -757,6 +782,22 @@
       event.preventDefault()
       closeHelp()
     }
+  }
+  
+  function setLocked(param: 'ari' | 'depth' | 'duration' | null){
+      if(lockedParameter === param){
+          lockedParameter = null;
+      } else {
+          lockedParameter = param;
+      }
+  }
+  
+  function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
+      recentlyRecalculated = param;
+      if(recalculationTimer) clearTimeout(recalculationTimer);
+      recalculationTimer = setTimeout(() => {
+          recentlyRecalculated = null;
+      }, 500)
   }
 
   onMount(() => {
@@ -977,38 +1018,71 @@
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
         <div class="grid cols-3 form-grid">
-          <div>
+          <div class="parameter-input">
             <label for="depth">Depth (in)</label>
-            <NumericStepper
-              id="depth"
-              label="Depth (in)"
-              min={0}
-              step={0.1}
-              bind:value={selectedDepth}
-              on:change={handleDepthInput}
-            />
+            <div class="input-with-lock">
+                <NumericStepper
+                  id="depth"
+                  label="Depth (in)"
+                  min={0}
+                  step={0.1}
+                  bind:value={selectedDepth}
+                  on:change={handleDepthInput}
+                  class:recalculated={recentlyRecalculated === 'depth'}
+                />
+                <button 
+                  class="lock-button" 
+                  class:locked={lockedParameter === 'depth'}
+                  on:click={() => setLocked('depth')}
+                  title="Lock this parameter"
+                >
+                  {lockedParameter === 'depth' ? '🔒' : '🔓'}
+                </button>
+            </div>
           </div>
-          <div>
+          <div class="parameter-input">
             <label for="duration">Duration (hr)</label>
-            <NumericStepper
-              id="duration"
-              label="Duration (hr)"
-              min={0.1}
-              step={1}
-              bind:value={selectedDurationHr}
-              on:change={handleDurationInput}
-            />
+            <div class="input-with-lock">
+                <NumericStepper
+                  id="duration"
+                  label="Duration (hr)"
+                  min={0.1}
+                  step={1}
+                  bind:value={selectedDurationHr}
+                  on:change={handleDurationInput}
+                  class:recalculated={recentlyRecalculated === 'duration'}
+                />
+                <button 
+                  class="lock-button" 
+                  class:locked={lockedParameter === 'duration'}
+                  on:click={() => setLocked('duration')}
+                  title="Lock this parameter"
+                >
+                  {lockedParameter === 'duration' ? '🔒' : '🔓'}
+                </button>
+            </div>
           </div>
-          <div>
-            <label for="timestep">Timestep (min)</label>
-            <NumericStepper
-              id="timestep"
-              label="Timestep (min)"
-              min={0.1}
-              step={1}
-              bind:value={timestepMin}
-              on:change={handleTimestepInput}
-            />
+          <div class="parameter-input">
+            <label for="ari">Average Recurrence Interval (years)</label>
+            <div class="input-with-lock">
+                <NumericStepper
+                  id="ari"
+                  label="Average Recurrence Interval (years)"
+                  min={0}
+                  step={1}
+                  bind:value={selectedAri}
+                  on:change={handleAriInput}
+                  class:recalculated={recentlyRecalculated === 'ari'}
+                />
+                <button 
+                  class="lock-button" 
+                  class:locked={lockedParameter === 'ari'}
+                  on:click={() => setLocked('ari')}
+                  title="Lock this parameter"
+                >
+                  {lockedParameter === 'ari' ? '🔒' : '🔓'}
+                </button>
+            </div>
           </div>
         </div>
 
@@ -1028,14 +1102,14 @@
             </select>
           </div>
           <div>
-            <label for="ari">Average Recurrence Interval (years)</label>
+            <label for="timestep">Timestep (min)</label>
             <NumericStepper
-              id="ari"
-              label="Average Recurrence Interval (years)"
-              min={0}
+              id="timestep"
+              label="Timestep (min)"
+              min={0.1}
               step={1}
-              bind:value={selectedAri}
-              on:change={handleAriInput}
+              bind:value={timestepMin}
+              on:change={handleTimestepInput}
             />
           </div>
           <div class="align-center">
@@ -1161,14 +1235,13 @@
             Choose a distribution (SCS types use dimensionless tables; Huff quartiles use Beta
             approximations).
           </li>
-          <li>Export CSV / DAT (DAT exports use in/hr rates).</li>
+          <li>Export CSV / DAT (DAT always in in/hr).</li>
         </ol>
         <h3>Interpolation</h3>
         <p>
-          NOAA table selections populate the inputs with matching depth, duration, and Average Recurrence
-          Interval. Adjusting the Average Recurrence Interval control re-applies the NOAA depth for the chosen
-          duration when data is available, while manual edits always remain editable.
-        </p>
+          When <i>Use NOAA selection</i> is <b>unchecked</b>:
+        editing <i>Return period</i> will interpolate <i>Depth</i> along the selected duration row.
+        Editing <i>Duration</i> or <i>Total depth</i> updates <i>Return period</i> to stay consistent.</p>
         <h3>Methods</h3>
         <p>
           Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
@@ -1692,11 +1765,10 @@
   }
 
   .data-table th {
-    background: var(--panel);
+    background: rgba(255, 255, 255, 0.05);
     position: sticky;
     top: 0;
-    z-index: 2;
-    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    z-index: 1;
   }
 
   .data-table tr:nth-child(even) {
@@ -1872,5 +1944,28 @@
     .data-table td {
       padding: 6px 8px;
     }
+  }
+  .input-with-lock {
+    display: flex;
+    align-items: center;
+  }
+  .lock-button {
+    margin-left: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .lock-button.locked {
+    background: var(--accent);
+    color: #04131c;
+  }
+  
+  .recalculated {
+      transition: box-shadow 0.5s ease-out;
+      box-shadow: 0 0 0 2px var(--accent);
   }
 </style>
