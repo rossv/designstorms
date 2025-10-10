@@ -60,8 +60,10 @@ The app calls NOAA's free-text CSV endpoint directly from the browser:
 ```
 https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=<lat>&lon=<lon>&series=pds&units=english
 ```
-If CORS ever breaks, the app now falls back to a couple of public CORS proxies and
-links directly to the NOAA table so users can download it manually if needed.
+In production builds the app requests the CSV through the AllOrigins proxy at
+`https://api.allorigins.win/raw`. If that proxy is unavailable, the fetch simply
+fails—there are currently no additional proxy fallbacks or direct-download links
+surfaced in the UI, so manual retrieval must be done outside the app.
 
 ## License
 MIT
