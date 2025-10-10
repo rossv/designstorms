@@ -1710,10 +1710,11 @@
   }
 
   .data-table th {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--panel);
     position: sticky;
     top: 0;
     z-index: 1;
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
   }
 
   .data-table tr:nth-child(even) {
