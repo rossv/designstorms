@@ -45,6 +45,7 @@
   let aris: string[] = []
   let selectedDurationLabel: string | null = null
   const DEFAULT_DURATION_HOURS = 24
+  const MIN_DURATION_HOURS = 1 / 60
   const DEFAULT_ARI_YEARS = 2
 
   let selectedAri = 10
@@ -1287,8 +1288,9 @@
             <NumericStepper
               id="duration"
               label="Duration (hr)"
-              min={0.1}
-              step={1}
+              min={MIN_DURATION_HOURS}
+              step={MIN_DURATION_HOURS}
+              buttonStep={1}
               bind:value={selectedDurationHr}
               on:change={handleDurationInput}
               recalculated={recentlyRecalculated === 'duration'}
