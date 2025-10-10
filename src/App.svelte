@@ -523,11 +523,12 @@
       },
       line: { color: 'rgba(15, 23, 42, 0.35)', smoothing: 0.6, width: 1 },
       colorscale: [
-        [0, '#0f172a'],
-        [0.25, '#0a3a60'],
-        [0.5, '#1d4ed8'],
-        [0.75, '#38bdf8'],
-        [1, '#bae6fd']
+        [0, '#e2f1ff'],
+        [0.2, '#bfd7ff'],
+        [0.4, '#89b3ff'],
+        [0.6, '#4f7dd9'],
+        [0.8, '#20499f'],
+        [1, '#0b1f4b']
       ],
       colorbar: {
         title: 'Depth (in)',
@@ -540,6 +541,38 @@
       hovertemplate:
         'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<br>Depth: %{z:.2f} in<extra></extra>',
       showscale: true
+    }
+
+    const pointXs: number[] = []
+    const pointYs: number[] = []
+    const pointLabels: string[] = []
+    durationEntries.forEach((duration) => {
+      ariEntries.forEach((ari) => {
+        const depth = duration.row.values[ari.key]
+        if (Number.isFinite(depth)) {
+          pointXs.push(ari.value)
+          pointYs.push(duration.hr)
+          pointLabels.push(duration.label)
+        }
+      })
+    })
+
+    const pointsTrace = {
+      type: 'scatter',
+      mode: 'markers',
+      x: pointXs,
+      y: pointYs,
+      customdata: pointLabels,
+      marker: {
+        color: 'rgba(226, 241, 255, 0.85)',
+        size: 8,
+        line: { color: 'rgba(11, 31, 75, 0.9)', width: 1.5 },
+        symbol: 'circle'
+      },
+      hovertemplate:
+        'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<extra>NOAA data point</extra>',
+      name: 'NOAA data points',
+      showlegend: false
     }
 
     let highlightTrace: any = null
@@ -572,10 +605,11 @@
     const layout: Partial<Plotly.Layout> = {
       ...plotLayoutBase,
       title: 'NOAA Depth Iso-Lines',
-      margin: { l: 60, r: 70, t: 40, b: 55 },
+      margin: { l: 72, r: 70, t: 40, b: 88 },
       xaxis: {
         ...plotLayoutBase.xaxis,
         title: 'Average Recurrence Interval (years)',
+        type: 'log',
         tickmode: 'array',
         tickvals: ariEntries.map((entry) => entry.value),
         ticktext: ariEntries.map((entry) => entry.key)
@@ -583,6 +617,7 @@
       yaxis: {
         ...plotLayoutBase.yaxis,
         title: 'Duration (hr)',
+        type: 'log',
         tickmode: 'array',
         tickvals: durationEntries.map((entry) => entry.hr),
         ticktext: durationEntries.map((entry) => entry.label)
@@ -590,7 +625,9 @@
       hovermode: 'closest'
     }
 
-    const data = highlightTrace ? [contourTrace, highlightTrace] : [contourTrace]
+    const data = highlightTrace
+      ? [contourTrace, pointsTrace, highlightTrace]
+      : [contourTrace, pointsTrace]
 
     Plotly.react(isoPlotDiv, data, layout, {
       ...plotConfig,
@@ -1909,7 +1946,7 @@
 
   .iso-plot-container {
     position: relative;
-    min-height: clamp(260px, 35vh, 360px);
+    min-height: clamp(320px, 45vh, 460px);
     border-radius: 16px;
     border: 1px solid var(--border);
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(8, 47, 73, 0.45));
