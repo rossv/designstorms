@@ -56,12 +56,16 @@ jobs:
 ```
 
 ## NOAA Atlas 14
-The app calls NOAA's free-text CSV endpoint directly from the browser:
+`fetchNoaaTable` hits NOAA's free-text **mean** rainfall depth CSV. The base URL built
+in production is:
 ```
-https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_depth.csv?data=depth&lat=<lat>&lon=<lon>&series=pds&units=english
+https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv?data=depth&lat=<lat>&lon=<lon>&series=pds&units=english
 ```
-If CORS ever breaks, the app now falls back to a couple of public CORS proxies and
-links directly to the NOAA table so users can download it manually if needed.
+
+- **Development**: Vite proxies `/noaa-api/fe_text_mean.csv` to NOAA so the browser
+  can request data without CORS errors.
+- **Production**: The app wraps the NOAA request with
+  `https://api.allorigins.win/raw?url=<encoded NOAA URL>` to work around CORS.
 
 ## License
 MIT
