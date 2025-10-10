@@ -153,6 +153,19 @@
     }
   }
 
+  function reduceTickEntries<T>(entries: T[], maxCount: number) {
+    if (!Number.isFinite(maxCount) || maxCount <= 0) {
+      return entries
+    }
+
+    if (entries.length <= maxCount) {
+      return entries
+    }
+
+    const step = Math.ceil(entries.length / maxCount)
+    return entries.filter((_, index) => index % step === 0 || index === entries.length - 1)
+  }
+
   const handleViewportChange = () => {
     updateTableScrollHeight()
   }
@@ -520,6 +533,43 @@
       maxDepth = minDepth + 0.5
     }
 
+    const bounds = isoPlotDiv.getBoundingClientRect()
+    const width = bounds.width || isoPlotDiv.clientWidth || 0
+    const height = bounds.height || isoPlotDiv.clientHeight || 0
+    const isCompact = width <= 640
+
+    const maxXTicks = Math.max(3, Math.floor((width || 1) / 70))
+    const maxYTicks = Math.max(4, Math.floor((height || 1) / 38))
+
+    const filteredAriEntries = reduceTickEntries(ariEntries, maxXTicks)
+    const filteredDurationEntries = reduceTickEntries(durationEntries, maxYTicks)
+
+    const colorbar: Partial<Plotly.ColorBar> = {
+      title: 'Depth (in)',
+      thickness: isCompact ? 10 : 14,
+      tickcolor: '#e7e7e7',
+      tickfont: { color: '#e7e7e7', size: isCompact ? 10 : 12 },
+      outlinecolor: 'rgba(255, 255, 255, 0.1)',
+      titlefont: { color: '#e7e7e7', size: isCompact ? 12 : undefined }
+    }
+
+    if (isCompact) {
+      colorbar.orientation = 'h'
+      colorbar.lenmode = 'fraction'
+      colorbar.len = 0.6
+      colorbar.x = 0.5
+      colorbar.y = -0.32
+      colorbar.xanchor = 'center'
+      colorbar.yanchor = 'top'
+      colorbar.ticklen = 3
+    } else {
+      colorbar.orientation = 'v'
+      colorbar.len = 1
+      colorbar.x = 1.05
+      colorbar.y = 0.5
+      colorbar.ticklen = 5
+    }
+
     const contourTrace = {
       type: 'contour',
       x: ariEntries.map((entry) => entry.value),
@@ -532,7 +582,7 @@
         end: maxDepth,
         size: 0.5,
         showlabels: true,
-        labelfont: { color: '#0f172a', size: 11 }
+        labelfont: { color: '#0f172a', size: isCompact ? 10 : 11 }
       },
       line: { color: 'rgba(15, 23, 42, 0.35)', smoothing: 0.6, width: 1 },
       colorscale: [
@@ -543,14 +593,7 @@
         [0.8, '#20499f'],
         [1, '#0b1f4b']
       ],
-      colorbar: {
-        title: 'Depth (in)',
-        thickness: 14,
-        tickcolor: '#e7e7e7',
-        tickfont: { color: '#e7e7e7' },
-        outlinecolor: 'rgba(255, 255, 255, 0.1)',
-        titlefont: { color: '#e7e7e7' }
-      },
+      colorbar,
       hovertemplate:
         'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<br>Depth: %{z:.2f} in<extra></extra>',
       showscale: true
@@ -608,6 +651,7 @@
             symbol: 'circle'
           },
           name: 'Selected NOAA cell',
+          showlegend: false,
           hovertemplate: `ARI: ${highlightAri.value}<br>Duration: ${highlightDuration.label} (${highlightDuration.hr.toFixed(
             2
           )} hr)<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
@@ -618,22 +662,31 @@
     const layout: Partial<Plotly.Layout> = {
       ...plotLayoutBase,
       title: 'NOAA Depth Iso-Lines',
-      margin: { l: 72, r: 70, t: 40, b: 88 },
+      margin: isCompact
+        ? { l: 64, r: 26, t: 48, b: 96 }
+        : { l: 72, r: 70, t: 40, b: 88 },
       xaxis: {
         ...plotLayoutBase.xaxis,
         title: 'Average Recurrence Interval (years)',
         type: 'log',
         tickmode: 'array',
-        tickvals: ariEntries.map((entry) => entry.value),
-        ticktext: ariEntries.map((entry) => entry.key)
+        tickvals: filteredAriEntries.map((entry) => entry.value),
+        ticktext: filteredAriEntries.map((entry) => entry.key),
+        tickangle: isCompact ? -45 : 0,
+        tickfont: { size: isCompact ? 10 : 12 },
+        titlefont: { size: isCompact ? 12 : undefined },
+        automargin: true
       },
       yaxis: {
         ...plotLayoutBase.yaxis,
         title: 'Duration (hr)',
         type: 'log',
         tickmode: 'array',
-        tickvals: durationEntries.map((entry) => entry.hr),
-        ticktext: durationEntries.map((entry) => entry.label)
+        tickvals: filteredDurationEntries.map((entry) => entry.hr),
+        ticktext: filteredDurationEntries.map((entry) => entry.label),
+        tickfont: { size: isCompact ? 10 : 12 },
+        titlefont: { size: isCompact ? 12 : undefined },
+        automargin: true
       },
       hovermode: 'closest'
     }
