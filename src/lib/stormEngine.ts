@@ -96,11 +96,54 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
 
 export function generateStorm(params: StormParams): StormResult {
   const { depthIn, durationHr, timestepMin, distribution, customCurveCsv } = params
-  const n = Math.ceil((durationHr*60)/timestepMin) + 1
-  const t = Array.from({length: n}, (_,i)=> i*timestepMin)
-  const cum = cumulativeFromDistribution(distribution, n, customCurveCsv).map(v => v*depthIn)
-  const inc: number[] = [cum[0]]
-  for (let i=1;i<n;i++) inc.push(Math.max(0, cum[i]-cum[i-1]))
-  const intensity = inc.map(v => (v / timestepMin) * 60)
-  return { timeMin: t, incrementalIn: inc, cumulativeIn: cum, intensityInHr: intensity }
+  const durationMin = durationHr * 60
+
+  if (durationMin <= 0 || timestepMin <= 0) {
+    return {
+      timeMin: [0],
+      incrementalIn: [0],
+      cumulativeIn: [0],
+      intensityInHr: [0]
+    }
+  }
+
+  const n = Math.ceil(durationMin / timestepMin) + 1
+  const timeMin = Array.from({ length: n }, (_, i) => {
+    if (i === n - 1) return durationMin
+    return Math.min(i * timestepMin, durationMin)
+  })
+
+  const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
+  const baseCumulative = cumulativeFromDistribution(distribution, n, customCurveCsv)
+
+  const cumulativeIn = normalizedTimes.map((nt) => {
+    if (n === 1) {
+      return (baseCumulative[0] ?? 0) * depthIn
+    }
+    const scaled = clamp01(nt) * (n - 1)
+    const i0 = Math.floor(scaled)
+    const i1 = Math.min(n - 1, i0 + 1)
+    const frac = scaled - i0
+    const v0 = baseCumulative[i0] ?? baseCumulative[n - 1] ?? 0
+    const v1 = baseCumulative[i1] ?? baseCumulative[n - 1] ?? v0
+    return (v0 * (1 - frac) + v1 * frac) * depthIn
+  })
+
+  if (cumulativeIn.length > 0) {
+    cumulativeIn[cumulativeIn.length - 1] = depthIn
+  }
+
+  const incrementalIn = cumulativeIn.map((value, idx) => {
+    const prev = idx > 0 ? cumulativeIn[idx - 1] : 0
+    return Math.max(0, value - prev)
+  })
+
+  const intensityInHr = incrementalIn.map((depth, idx) => {
+    if (idx === 0) return 0
+    const dt = timeMin[idx] - timeMin[idx - 1]
+    if (dt <= 0) return 0
+    return (depth / dt) * 60
+  })
+
+  return { timeMin, incrementalIn, cumulativeIn, intensityInHr }
 }

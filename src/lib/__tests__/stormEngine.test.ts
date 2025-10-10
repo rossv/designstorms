@@ -53,6 +53,34 @@ describe('generateStorm', () => {
     ])
   })
 
+  it('clamps the final timestep and preserves totals when duration is not divisible', () => {
+    const depthIn = 2
+    const timestepMin = 7
+    const durationMin = minutes(1)
+    const storm = generateStorm({
+      depthIn,
+      durationHr: 1,
+      timestepMin,
+      distribution: 'scs_type_i',
+      customCurveCsv: ''
+    })
+
+    expect(storm.timeMin.at(-1)).toBe(durationMin)
+    expect(storm.timeMin.at(-2)).toBe(durationMin - (durationMin % timestepMin || timestepMin))
+
+    const steps = storm.timeMin.slice(1).map((t, idx) => t - storm.timeMin[idx])
+    expect(steps.at(-1)).toBeCloseTo(durationMin % timestepMin || timestepMin, 6)
+    expect(steps.every((step) => step > 0 && step <= timestepMin)).toBe(true)
+
+    expect(storm.cumulativeIn.at(-1)).toBeCloseTo(depthIn, 6)
+    expect(storm.incrementalIn.reduce((sum, step) => sum + step, 0)).toBeCloseTo(depthIn, 6)
+
+    const finalIncrement = storm.incrementalIn.at(-1) ?? 0
+    const finalDuration = steps.at(-1) ?? 0
+    const expectedFinalIntensity = finalDuration > 0 ? (finalIncrement / finalDuration) * 60 : 0
+    expect(storm.intensityInHr.at(-1)).toBeCloseTo(expectedFinalIntensity, 6)
+  })
+
   it('handles zero-duration storms without NaNs', () => {
     const storm = generateStorm({
       depthIn: 1,
