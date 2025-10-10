@@ -44,6 +44,9 @@
   let durations: string[] = []
   let aris: string[] = []
   let selectedDurationLabel: string | null = null
+  const DEFAULT_DURATION_HOURS = 24
+  const DEFAULT_ARI_YEARS = 2
+
   let selectedAri = 10
   let selectedDepth = 1.0
   let selectedDurationHr = 24
@@ -232,6 +235,7 @@
   }
 
   async function loadNoaa() {
+    const hadTable = Boolean(table)
     if (fetchTimer) {
       clearTimeout(fetchTimer)
       fetchTimer = null
@@ -254,14 +258,22 @@
       table = parsed
       durations = parsed.rows.map((r) => r.label)
       aris = parsed.aris
-      if (!aris.includes(String(selectedAri)) && aris.length) {
-        selectedAri = Number(aris[0])
-      }
-      if (
+      const defaultDurationLabel = parsed.rows.find(
+        (r) => Math.abs(toHours(r.label) - DEFAULT_DURATION_HOURS) < 1e-6
+      )?.label
+      if (!hadTable && defaultDurationLabel) {
+        selectedDurationLabel = defaultDurationLabel
+      } else if (
         !selectedDurationLabel ||
         !parsed.rows.some((r) => r.label === selectedDurationLabel)
       ) {
-        selectedDurationLabel = parsed.rows[0]?.label ?? null
+        selectedDurationLabel = defaultDurationLabel ?? parsed.rows[0]?.label ?? null
+      }
+      if (!hadTable && aris.includes(String(DEFAULT_ARI_YEARS))) {
+        selectedAri = DEFAULT_ARI_YEARS
+      }
+      if (!aris.includes(String(selectedAri)) && aris.length) {
+        selectedAri = Number(aris[0])
       }
       if (selectedDurationLabel) {
         applyNoaaSelection()
