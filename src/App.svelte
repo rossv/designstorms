@@ -815,7 +815,7 @@
               id="depth"
               label="Depth (in)"
               min={0}
-              step={0.001}
+              step={0.1}
               bind:value={selectedDepth}
               on:change={handleDepthInput}
             />
@@ -826,7 +826,7 @@
               id="duration"
               label="Duration (hr)"
               min={0.1}
-              step={0.1}
+              step={1}
               bind:value={selectedDurationHr}
               on:change={handleDurationInput}
             />
@@ -837,7 +837,7 @@
               id="timestep"
               label="Timestep (min)"
               min={0.1}
-              step={0.1}
+              step={1}
               bind:value={timestepMin}
             />
           </div>
