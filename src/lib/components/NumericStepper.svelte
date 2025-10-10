@@ -6,6 +6,7 @@
   export let min: number | null = null
   export let max: number | null = null
   export let step = 1
+  export let buttonStep: number | null = null
   export let label = ''
   export let disabled = false
   export let showProgress = false
@@ -123,17 +124,25 @@
     updateValue(parsed)
   }
 
+  function getButtonStepValue() {
+    const candidate = buttonStep ?? step
+    if (!Number.isFinite(candidate) || candidate <= 0) {
+      return step
+    }
+    return candidate
+  }
+
   function increment() {
     if (disabled) return
     const base = Number.isFinite(value) ? value : min ?? 0
-    updateValue(base + step)
+    updateValue(base + getButtonStepValue())
     focusInput()
   }
 
   function decrement() {
     if (disabled) return
     const base = Number.isFinite(value) ? value : max ?? 0
-    updateValue(base - step)
+    updateValue(base - getButtonStepValue())
     focusInput()
   }
 
