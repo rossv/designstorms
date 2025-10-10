@@ -67,4 +67,34 @@ describe('generateStorm', () => {
     expect(storm.incrementalIn).toEqual([0])
     expect(storm.intensityInHr).toEqual([0])
   })
+
+  it('falls back to an even distribution when user curve data is missing', () => {
+    const storm = generateStorm({
+      depthIn: 1.5,
+      durationHr: 1,
+      timestepMin: 20,
+      distribution: 'user',
+      customCurveCsv: ''
+    })
+
+    expect(storm.cumulativeIn.at(-1)).toBeCloseTo(1.5, 6)
+    expect(storm.cumulativeIn).toEqual([
+      0,
+      0.5,
+      1,
+      1.5
+    ])
+    expect(storm.incrementalIn).toEqual([
+      0,
+      0.5,
+      0.5,
+      0.5
+    ])
+    expect(storm.intensityInHr).toEqual([
+      0,
+      1.5,
+      1.5,
+      1.5
+    ])
+  })
 })
