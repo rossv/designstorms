@@ -53,31 +53,45 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
     }
     return out
   }
-  if (name === 'user' && customCsv) {
-    const rows = customCsv.split(/\r?\n/).map(r=>r.trim()).filter(Boolean)
-    const pts: [number,number][] = []
-    for (const r of rows){
-      const parts = r.split(/[;,\s]+/).map(x=>Number(x))
-      if (parts.length>=2 && isFinite(parts[0]) && isFinite(parts[1])) pts.push([clamp01(parts[0]), clamp01(parts[1])])
-    }
-    if (pts.length>=2){
-      pts.sort((a,b)=>a[0]-b[0])
-      const out:number[]=[]
-      const denom = Math.max(1, n - 1)
-      for (let i=0;i<n;i++){
-        const t = i/denom
-        let j=1; while (j<pts.length && pts[j][0]<t) j++
-        const [x0,y0] = pts[Math.max(0,j-1)]; const [x1,y1] = pts[Math.min(pts.length-1, j)]
-        const frac = (t - x0) / Math.max(1e-9, (x1 - x0))
-        out.push(y0*(1-frac)+y1*frac)
+  if (name === 'user') {
+    if (customCsv) {
+      const rows = customCsv.split(/\r?\n/).map(r => r.trim()).filter(Boolean)
+      const pts: [number, number][] = []
+      for (const r of rows) {
+        const parts = r.split(/[;,\s]+/).map((x) => Number(x))
+        if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+          pts.push([clamp01(parts[0]), clamp01(parts[1])])
+        }
       }
-      return out
+      if (pts.length >= 2) {
+        pts.sort((a, b) => a[0] - b[0])
+        const out: number[] = []
+        const denom = Math.max(1, n - 1)
+        for (let i = 0; i < n; i++) {
+          const t = i / denom
+          let j = 1
+          while (j < pts.length && pts[j][0] < t) j++
+          const [x0, y0] = pts[Math.max(0, j - 1)]
+          const [x1, y1] = pts[Math.min(pts.length - 1, j)]
+          const frac = (t - x0) / Math.max(1e-9, x1 - x0)
+          out.push(y0 * (1 - frac) + y1 * frac)
+        }
+        return out
+      }
     }
+    return linspace(n)
   }
-  const [a,b] = (BETA_PRESETS as any)[name] as [number,number]
-  const out = linspace(n).map(t => betaCDF(t, a, b))
-  const maxv = out[out.length-1] || 1
-  return out.map(v => v/maxv)
+  const preset = (BETA_PRESETS as any)[name] as [number, number] | undefined
+  if (!preset) {
+    return linspace(n)
+  }
+  const [a, b] = preset
+  const out = linspace(n).map((t) => betaCDF(t, a, b))
+  const maxv = out[out.length - 1] || 0
+  if (maxv <= 0) {
+    return linspace(n)
+  }
+  return out.map((v) => v / maxv)
 }
 
 export function generateStorm(params: StormParams): StormResult {
