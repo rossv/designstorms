@@ -15,6 +15,7 @@
   let plotDiv1: HTMLDivElement
   let plotDiv2: HTMLDivElement
   let plotDiv3: HTMLDivElement
+  let isoPlotDiv: HTMLDivElement
 
   let map: L.Map
   let marker: L.Marker
@@ -273,6 +274,7 @@
       aris = []
       selectedDurationLabel = null
       lastFetchKey = ''
+      drawIsoPlot()
     } finally {
       isLoadingNoaa = false
     }
@@ -436,6 +438,228 @@
         },
         plotConfig
       )
+    }
+
+    drawIsoPlot()
+  }
+
+  function drawIsoPlot() {
+    if (!isoPlotDiv) return
+
+    if (!table || !aris.length) {
+      Plotly.purge(isoPlotDiv)
+      detachIsoPlotClickHandler()
+      return
+    }
+
+    const durationEntries = getSortedDurationRows()
+    if (!durationEntries.length) {
+      Plotly.purge(isoPlotDiv)
+      detachIsoPlotClickHandler()
+      return
+    }
+
+    const ariEntries = aris
+      .map((key) => ({ key, value: Number(key) }))
+      .filter((entry) => Number.isFinite(entry.value))
+      .sort((a, b) => a.value - b.value)
+
+    if (!ariEntries.length) {
+      Plotly.purge(isoPlotDiv)
+      detachIsoPlotClickHandler()
+      return
+    }
+
+    const contourZ = durationEntries.map(({ row }) =>
+      ariEntries.map((entry) => {
+        const depth = row.values[entry.key]
+        return Number.isFinite(depth) ? Number(depth) : null
+      })
+    )
+
+    const customData = durationEntries.map((entry) =>
+      ariEntries.map(() => entry.label)
+    )
+
+    const finiteDepths = contourZ
+      .flat()
+      .filter((value): value is number => value !== null && Number.isFinite(value))
+
+    if (!finiteDepths.length) {
+      Plotly.purge(isoPlotDiv)
+      detachIsoPlotClickHandler()
+      return
+    }
+
+    let minDepth = Math.min(...finiteDepths)
+    let maxDepth = Math.max(...finiteDepths)
+
+    if (!Number.isFinite(minDepth) || !Number.isFinite(maxDepth)) {
+      Plotly.purge(isoPlotDiv)
+      detachIsoPlotClickHandler()
+      return
+    }
+
+    minDepth = Math.floor(minDepth * 2) / 2
+    maxDepth = Math.ceil(maxDepth * 2) / 2
+
+    if (maxDepth - minDepth < 0.5) {
+      maxDepth = minDepth + 0.5
+    }
+
+    const contourTrace = {
+      type: 'contour',
+      x: ariEntries.map((entry) => entry.value),
+      y: durationEntries.map((entry) => entry.hr),
+      z: contourZ,
+      customdata: customData,
+      contours: {
+        coloring: 'heatmap',
+        start: minDepth,
+        end: maxDepth,
+        size: 0.5,
+        showlabels: true,
+        labelfont: { color: '#0f172a', size: 11 }
+      },
+      line: { color: 'rgba(15, 23, 42, 0.35)', smoothing: 0.6, width: 1 },
+      colorscale: [
+        [0, '#0f172a'],
+        [0.25, '#0a3a60'],
+        [0.5, '#1d4ed8'],
+        [0.75, '#38bdf8'],
+        [1, '#bae6fd']
+      ],
+      colorbar: {
+        title: 'Depth (in)',
+        thickness: 14,
+        tickcolor: '#e7e7e7',
+        tickfont: { color: '#e7e7e7' },
+        outlinecolor: 'rgba(255, 255, 255, 0.1)',
+        titlefont: { color: '#e7e7e7' }
+      },
+      hovertemplate:
+        'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<br>Depth: %{z:.2f} in<extra></extra>',
+      showscale: true
+    }
+
+    let highlightTrace: any = null
+    if (table && selectedDurationLabel) {
+      const highlightDuration = durationEntries.find(
+        (entry) => entry.label === selectedDurationLabel
+      )
+      const highlightAri = ariEntries.find((entry) => entry.key === String(selectedAri))
+      const depth = highlightDuration?.row.values[highlightAri?.key ?? '']
+      if (highlightDuration && highlightAri && Number.isFinite(depth)) {
+        highlightTrace = {
+          type: 'scatter',
+          mode: 'markers',
+          x: [highlightAri.value],
+          y: [highlightDuration.hr],
+          marker: {
+            color: '#f8fafc',
+            size: 12,
+            line: { color: '#0ea5e9', width: 3 },
+            symbol: 'circle'
+          },
+          name: 'Selected NOAA cell',
+          hovertemplate: `ARI: ${highlightAri.value}<br>Duration: ${highlightDuration.label} (${highlightDuration.hr.toFixed(
+            2
+          )} hr)<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
+        }
+      }
+    }
+
+    const layout: Partial<Plotly.Layout> = {
+      ...plotLayoutBase,
+      title: 'NOAA Depth Iso-Lines',
+      margin: { l: 60, r: 70, t: 40, b: 55 },
+      xaxis: {
+        ...plotLayoutBase.xaxis,
+        title: 'Average Recurrence Interval (years)',
+        tickmode: 'array',
+        tickvals: ariEntries.map((entry) => entry.value),
+        ticktext: ariEntries.map((entry) => entry.key)
+      },
+      yaxis: {
+        ...plotLayoutBase.yaxis,
+        title: 'Duration (hr)',
+        tickmode: 'array',
+        tickvals: durationEntries.map((entry) => entry.hr),
+        ticktext: durationEntries.map((entry) => entry.label)
+      },
+      hovermode: 'closest'
+    }
+
+    const data = highlightTrace ? [contourTrace, highlightTrace] : [contourTrace]
+
+    Plotly.react(isoPlotDiv, data, layout, {
+      ...plotConfig,
+      displayModeBar: false
+    })
+
+    attachIsoPlotClickHandler()
+  }
+
+  const handleIsoPlotClick = (event: any) => {
+    if (!table) return
+    const point = event?.points?.[0]
+    if (!point) return
+
+    const ariEntries = aris
+      .map((key) => ({ key, value: Number(key) }))
+      .filter((entry) => Number.isFinite(entry.value))
+      .sort((a, b) => a.value - b.value)
+
+    const durationEntries = getSortedDurationRows()
+    if (!ariEntries.length || !durationEntries.length) return
+
+    const nearestAri = ariEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.value - point.x)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: ariEntries[0] }
+    )
+
+    const nearestDuration = durationEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.hr - point.y)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
+    )
+
+    const selectedRow = nearestDuration.entry.row
+    const ariKey = nearestAri.entry.key
+    const depth = selectedRow.values[ariKey]
+
+    if (!Number.isFinite(depth)) {
+      return
+    }
+
+    pickCell(nearestDuration.entry.label, ariKey)
+  }
+
+  function attachIsoPlotClickHandler() {
+    if (!isoPlotDiv) return
+    const plotElement = isoPlotDiv as any
+    if (typeof plotElement.removeListener === 'function') {
+      plotElement.removeListener('plotly_click', handleIsoPlotClick)
+    } else if (typeof plotElement.off === 'function') {
+      plotElement.off('plotly_click', handleIsoPlotClick)
+    }
+    if (typeof plotElement.on === 'function') {
+      plotElement.on('plotly_click', handleIsoPlotClick)
+    }
+  }
+
+  function detachIsoPlotClickHandler() {
+    if (!isoPlotDiv) return
+    const plotElement = isoPlotDiv as any
+    if (typeof plotElement.removeListener === 'function') {
+      plotElement.removeListener('plotly_click', handleIsoPlotClick)
+    } else if (typeof plotElement.off === 'function') {
+      plotElement.off('plotly_click', handleIsoPlotClick)
     }
   }
 
@@ -812,6 +1036,10 @@
     if (plotDiv1) Plotly.purge(plotDiv1)
     if (plotDiv2) Plotly.purge(plotDiv2)
     if (plotDiv3) Plotly.purge(plotDiv3)
+    if (isoPlotDiv) {
+      detachIsoPlotClickHandler()
+      Plotly.purge(isoPlotDiv)
+    }
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange)
     tableScrollObserver?.disconnect()
@@ -1093,6 +1321,16 @@
             <div class="stat-title">Selected Average Recurrence Interval</div>
             <div class="stat-value">{selectedAri} years</div>
           </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="section-title">NOAA Depth Iso-Lines</h2>
+        <div class="iso-plot-container">
+          <div class="iso-plot" bind:this={isoPlotDiv} aria-label="Contour plot of NOAA depths by duration and recurrence interval"></div>
+          {#if !table}
+            <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
+          {/if}
         </div>
       </div>
     </section>
@@ -1667,6 +1905,34 @@
     margin: 14px 0;
     align-items: center;
     flex-wrap: wrap;
+  }
+
+  .iso-plot-container {
+    position: relative;
+    min-height: clamp(260px, 35vh, 360px);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(8, 47, 73, 0.45));
+    overflow: hidden;
+  }
+
+  .iso-plot {
+    width: 100%;
+    height: 100%;
+  }
+
+  .iso-plot-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    background: linear-gradient(135deg, rgba(2, 6, 23, 0.8), rgba(8, 47, 73, 0.65));
+    backdrop-filter: blur(2px);
   }
 
   .plot {
