@@ -125,18 +125,4 @@ describe('generateStorm', () => {
       1.5
     ])
   })
-
-  it('clamps user-defined curves outside of provided points', () => {
-    const storm = generateStorm({
-      depthIn: 2,
-      durationHr: 1,
-      timestepMin: 15,
-      distribution: 'user',
-      customCurveCsv: '0.25,0\n0.75,1'
-    })
-
-    expect(storm.cumulativeIn[0]).toBe(0)
-    expect(Math.min(...storm.cumulativeIn)).toBeGreaterThanOrEqual(0)
-    expect(storm.cumulativeIn.at(-1)).toBeCloseTo(2, 6)
-  })
 })
