@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
+  import { snapValueToStep } from '../numberUtils'
 
   export let id: string | undefined
   export let value: number = 0
@@ -70,17 +71,11 @@
   }
 
   function roundToStep(val: number) {
-    if (!Number.isFinite(step) || step <= 0) return val
-    const precision = Math.max(getStepPrecision(), 0)
-    const factor = 10 ** precision
-    if (min != null) {
-      const base = Math.round(min * factor)
-      const offset = Math.round(val * factor) - base
-      const stepUnits = Math.round(step * factor)
-      const snapped = Math.round(offset / stepUnits) * stepUnits + base
-      return snapped / factor
+    if (!Number.isFinite(step) || step <= 0 || !Number.isFinite(val)) {
+      return val
     }
-    return Math.round(val * factor) / factor
+
+    return snapValueToStep(val, step, { min })
   }
 
   function updateValue(next: number, options: { preserveInput?: boolean } = {}) {
