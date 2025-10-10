@@ -716,6 +716,7 @@
               min={-90}
               max={90}
               step={0.0001}
+              buttonStep={0.1}
               bind:value={lat}
               showProgress
               on:change={() => {
@@ -731,6 +732,7 @@
               min={-180}
               max={180}
               step={0.0001}
+              buttonStep={0.1}
               bind:value={lon}
               showProgress
               on:change={() => {
