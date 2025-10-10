@@ -9,6 +9,7 @@
   import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
   import { saveCsv, savePcswmmDat } from './lib/export'
   import NumericStepper from './lib/components/NumericStepper.svelte'
+  import designStormIcon from './design_storm.ico'
 
   let mapDiv: HTMLDivElement
   let plotDiv1: HTMLDivElement
@@ -821,8 +822,11 @@
 
 <div class="page">
   <header class="panel header">
-    <div>
-      <h1>Design Storm Generator</h1>
+    <div class="title-group">
+      <img src={designStormIcon} alt="Design Storm" class="app-icon" />
+      <div class="title-text">
+        <h1>Design Storm Generator</h1>
+      </div>
     </div>
     <div class="badge">Beta</div>
   </header>
@@ -1203,6 +1207,27 @@
     text-align: center;
   }
 
+  .title-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.6rem, 0.9vw + 0.4rem, 1rem);
+  }
+
+  .app-icon {
+    width: clamp(40px, 4vw + 24px, 56px);
+    height: clamp(40px, 4vw + 24px, 56px);
+    border-radius: 12px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    flex: 0 0 auto;
+  }
+
+  .title-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .header h1 {
     margin: 0 0 6px;
     font-size: 22px;
@@ -1251,6 +1276,10 @@
     .header {
       justify-content: space-between;
       text-align: left;
+    }
+
+    .title-group {
+      justify-content: flex-start;
     }
 
     .header > * {
