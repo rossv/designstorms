@@ -1008,8 +1008,8 @@
           </div>
         </div>
 
-        <div class="grid cols-3 form-grid">
-          <div>
+        <div class="grid cols-3 form-grid form-grid--secondary">
+          <div class="align-center">
             <label for="dist">Distribution</label>
             <select id="dist" bind:value={distribution}>
               <option value="scs_type_i">SCS Type I</option>
@@ -1034,7 +1034,7 @@
               on:change={handleAriInput}
             />
           </div>
-          <div>
+          <div class="align-center">
             <label for="start">Start (ISO)</label>
             <input id="start" type="datetime-local" bind:value={startISO} />
           </div>
@@ -1348,6 +1348,22 @@
 
   .form-grid {
     gap: 14px;
+  }
+
+  .form-grid + .form-grid {
+    margin-top: 18px;
+  }
+
+  .form-grid--secondary {
+    align-items: stretch;
+  }
+
+  .form-grid--secondary .align-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    height: 100%;
   }
 
   .checkbox {
