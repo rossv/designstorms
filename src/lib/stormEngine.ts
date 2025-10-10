@@ -73,7 +73,7 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
           while (j < pts.length && pts[j][0] < t) j++
           const [x0, y0] = pts[Math.max(0, j - 1)]
           const [x1, y1] = pts[Math.min(pts.length - 1, j)]
-          const frac = (t - x0) / Math.max(1e-9, x1 - x0)
+          const frac = clamp01((t - x0) / Math.max(1e-9, x1 - x0))
           out.push(y0 * (1 - frac) + y1 * frac)
         }
         return out
