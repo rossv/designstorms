@@ -67,5 +67,11 @@ https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv?data=depth&lat=<lat>&lon=
 - **Production**: The app wraps the NOAA request with
   `https://api.allorigins.win/raw?url=<encoded NOAA URL>` to work around CORS.
 
+In production builds the app requests the CSV through the AllOrigins proxy at
+`https://api.allorigins.win/raw`. If that proxy is unavailable, the fetch simply
+fails—there are currently no additional proxy fallbacks or direct-download links
+surfaced in the UI, so manual retrieval must be done outside the app.
+
+
 ## License
 MIT
