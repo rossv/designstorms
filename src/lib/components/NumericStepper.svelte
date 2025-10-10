@@ -37,13 +37,25 @@
 
   function formatValue(val: number) {
     if (!Number.isFinite(val)) return ''
-    return Number.parseFloat(val.toFixed(Math.min(getStepPrecision(), 6))).toString()
+    const precision = Math.min(6, Math.max(getStepPrecision(), getValuePrecision(val)))
+    return Number(val.toFixed(precision)).toString()
   }
 
   function getStepPrecision() {
     const text = step.toString()
     const dot = text.indexOf('.')
     return dot === -1 ? 0 : text.length - dot - 1
+  }
+
+  function getValuePrecision(val: number) {
+    const maxPrecision = 6
+    for (let decimals = 0; decimals <= maxPrecision; decimals += 1) {
+      const rounded = Number(val.toFixed(decimals))
+      if (Math.abs(rounded - val) < epsilon) {
+        return decimals
+      }
+    }
+    return maxPrecision
   }
 
   function clamp(val: number) {

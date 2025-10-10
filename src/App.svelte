@@ -761,10 +761,13 @@
                 <div>
                   <strong>Duration</strong>
                 </div>
-                <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
-                  {#each aris as a}
-                    <div><strong>{a}</strong></div>
-                  {/each}
+                <div class="ari-header">
+                  <span class="ari-label">Average Recurrence Interval (years)</span>
+                  <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
+                    {#each aris as a}
+                      <div><strong>{a}</strong></div>
+                    {/each}
+                  </div>
                 </div>
               </div>
               <div class="table-body">
@@ -790,7 +793,7 @@
                               : ''
                           } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
                           data-ari={a}
-                          aria-label={`${a}-year ARI depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
+                          aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
                           on:click={() => pickCell(row.label, a)}
                         >
                         {depth}
@@ -802,7 +805,7 @@
               </div>
             </div>
           </div>
-          <div class="small">Tip: Click a table cell to apply the depth, duration, and ARI to the storm parameters.</div>
+          <div class="small">Tip: Click a table cell to apply the depth, duration, and Average Recurrence Interval to the storm parameters.</div>
         {/if}
       </div>
 
@@ -859,23 +862,15 @@
             </select>
           </div>
           <div>
-            <label for="ari">ARI (years)</label>
-            <input
+            <label for="ari">Average Recurrence Interval (years)</label>
+            <NumericStepper
               id="ari"
-              type="number"
-              min="0"
-              step="0.1"
+              label="Average Recurrence Interval (years)"
+              min={0}
+              step={1}
               bind:value={selectedAri}
-              on:input={handleAriInput}
-              list="ari-options"
+              on:change={handleAriInput}
             />
-            {#if aris.length}
-              <datalist id="ari-options">
-                {#each aris as a}
-                  <option value={a}>{a}</option>
-                {/each}
-              </datalist>
-            {/if}
           </div>
           <div>
             <label for="start">Start (ISO)</label>
@@ -910,8 +905,8 @@
             <div class="stat-value">{peakIntensity.toFixed(2)} in/hr</div>
           </div>
           <div class="stat-box">
-            <div class="stat-title">Selected ARI</div>
-            <div class="stat-value">{selectedAri} yr</div>
+            <div class="stat-title">Selected Average Recurrence Interval</div>
+            <div class="stat-value">{selectedAri} years</div>
           </div>
         </div>
       </div>
@@ -988,7 +983,10 @@
         <h3>Workflow</h3>
         <ol>
           <li>Pick a location on the map (NOAA table refreshes automatically).</li>
-          <li>Click a cell in the NOAA table to set <em>Return period</em>, <em>Depth</em>, and <em>Duration</em>.</li>
+          <li>
+            Click a cell in the NOAA table to set <em>Return period (Average Recurrence Interval)</em>,
+            <em>Depth</em>, and <em>Duration</em>.
+          </li>
           <li>
             Choose a distribution (SCS types use dimensionless tables; Huff quartiles use Beta
             approximations).
@@ -997,9 +995,9 @@
         </ol>
         <h3>Interpolation</h3>
         <p>
-          NOAA table selections populate the inputs with matching depth, duration, and ARI. Adjusting the ARI
-          dropdown re-applies the NOAA depth for the chosen duration when data is available, while manual
-          edits always remain editable.
+          NOAA table selections populate the inputs with matching depth, duration, and Average Recurrence
+          Interval. Adjusting the Average Recurrence Interval control re-applies the NOAA depth for the chosen
+          duration when data is available, while manual edits always remain editable.
         </p>
         <h3>Methods</h3>
         <p>
@@ -1234,6 +1232,19 @@
     border-bottom: 1px solid var(--border);
   }
 
+  .ari-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ari-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
   .table-header > div,
   .table-row > div {
     padding: 10px;
@@ -1403,7 +1414,7 @@
     }
 
     .table-button.cell::before {
-      content: attr(data-ari) ' yr ARI';
+      content: 'Average Recurrence Interval — ' attr(data-ari) ' yr';
       font-size: 11px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
