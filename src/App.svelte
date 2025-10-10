@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
+  import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
   import * as L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
@@ -95,6 +95,11 @@
   }[] = []
   let hasTimestamp = false
 
+  let tableScrollEl: HTMLDivElement | null = null
+  let tableScrollObserver: ResizeObserver | null = null
+  let observedTableScrollEl: HTMLDivElement | null = null
+  let tableScrollMaxHeight = 320
+
   function formatTimestamp(date: Date) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
@@ -102,6 +107,43 @@
     const hour = String(date.getHours()).padStart(2, '0')
     const minute = String(date.getMinutes()).padStart(2, '0')
     return `${month}-${day}-${year} ${hour}:${minute}`
+  }
+
+  function attachTableScrollObserver() {
+    if (!tableScrollObserver) return
+    if (observedTableScrollEl && observedTableScrollEl !== tableScrollEl) {
+      tableScrollObserver.unobserve(observedTableScrollEl)
+    }
+    if (tableScrollEl && observedTableScrollEl !== tableScrollEl) {
+      tableScrollObserver.observe(tableScrollEl)
+    }
+    observedTableScrollEl = tableScrollEl
+  }
+
+  function updateTableScrollHeight() {
+    if (!tableScrollEl) return
+
+    const rect = tableScrollEl.getBoundingClientRect()
+    const pageElement = tableScrollEl.closest('.page')
+    let paddingBottom = 0
+
+    if (pageElement instanceof HTMLElement) {
+      const computed = getComputedStyle(pageElement)
+      paddingBottom = parseFloat(computed.paddingBottom) || 0
+    }
+
+    const clearance = 12
+    const minHeight = 200
+    const available = window.innerHeight - rect.top - paddingBottom - clearance
+    const nextHeight = Math.max(minHeight, available)
+
+    if (Math.abs(nextHeight - tableScrollMaxHeight) > 1) {
+      tableScrollMaxHeight = nextHeight
+    }
+  }
+
+  const handleViewportChange = () => {
+    updateTableScrollHeight()
   }
 
   function scheduleNoaaFetch(delay = 700) {
@@ -643,6 +685,12 @@
 
     void loadNoaa()
     makeStorm()
+
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener('scroll', handleViewportChange, { passive: true })
+    tableScrollObserver = new ResizeObserver(handleViewportChange)
+    attachTableScrollObserver()
+    updateTableScrollHeight()
   })
 
   onDestroy(() => {
@@ -651,6 +699,9 @@
     if (plotDiv1) Plotly.purge(plotDiv1)
     if (plotDiv2) Plotly.purge(plotDiv2)
     if (plotDiv3) Plotly.purge(plotDiv3)
+    window.removeEventListener('resize', handleViewportChange)
+    window.removeEventListener('scroll', handleViewportChange)
+    tableScrollObserver?.disconnect()
   })
 
   $: if (marker) {
@@ -663,6 +714,11 @@
       scheduleNoaaFetch()
     }
   }
+
+  afterUpdate(() => {
+    attachTableScrollObserver()
+    updateTableScrollHeight()
+  })
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -935,7 +991,11 @@
       <div class="panel results">
         <h2 class="section-title">Storm Table</h2>
         {#if tableRows.length}
-          <div class="table-scroll">
+          <div
+            class="table-scroll"
+            bind:this={tableScrollEl}
+            style:max-height={`${tableScrollMaxHeight}px`}
+          >
             <table class="data-table">
               <thead>
                 <tr>
