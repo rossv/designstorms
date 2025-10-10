@@ -1028,7 +1028,7 @@
                   step={0.1}
                   bind:value={selectedDepth}
                   on:change={handleDepthInput}
-                  class:recalculated={recentlyRecalculated === 'depth'}
+                  recalculated={recentlyRecalculated === 'depth'}
                 />
                 <button 
                   class="lock-button" 
@@ -1050,7 +1050,7 @@
                   step={1}
                   bind:value={selectedDurationHr}
                   on:change={handleDurationInput}
-                  class:recalculated={recentlyRecalculated === 'duration'}
+                  recalculated={recentlyRecalculated === 'duration'}
                 />
                 <button 
                   class="lock-button" 
@@ -1072,7 +1072,7 @@
                   step={1}
                   bind:value={selectedAri}
                   on:change={handleAriInput}
-                  class:recalculated={recentlyRecalculated === 'ari'}
+                  recalculated={recentlyRecalculated === 'ari'}
                 />
                 <button 
                   class="lock-button" 
@@ -1962,10 +1962,5 @@
   .lock-button.locked {
     background: var(--accent);
     color: #04131c;
-  }
-  
-  .recalculated {
-      transition: box-shadow 0.5s ease-out;
-      box-shadow: 0 0 0 2px var(--accent);
   }
 </style>
