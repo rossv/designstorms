@@ -583,6 +583,13 @@
     recalcFromAri()
   }
 
+  function handleTimestepInput() {
+    if (!Number.isFinite(timestepMin) || timestepMin <= 0) {
+      return
+    }
+    makeStorm()
+  }
+
   function doCsv() {
     if (!lastStorm) return
     saveCsv(lastStorm, 'design_storm.csv')
@@ -839,6 +846,7 @@
               min={0.1}
               step={1}
               bind:value={timestepMin}
+              on:change={handleTimestepInput}
             />
           </div>
         </div>
