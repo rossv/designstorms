@@ -62,7 +62,6 @@
 
   let lastStorm: ReturnType<typeof generateStorm> | null = null
   
-  let lockedParameter: 'ari' | 'depth' | 'duration' | null = null;
   let lastChangedBy: 'user' | 'system' = 'user';
   let recentlyRecalculated: 'ari' | 'depth' | 'duration' | null = null;
   let recalculationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -718,33 +717,17 @@
 
   function handleDepthInput() {
     lastChangedBy = 'user';
-    if(lockedParameter === 'depth') return;
-    if(lockedParameter === 'ari'){
-        // ToDo recalculate duration
-    } else { // duration or null
-        recalcFromDepthOrDuration()
-    }
+    recalcFromDepthOrDuration()
   }
 
   function handleDurationInput() {
     lastChangedBy = 'user';
-    if(lockedParameter === 'duration') return;
-
-    if(lockedParameter === 'ari'){
-        // ToDo recalculate depth
-    } else { // depth or null
-        recalcFromDepthOrDuration()
-    }
+    recalcFromDepthOrDuration()
   }
 
   function handleAriInput() {
     lastChangedBy = 'user';
-    if(lockedParameter === 'ari') return;
-    if(lockedParameter === 'depth'){
-        // ToDo recalculate duration
-    } else { // duration or null
-        recalcFromAri()
-    }
+    recalcFromAri()
   }
 
   function handleTimestepInput() {
@@ -782,14 +765,6 @@
       event.preventDefault()
       closeHelp()
     }
-  }
-  
-  function setLocked(param: 'ari' | 'depth' | 'duration' | null){
-      if(lockedParameter === param){
-          lockedParameter = null;
-      } else {
-          lockedParameter = param;
-      }
   }
   
   function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
@@ -1020,69 +995,39 @@
         <div class="grid cols-3 form-grid">
           <div class="parameter-input">
             <label for="depth">Depth (in)</label>
-            <div class="input-with-lock">
-                <NumericStepper
-                  id="depth"
-                  label="Depth (in)"
-                  min={0}
-                  step={0.1}
-                  bind:value={selectedDepth}
-                  on:change={handleDepthInput}
-                  recalculated={recentlyRecalculated === 'depth'}
-                />
-                <button 
-                  class="lock-button" 
-                  class:locked={lockedParameter === 'depth'}
-                  on:click={() => setLocked('depth')}
-                  title="Lock this parameter"
-                >
-                  {lockedParameter === 'depth' ? '🔒' : '🔓'}
-                </button>
-            </div>
+            <NumericStepper
+              id="depth"
+              label="Depth (in)"
+              min={0}
+              step={0.1}
+              bind:value={selectedDepth}
+              on:change={handleDepthInput}
+              recalculated={recentlyRecalculated === 'depth'}
+            />
           </div>
           <div class="parameter-input">
             <label for="duration">Duration (hr)</label>
-            <div class="input-with-lock">
-                <NumericStepper
-                  id="duration"
-                  label="Duration (hr)"
-                  min={0.1}
-                  step={1}
-                  bind:value={selectedDurationHr}
-                  on:change={handleDurationInput}
-                  recalculated={recentlyRecalculated === 'duration'}
-                />
-                <button 
-                  class="lock-button" 
-                  class:locked={lockedParameter === 'duration'}
-                  on:click={() => setLocked('duration')}
-                  title="Lock this parameter"
-                >
-                  {lockedParameter === 'duration' ? '🔒' : '🔓'}
-                </button>
-            </div>
+            <NumericStepper
+              id="duration"
+              label="Duration (hr)"
+              min={0.1}
+              step={1}
+              bind:value={selectedDurationHr}
+              on:change={handleDurationInput}
+              recalculated={recentlyRecalculated === 'duration'}
+            />
           </div>
           <div class="parameter-input">
             <label for="ari">Average Recurrence Interval (years)</label>
-            <div class="input-with-lock">
-                <NumericStepper
-                  id="ari"
-                  label="Average Recurrence Interval (years)"
-                  min={0}
-                  step={1}
-                  bind:value={selectedAri}
-                  on:change={handleAriInput}
-                  recalculated={recentlyRecalculated === 'ari'}
-                />
-                <button 
-                  class="lock-button" 
-                  class:locked={lockedParameter === 'ari'}
-                  on:click={() => setLocked('ari')}
-                  title="Lock this parameter"
-                >
-                  {lockedParameter === 'ari' ? '🔒' : '🔓'}
-                </button>
-            </div>
+            <NumericStepper
+              id="ari"
+              label="Average Recurrence Interval (years)"
+              min={0}
+              step={1}
+              bind:value={selectedAri}
+              on:change={handleAriInput}
+              recalculated={recentlyRecalculated === 'ari'}
+            />
           </div>
         </div>
 
@@ -1944,23 +1889,5 @@
     .data-table td {
       padding: 6px 8px;
     }
-  }
-  .input-with-lock {
-    display: flex;
-    align-items: center;
-  }
-  .lock-button {
-    margin-left: 8px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .lock-button.locked {
-    background: var(--accent);
-    color: #04131c;
   }
 </style>
