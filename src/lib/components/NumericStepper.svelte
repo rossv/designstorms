@@ -10,6 +10,9 @@
   export let label = ''
   export let disabled = false
   export let showProgress = false
+  export let recalculated = false // New prop
+  let className = ''
+  export { className as class }
 
   const dispatch = createEventDispatcher<{ change: { value: number } }>()
 
@@ -178,7 +181,7 @@
   }
 </script>
 
-<div class="stepper" data-disabled={disabled} data-focused={isEditing}>
+<div class="stepper {className}" class:recalculated data-disabled={disabled} data-focused={isEditing}>
   <button
     type="button"
     class="stepper-button decrement"
@@ -239,6 +242,10 @@
     transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
     width: 100%;
     box-sizing: border-box;
+  }
+
+  .stepper.recalculated {
+      box-shadow: 0 0 0 2px var(--accent);
   }
 
   .stepper[data-disabled='true'] {
