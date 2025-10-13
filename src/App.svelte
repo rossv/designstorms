@@ -7,6 +7,14 @@
   import Plotly from 'plotly.js-dist-min'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
+  import {
+    toHours,
+    getSortedDurationRows,
+    getRowForCalculation,
+    interpolateAriForDuration,
+    interpolateDepthFromAri,
+    type InterpolationCell
+  } from './lib/rainfall'
   import { saveCsv, savePcswmmDat } from './lib/export'
   import NumericStepper from './lib/components/NumericStepper.svelte'
   import designStormIcon from './design_storm.ico'
@@ -52,7 +60,7 @@
   let selectedDepth = 1.0
   let selectedDurationHr = 24
 
-  let interpolatedCells: { duration: string; ari: string }[] = []
+  let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
 
   let timestepMin = 5
@@ -320,14 +328,6 @@
     makeStorm()
   }
 
-  function toHours(label: string): number {
-    const m = label.toLowerCase()
-    const num = parseFloat(m)
-    if (m.includes('min')) return num / 60
-    if (m.includes('hr') || m.includes('hour')) return num
-    return num * 24
-  }
-
   function applyNoaaSelection() {
     if (!table || !selectedDurationLabel) return
     const row = table.rows.find((r) => r.label === selectedDurationLabel)
@@ -341,7 +341,7 @@
       makeStorm()
       return
     }
-    const interpolated = interpolateDepthFromAri(row, selectedAri)
+    const interpolated = interpolateDepthFromAri(row, selectedAri, table.aris)
     if (interpolated) {
       selectedDepth = interpolated.depth
       interpolatedCells = interpolated.highlight ?? []
@@ -478,7 +478,7 @@
       return
     }
 
-    const durationEntries = getSortedDurationRows()
+    const durationEntries = getSortedDurationRows(table)
     if (!durationEntries.length) {
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
@@ -720,7 +720,7 @@
       .filter((entry) => Number.isFinite(entry.value))
       .sort((a, b) => a.value - b.value)
 
-    const durationEntries = getSortedDurationRows()
+    const durationEntries = getSortedDurationRows(table)
     if (!ariEntries.length || !durationEntries.length) return
 
     const nearestAri = ariEntries.reduce(
@@ -773,219 +773,10 @@
     }
   }
 
-  function getRowForCalculation() {
-    if (!table) {
-      return { row: null as NoaaRow | null, label: null as string | null }
-    }
-    if (selectedDurationLabel) {
-      const existing = table.rows.find((r) => r.label === selectedDurationLabel)
-      if (existing) {
-        return { row: existing, label: existing.label }
-      }
-    }
-    return findClosestRow(selectedDurationHr)
-  }
-
-  function findClosestRow(durationHr: number) {
-    if (!table || !Number.isFinite(durationHr)) {
-      return { row: null as NoaaRow | null, label: null as string | null }
-    }
-    let bestRow: NoaaRow | null = null
-    let bestLabel: string | null = null
-    let bestDiff = Number.POSITIVE_INFINITY
-    for (const r of table.rows) {
-      const diff = Math.abs(toHours(r.label) - durationHr)
-      if (diff < bestDiff) {
-        bestDiff = diff
-        bestRow = r
-        bestLabel = r.label
-      }
-    }
-    return { row: bestRow, label: bestLabel }
-  }
-
-  function getRowPoints(row: NoaaRow) {
-    if (!table) return [] as { key: string; ari: number; depth: number }[]
-    return table.aris
-      .map((key) => ({
-        key,
-        ari: Number.parseFloat(key),
-        depth: row.values[key]
-      }))
-      .filter((pt) => Number.isFinite(pt.ari) && Number.isFinite(pt.depth))
-      .sort((a, b) => a.ari - b.ari)
-  }
-
-  function interpolateAriFromDepth(
-    row: NoaaRow,
-    targetDepth: number
-  ) {
-    const points = getRowPoints(row)
-    if (!points.length || !Number.isFinite(targetDepth)) return null
-    if (targetDepth <= points[0].depth) {
-      return { ari: points[0].ari, highlight: null as { duration: string; ari: string }[] | null }
-    }
-    for (let i = 0; i < points.length - 1; i += 1) {
-      const a = points[i]
-      const b = points[i + 1]
-      const low = Math.min(a.depth, b.depth)
-      const high = Math.max(a.depth, b.depth)
-      if (targetDepth >= low && targetDepth <= high) {
-        const span = b.depth - a.depth
-        if (Math.abs(span) < 1e-9) {
-          return { ari: b.ari, highlight: null }
-        }
-        const ratio = (targetDepth - a.depth) / span
-        const interpolatedAri = a.ari + ratio * (b.ari - a.ari)
-        const highlight =
-          ratio > 0 && ratio < 1
-            ? [
-                { duration: row.label, ari: a.key },
-                { duration: row.label, ari: b.key }
-              ]
-            : null
-        return { ari: interpolatedAri, highlight }
-      }
-    }
-    const last = points[points.length - 1]
-    return { ari: last.ari, highlight: null }
-  }
-
-  function interpolateDepthFromAri(
-    row: NoaaRow,
-    targetAri: number
-  ) {
-    const points = getRowPoints(row)
-    if (!points.length || !Number.isFinite(targetAri)) return null
-    if (targetAri <= points[0].ari) {
-      return { depth: points[0].depth, highlight: null as { duration: string; ari: string }[] | null }
-    }
-    for (let i = 0; i < points.length - 1; i += 1) {
-      const a = points[i]
-      const b = points[i + 1]
-      if (targetAri >= a.ari && targetAri <= b.ari) {
-        const span = b.ari - a.ari
-        if (Math.abs(span) < 1e-9) {
-          return { depth: b.depth, highlight: null }
-        }
-        const ratio = (targetAri - a.ari) / span
-        const interpolatedDepth = a.depth + ratio * (b.depth - a.depth)
-        const highlight =
-          ratio > 0 && ratio < 1
-            ? [
-                { duration: row.label, ari: a.key },
-                { duration: row.label, ari: b.key }
-              ]
-            : null
-        return { depth: interpolatedDepth, highlight }
-      }
-    }
-    const last = points[points.length - 1]
-    return { depth: last.depth, highlight: null }
-  }
-
   function cellIsInterpolated(durationLabel: string, ari: string) {
     return interpolatedCells.some(
       (cell) => cell.duration === durationLabel && cell.ari === ari
     )
-  }
-
-  type DurationInterpolationResult = {
-    ari: number
-    label: string | null
-    highlight: { duration: string; ari: string }[] | null
-  }
-
-  function getSortedDurationRows() {
-    if (!table) return [] as { hr: number; label: string; row: NoaaRow }[]
-    return table.rows
-      .map((row) => ({ hr: toHours(row.label), label: row.label, row }))
-      .filter((entry) => Number.isFinite(entry.hr))
-      .sort((a, b) => a.hr - b.hr)
-  }
-
-  function interpolateAriForDuration(
-    durationHr: number,
-    depth: number
-  ): DurationInterpolationResult | null {
-    if (!Number.isFinite(durationHr) || !Number.isFinite(depth) || !table) {
-      return null
-    }
-
-    const entries = getSortedDurationRows()
-    if (!entries.length) {
-      return null
-    }
-
-    const exactMatch = entries.find((entry) => entry.label === selectedDurationLabel)
-    if (exactMatch && Math.abs(exactMatch.hr - durationHr) < 1e-6) {
-      const result = interpolateAriFromDepth(exactMatch.row, depth)
-      if (!result) return null
-      return { ari: result.ari, label: exactMatch.label, highlight: result.highlight }
-    }
-
-    if (durationHr <= entries[0].hr) {
-      const result = interpolateAriFromDepth(entries[0].row, depth)
-      if (!result) return null
-      return { ari: result.ari, label: entries[0].label, highlight: result.highlight }
-    }
-
-    const lastEntry = entries[entries.length - 1]
-    if (durationHr >= lastEntry.hr) {
-      const result = interpolateAriFromDepth(lastEntry.row, depth)
-      if (!result) return null
-      return { ari: result.ari, label: lastEntry.label, highlight: result.highlight }
-    }
-
-    for (let i = 0; i < entries.length - 1; i += 1) {
-      const lower = entries[i]
-      const upper = entries[i + 1]
-      if (durationHr >= lower.hr && durationHr <= upper.hr) {
-        const span = upper.hr - lower.hr
-        if (span < 1e-6) {
-          const fallback = interpolateAriFromDepth(upper.row, depth)
-          if (!fallback) return null
-          return { ari: fallback.ari, label: upper.label, highlight: fallback.highlight }
-        }
-
-        const lowerResult = interpolateAriFromDepth(lower.row, depth)
-        const upperResult = interpolateAriFromDepth(upper.row, depth)
-        if (!lowerResult || !upperResult) {
-          const fallback = lowerResult ?? upperResult
-          if (!fallback) return null
-          const fallbackLabel = lowerResult ? lower.label : upper.label
-          return {
-            ari: fallback.ari,
-            label: fallbackLabel,
-            highlight: fallback.highlight
-          }
-        }
-
-        const ratio = (durationHr - lower.hr) / span
-        const interpolatedAri = lowerResult.ari + ratio * (upperResult.ari - lowerResult.ari)
-
-        const combinedHighlights = [
-          ...(lowerResult.highlight ?? []),
-          ...(upperResult.highlight ?? [])
-        ]
-
-        const uniqueHighlights = combinedHighlights.filter((cell, index, array) => {
-          const key = `${cell.duration}:${cell.ari}`
-          return (
-            index ===
-            array.findIndex((candidate) => `${candidate.duration}:${candidate.ari}` === key)
-          )
-        })
-
-        return {
-          ari: interpolatedAri,
-          label: ratio < 0.5 ? lower.label : upper.label,
-          highlight: uniqueHighlights.length ? uniqueHighlights : null
-        }
-      }
-    }
-
-    return null
   }
 
   function recalcFromDepthOrDuration() {
@@ -998,7 +789,9 @@
       return
     }
 
-    const result = interpolateAriForDuration(selectedDurationHr, selectedDepth)
+    const result = interpolateAriForDuration(table, selectedDurationHr, selectedDepth, {
+      preferredLabel: selectedDurationLabel ?? null
+    })
     if (!result) {
       interpolatedCells = []
       makeStorm()
@@ -1025,7 +818,11 @@
       interpolatedCells = []
       return
     }
-    const { row, label } = getRowForCalculation()
+    const { row, label } = getRowForCalculation(
+      table,
+      selectedDurationHr,
+      selectedDurationLabel ?? null
+    )
     if (!row || !label) {
       interpolatedCells = []
       return
@@ -1033,7 +830,7 @@
     if (selectedDurationLabel !== label) {
       selectedDurationLabel = label
     }
-    const result = interpolateDepthFromAri(row, selectedAri)
+    const result = interpolateDepthFromAri(row, selectedAri, table.aris)
     if (result) {
       const newDepth = Number(result.depth.toFixed(3))
       if (selectedDepth !== newDepth) {
