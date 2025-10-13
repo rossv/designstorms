@@ -626,7 +626,7 @@
         symbol: 'circle'
       },
       hovertemplate:
-        'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<extra>NOAA data point</extra>',
+        'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<extra></extra>',
       name: 'NOAA data points',
       showlegend: false
     }
@@ -688,7 +688,14 @@
         titlefont: { size: isCompact ? 12 : undefined },
         automargin: true
       },
-      hovermode: 'closest'
+      hovermode: 'closest',
+      hoverlabel: {
+        bgcolor: '#0f172a',
+        bordercolor: '#38bdf8',
+        font: {
+          color: '#f8fafc'
+        }
+      }
     }
 
     const data = highlightTrace
