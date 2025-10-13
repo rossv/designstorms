@@ -13,8 +13,14 @@ describe('formatPcswmmDat', () => {
 
     const txt = formatPcswmmDat(storm, 5, 'Gauge', '2024-01-01T00:00:00-05:00')
     const lines = txt.trim().split('\n')
-    const dataLine = lines[2]
-    const [, year, month, day, hour, minute] = dataLine.split('\t')
-    expect([year, month, day, hour, minute]).toEqual(['2024', '1', '1', '0', '5'])
+    const dataLines = lines.slice(2)
+    expect(dataLines).toHaveLength(storm.intensityInHr.length)
+
+    const [firstLine, secondLine] = dataLines
+    const [, ...firstParts] = firstLine.split('\t')
+    const [, ...secondParts] = secondLine.split('\t')
+
+    expect(firstParts.slice(0, 5)).toEqual(['2024', '1', '1', '0', '0'])
+    expect(secondParts.slice(0, 5)).toEqual(['2024', '1', '1', '0', '5'])
   })
 })
