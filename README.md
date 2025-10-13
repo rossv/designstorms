@@ -1,25 +1,88 @@
 # Design Storm Web (TypeScript + Svelte)
 
-A GitHub Pages–ready, client-only app to build design-storm hyetographs (SCS I/IA/II/III, Huff quartiles, user curves), fetch NOAA Atlas 14 depths live by lat/lon, visualize intensity/cumulative, and export CSV / PCSWMM DAT.
+Design Storm Web is a GitHub Pages–ready, client-only tool for hydrologists and stormwater
+modelers. It combines live NOAA Atlas 14 precipitation tables with a library of temporal
+patterns so you can generate design-storm hyetographs, visualize cumulative and intensity
+plots, and export the results as CSV or PCSWMM-compatible DAT files.
 
-## Stack
-- Svelte + Vite + TypeScript
-- Leaflet (OSM tiles)
-- Plotly.js for charts
-- Pure client-side; zero backend
+## Key Features
 
-## Dev
+- Interactive Leaflet map with NOAA Atlas 14 depth lookup by latitude/longitude.
+- Support for SCS Types I/IA/II/III, Huff quartiles, beta-based distributions, and
+  user-supplied cumulative depth curves.
+- Side-by-side cumulative and intensity charts powered by Plotly.js.
+- CSV export with tabular precipitation data and DAT export using PCSWMM's
+  intensity units (in/hr).
+- 100% client-side—no backend services to deploy or maintain.
+
+## Tech Stack
+
+- [Svelte](https://svelte.dev/) + [Vite](https://vitejs.dev/) + TypeScript
+- [Leaflet](https://leafletjs.com/) with OpenStreetMap tiles
+- [Plotly.js](https://plotly.com/javascript/) for chart rendering
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ (Node 22 LTS recommended to match the CI configuration)
+- npm 9+
+
+### Install and Run the Dev Server
+
 ```bash
-npm i
+npm install
 npm run dev
 ```
-Open http://localhost:5173
 
-## Build & Deploy (GitHub Pages)
-1. Create a repo on GitHub (e.g., `design-storm-web`).
-2. In `vite.config.ts`, set `base` to `"/<repo-name>/"` (e.g., `"/design-storm-web/"`).
-3. Push, then enable Pages on the repo (Source: GitHub Actions).
-4. Add the workflow below at `.github/workflows/deploy.yml`.
+By default Vite serves the app at http://localhost:5173. The dev server automatically proxies
+requests from `/noaa-api/fe_text_mean.csv` to NOAA's Atlas 14 service, so live precipitation
+tables are available without additional setup.
+
+### Run Tests and Type Checks
+
+```bash
+npm test       # Vitest unit tests
+npx svelte-check
+```
+
+## Data Sources & Exports
+
+### NOAA Atlas 14 Integration
+
+The app retrieves NOAA Atlas 14 **mean** rainfall depth tables from `fe_text_mean.csv`:
+
+```
+https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv?data=depth&lat=<lat>&lon=<lon>&series=pds&units=english
+```
+
+- **Development**: `/noaa-api/fe_text_mean.csv` is configured as a Vite proxy target in
+  `vite.config.ts`, keeping the browser requests same-origin.
+- **Production**: Requests are wrapped in
+  `https://api.allorigins.win/raw?url=<encoded NOAA URL>` to avoid CORS issues on GitHub Pages.
+
+If the public proxy is unavailable, data fetches will fail gracefully and no table rows will
+populate. Users can still enter depths manually or retry once the proxy is back online.
+
+### Temporal Patterns
+
+SCS storm types rely on NRCS dimensionless cumulative rainfall tables that are resampled to the
+selected storm duration. Huff quartiles and additional presets use parameterized Beta(α,β)
+distributions on [0, 1]. Custom temporal patterns can be loaded from CSV files containing time and
+cumulative fraction columns; the curve is normalized and resampled before intensities are derived.
+
+### Export Formats
+
+- **CSV** – Includes timestamp (if requested), cumulative depth, incremental depth, and intensity.
+- **DAT** – Encodes intensities only and always exports in inches per hour to align with PCSWMM's
+  expectations.
+
+## Deploying to GitHub Pages
+
+1. Create a repository on GitHub (for example, `design-storm-web`).
+2. In `vite.config.ts`, set `base` to `"/<repo-name>/"` (for example, `"/design-storm-web/"`).
+3. Push to GitHub and enable Pages on the repository (Source: GitHub Actions).
+4. Add the workflow below as `.github/workflows/deploy.yml`:
 
 ```yaml
 name: Deploy to GitHub Pages
@@ -55,23 +118,14 @@ jobs:
         uses: actions/deploy-pages@v4
 ```
 
-## NOAA Atlas 14
-`fetchNoaaTable` hits NOAA's free-text **mean** rainfall depth CSV. The base URL built
-in production is:
-```
-https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv?data=depth&lat=<lat>&lon=<lon>&series=pds&units=english
-```
+## Contributing
 
-- **Development**: Vite proxies `/noaa-api/fe_text_mean.csv` to NOAA so the browser
-  can request data without CORS errors.
-- **Production**: The app wraps the NOAA request with
-  `https://api.allorigins.win/raw?url=<encoded NOAA URL>` to work around CORS.
+Open an issue or submit a pull request for enhancements. When reporting bugs, include:
 
-In production builds the app requests the CSV through the AllOrigins proxy at
-`https://api.allorigins.win/raw`. If that proxy is unavailable, the fetch simply
-fails—there are currently no additional proxy fallbacks or direct-download links
-surfaced in the UI, so manual retrieval must be done outside the app.
-
+- The location (lat/lon) and storm settings you were using
+- Browser and operating system details
+- Console/network errors from the developer tools, if available
 
 ## License
+
 MIT

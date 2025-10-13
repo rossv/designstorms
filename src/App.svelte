@@ -1326,13 +1326,18 @@
             Choose a distribution (SCS types use dimensionless tables; Huff quartiles use Beta
             approximations).
           </li>
-          <li>Export CSV / DAT (DAT always in in/hr).</li>
+          <li>
+            Export your results. CSV includes timestamps, incremental depth, cumulative depth, and
+            intensity columns. DAT exports contain intensities only and are always reported in inches per
+            hour to match PCSWMM expectations.
+          </li>
         </ol>
         <h3>Interpolation</h3>
         <p>
-          When <i>Use NOAA selection</i> is <b>unchecked</b>:
-        editing <i>Return period</i> will interpolate <i>Depth</i> along the selected duration row.
-        Editing <i>Duration</i> or <i>Total depth</i> updates <i>Return period</i> to stay consistent.</p>
+          When <i>Use NOAA selection</i> is <b>unchecked</b>, editing <i>Return period</i> will interpolate
+          <i>Depth</i> along the selected duration row. Editing <i>Duration</i> or <i>Total depth</i> updates
+          <i>Return period</i> to stay consistent.
+        </p>
         <h3>Methods</h3>
         <p>
           Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
