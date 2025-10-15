@@ -24,6 +24,8 @@
   let plotDiv2: HTMLDivElement
   let plotDiv3: HTMLDivElement
   let isoPlotDiv: HTMLDivElement
+  let curvePlotDiv: HTMLDivElement | null = null
+  let curveModalDialog: HTMLDivElement | null = null
 
   let map: L.Map
   let marker: L.Marker
@@ -70,6 +72,7 @@
   let startISO = '2003-01-01T00:00'
   let customCurveCsv = ''
   let showHelp = false
+  let showCurveModal = false
   let helpDialog: HTMLDivElement | null = null
 
   let isLoadingNoaa = false
@@ -120,6 +123,18 @@
   let tableScrollObserver: ResizeObserver | null = null
   let observedTableScrollEl: HTMLDivElement | null = null
   let tableScrollMaxHeight = 320
+
+  type DurationCurve = {
+    duration: number
+    timeHr: number[]
+    fraction: number[]
+    rows: { time: number; fraction: number }[]
+  }
+
+  let durationCurves: DurationCurve[] = []
+  let selectedCurveDuration: number | null = null
+  let lastCurveParamsKey = ''
+  let selectedCurveData: DurationCurve | null = null
 
   function formatTimestamp(date: Date) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -953,10 +968,32 @@
     showHelp = false
   }
 
+  async function openCurveModal() {
+    showCurveModal = true
+    await tick()
+    curveModalDialog?.focus()
+    refreshDurationCurves()
+  }
+
+  function closeCurveModal() {
+    showCurveModal = false
+    detachCurvePlotClickHandler()
+    if (curvePlotDiv) {
+      Plotly.purge(curvePlotDiv)
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && showHelp) {
-      event.preventDefault()
-      closeHelp()
+    if (event.key === 'Escape') {
+      if (showCurveModal) {
+        event.preventDefault()
+        closeCurveModal()
+        return
+      }
+      if (showHelp) {
+        event.preventDefault()
+        closeHelp()
+      }
     }
   }
 
@@ -964,6 +1001,141 @@
     if (event.target === event.currentTarget) {
       closeHelp()
     }
+  }
+
+  function handleCurveBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
+      closeCurveModal()
+    }
+  }
+
+  function refreshDurationCurves() {
+    if (!showCurveModal) return
+
+    const trimmedCsv = customCurveCsv.trim()
+    const key = `${distribution}|${timestepMin}|${trimmedCsv}`
+    if (key === lastCurveParamsKey && durationCurves.length) {
+      drawDurationCurves()
+      return
+    }
+
+    lastCurveParamsKey = key
+
+    durationCurves = STANDARD_DURATION_HOURS.map((duration) => {
+      const params: StormParams = {
+        depthIn: 1,
+        durationHr: duration,
+        timestepMin,
+        distribution,
+        startISO,
+        customCurveCsv: trimmedCsv || undefined,
+        durationMode: 'standard'
+      }
+
+      const result = generateStorm(params)
+      const totalDepth = result.cumulativeIn[result.cumulativeIn.length - 1] || 1
+      const timeHr = result.timeMin.map((t) => t / 60)
+      const fraction = result.cumulativeIn.map((value) =>
+        totalDepth === 0 ? 0 : Math.min(1, Math.max(0, value / totalDepth))
+      )
+
+      if (timeHr.length > 0) {
+        timeHr[timeHr.length - 1] = duration
+      }
+      if (fraction.length > 0) {
+        fraction[fraction.length - 1] = 1
+      }
+
+      const rows = timeHr.map((time, index) => ({
+        time,
+        fraction: fraction[index] ?? 0
+      }))
+
+      return { duration, timeHr, fraction, rows }
+    })
+
+    if (!selectedCurveDuration || !matchesStandardDurationHours(selectedCurveDuration)) {
+      const preferred = matchesStandardDurationHours(selectedDurationHr)
+        ? (nearestStandardDuration(selectedDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
+        : STANDARD_DURATION_HOURS[0]
+      selectedCurveDuration = preferred
+    }
+
+    drawDurationCurves()
+  }
+
+  const handleCurvePlotClick = (event: any) => {
+    const point = event?.points?.[0]
+    const duration = point?.data?.meta
+    if (typeof duration === 'number') {
+      selectedCurveDuration = duration
+    }
+  }
+
+  function attachCurvePlotClickHandler() {
+    if (!curvePlotDiv) return
+    const plotElement = curvePlotDiv as any
+    if (plotElement && typeof plotElement.on === 'function') {
+      detachCurvePlotClickHandler()
+      plotElement.on('plotly_click', handleCurvePlotClick)
+    }
+  }
+
+  function detachCurvePlotClickHandler() {
+    if (!curvePlotDiv) return
+    const plotElement = curvePlotDiv as any
+    if (plotElement) {
+      if (typeof plotElement.removeListener === 'function') {
+        plotElement.removeListener('plotly_click', handleCurvePlotClick)
+      }
+      if (typeof plotElement.off === 'function') {
+        plotElement.off('plotly_click', handleCurvePlotClick)
+      }
+    }
+  }
+
+  function drawDurationCurves() {
+    if (!curvePlotDiv) return
+    if (!durationCurves.length) {
+      Plotly.purge(curvePlotDiv)
+      detachCurvePlotClickHandler()
+      return
+    }
+
+    const traces = durationCurves.map((curve) => ({
+      x: curve.timeHr,
+      y: curve.fraction,
+      type: 'scatter',
+      mode: 'lines',
+      name: `${curve.duration}-hr`,
+      line: { width: 3 },
+      hovertemplate: `Time: %{x:.2f} hr<br>Rain fraction: %{y:.3f}<extra></extra>`,
+      meta: curve.duration
+    }))
+
+    const maxDuration = Math.max(...durationCurves.map((curve) => curve.duration))
+
+    Plotly.react(
+      curvePlotDiv,
+      traces,
+      {
+        ...plotLayoutBase,
+        title: 'Distribution Rain Fraction Comparison',
+        xaxis: {
+          ...plotLayoutBase.xaxis,
+          title: 'Time (hr)',
+          range: [0, Math.max(6, maxDuration)]
+        },
+        yaxis: {
+          ...plotLayoutBase.yaxis,
+          title: 'Rain Fraction',
+          range: [0, 1]
+        }
+      },
+      plotConfig
+    )
+
+    attachCurvePlotClickHandler()
   }
   
   function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
@@ -1015,6 +1187,10 @@
       detachIsoPlotClickHandler()
       Plotly.purge(isoPlotDiv)
     }
+    if (curvePlotDiv) {
+      detachCurvePlotClickHandler()
+      Plotly.purge(curvePlotDiv)
+    }
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange)
     tableScrollObserver?.disconnect()
@@ -1030,6 +1206,15 @@
       scheduleNoaaFetch()
     }
   }
+
+  $: if (showCurveModal) {
+    refreshDurationCurves()
+  }
+
+  $: selectedCurveData =
+    selectedCurveDuration != null
+      ? durationCurves.find((curve) => curve.duration === selectedCurveDuration) ?? null
+      : null
 
   afterUpdate(() => {
     attachTableScrollObserver()
@@ -1313,6 +1498,7 @@
           <button class="primary" on:click={makeStorm}>Generate Storm</button>
           <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
           <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
+          <button type="button" on:click={openCurveModal}>Compare Durations</button>
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
 
@@ -1453,6 +1639,66 @@
       </div>
       <div class="modal-actions">
         <button type="button" on:click={closeHelp}>Close</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showCurveModal}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={handleCurveBackdropClick}
+    on:keydown={handleKeydown}
+  >
+    <div
+      class="modal curve-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="curve-modal-title"
+      tabindex="-1"
+      bind:this={curveModalDialog}
+    >
+      <div class="modal-content">
+        <h2 id="curve-modal-title">Standard Duration Distribution Curves</h2>
+        <p class="small">
+          Compare cumulative rain fraction over time for 6, 12, and 24 hour storms using the current temporal
+          distribution. Click a curve to view the underlying table of normalized values.
+        </p>
+        <div class="curve-plot" bind:this={curvePlotDiv} aria-label="Cumulative rain fraction by standard duration"></div>
+        {#if durationCurves.length}
+          {#if selectedCurveData}
+            <div class="curve-table">
+              <h3>{selectedCurveData.duration}-hr Curve Values</h3>
+              <div class="table-scroll curve-table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th class="left">Time (hr)</th>
+                      <th>Rain Fraction</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each selectedCurveData.rows as row}
+                      <tr>
+                        <td class="left">{row.time.toFixed(2)}</td>
+                        <td>{row.fraction.toFixed(3)}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {:else}
+            <p class="empty">Select a curve to view its values.</p>
+          {/if}
+        {:else}
+          <p class="empty">Unable to generate comparison curves. Adjust parameters and try again.</p>
+        {/if}
+      </div>
+      <div class="modal-actions">
+        <button type="button" on:click={closeCurveModal}>Close</button>
       </div>
     </div>
   </div>
@@ -2150,6 +2396,23 @@
 
   .modal-actions button {
     min-width: 90px;
+  }
+
+  .curve-modal .modal-content {
+    max-width: min(640px, 90vw);
+  }
+
+  .curve-plot {
+    width: 100%;
+    min-height: 320px;
+  }
+
+  .curve-table h3 {
+    margin: 0;
+  }
+
+  .curve-table-scroll {
+    max-height: 240px;
   }
 
   @media (max-width: 640px) {
