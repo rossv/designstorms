@@ -26,6 +26,8 @@
   let isoPlotDiv: HTMLDivElement
   let curvePlotDiv: HTMLDivElement | null = null
   let curveModalDialog: HTMLDivElement | null = null
+  let customCurveModalDialog: HTMLDivElement | null = null
+  let customCurveTextarea: HTMLTextAreaElement | null = null
 
   let map: L.Map
   let marker: L.Marker
@@ -147,6 +149,15 @@
   let distribution: DistributionName = 'scs_type_ii'
   let startISO = '2003-01-01T00:00'
   let customCurveCsv = ''
+  let customCurveDraft = ''
+  let showCustomCurveModal = false
+  let customCurveLines: string[] = []
+
+  $: customCurveLines = customCurveCsv.trim()
+    ? customCurveCsv
+        .trim()
+        .split(/\r?\n/)
+    : []
   let showHelp = false
   let showCurveModal = false
   let helpDialog: HTMLDivElement | null = null
@@ -1049,6 +1060,23 @@
     savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat', 'System', start)
   }
 
+  async function openCustomCurveModal() {
+    customCurveDraft = customCurveCsv
+    showCustomCurveModal = true
+    await tick()
+    customCurveModalDialog?.focus()
+    customCurveTextarea?.focus()
+  }
+
+  function closeCustomCurveModal() {
+    showCustomCurveModal = false
+  }
+
+  function applyCustomCurveDraft() {
+    customCurveCsv = customCurveDraft
+    closeCustomCurveModal()
+  }
+
   async function openHelp() {
     showHelp = true
     await tick()
@@ -1076,6 +1104,11 @@
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
+      if (showCustomCurveModal) {
+        event.preventDefault()
+        closeCustomCurveModal()
+        return
+      }
       if (showCurveModal) {
         event.preventDefault()
         closeCurveModal()
@@ -1097,6 +1130,12 @@
   function handleCurveBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {
       closeCurveModal()
+    }
+  }
+
+  function handleCustomCurveBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
+      closeCustomCurveModal()
     }
   }
 
@@ -1662,14 +1701,28 @@
             </div>
           </div>
 
-          <div class="field field--textarea">
-            <label for="curve">Custom Curve CSV</label>
-            <textarea
-              id="curve"
-              rows="3"
-              placeholder="t (0..1), cumulative (0..1)"
-              bind:value={customCurveCsv}
-            ></textarea>
+          <div class="field field--custom-curve">
+            <label for="curve-button">Custom Curve CSV</label>
+            <button
+              id="curve-button"
+              type="button"
+              class="ghost custom-curve-button"
+              on:click={openCustomCurveModal}
+            >
+              {customCurveLines.length ? 'Edit Custom Curve' : 'Add Custom Curve'}
+            </button>
+            {#if customCurveLines.length}
+              <div class="custom-curve-preview" aria-live="polite">
+                <pre>{customCurveLines.slice(0, 3).join('\n')}</pre>
+                {#if customCurveLines.length > 3}
+                  <div class="custom-curve-preview-more">
+                    +{customCurveLines.length - 3} additional row{customCurveLines.length - 3 === 1 ? '' : 's'}
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="field-hint">No custom curve provided yet.</div>
+            {/if}
             <div class="field-hint">Note: Huff distributions are approximated using Beta distributions.</div>
           </div>
         </div>
@@ -1769,6 +1822,49 @@
     </section>
   </div>
 </div>
+
+{#if showCustomCurveModal}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={handleCustomCurveBackdropClick}
+    on:keydown={handleKeydown}
+  >
+    <div
+      class="modal custom-curve-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-curve-title"
+      tabindex="-1"
+      bind:this={customCurveModalDialog}
+    >
+      <div class="modal-content">
+        <h2 id="custom-curve-title">Custom Curve CSV</h2>
+        <p class="small">
+          Provide normalized cumulative pairs in CSV format (time fraction, cumulative depth fraction).
+        </p>
+        <label class="sr-only" for="custom-curve-textarea">Custom curve CSV input</label>
+        <textarea
+          id="custom-curve-textarea"
+          rows="6"
+          placeholder="t (0..1), cumulative (0..1)"
+          bind:this={customCurveTextarea}
+          bind:value={customCurveDraft}
+        ></textarea>
+        <div class="field-hint">
+          The curve will be trimmed, normalized, and interpolated to match the selected storm duration.
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" on:click={closeCustomCurveModal}>Cancel</button>
+        <button type="button" class="primary" on:click={applyCustomCurveDraft}>
+          Save Curve
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if showHelp}
   <div
@@ -2181,8 +2277,54 @@
     white-space: nowrap;
   }
 
-  .field--textarea textarea {
-    min-height: 120px;
+  .field--custom-curve {
+    gap: 12px;
+  }
+
+  .custom-curve-button {
+    align-self: flex-start;
+  }
+
+  .custom-curve-preview {
+    width: 100%;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .custom-curve-preview pre {
+    margin: 0;
+    font-family: 'JetBrains Mono', 'Fira Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .custom-curve-preview-more {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .custom-curve-modal textarea {
+    width: 100%;
+    min-height: 160px;
+    resize: vertical;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   @media (max-width: 720px) {
