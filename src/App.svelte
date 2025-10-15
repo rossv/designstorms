@@ -759,10 +759,15 @@
       displayModeBar: false
     })
 
-    attachIsoPlotClickHandler()
+    if (durationMode === 'custom') {
+      attachIsoPlotClickHandler()
+    } else {
+      detachIsoPlotClickHandler()
+    }
   }
 
   const handleIsoPlotClick = (event: any) => {
+    if (durationMode !== 'custom') return
     if (!table) return
     const point = event?.points?.[0]
     if (!point) return
@@ -1521,9 +1526,17 @@
       <div class="panel">
         <h2 class="section-title">NOAA Depth Iso-Lines</h2>
         <div class="iso-plot-container">
-          <div class="iso-plot" bind:this={isoPlotDiv} aria-label="Contour plot of NOAA depths by duration and recurrence interval"></div>
+          <div
+            class="iso-plot"
+            bind:this={isoPlotDiv}
+            aria-label="Contour plot of NOAA depths by duration and recurrence interval"
+          ></div>
           {#if !table}
             <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
+          {:else if durationMode === 'standard'}
+            <div class="iso-plot-overlay">
+              Switch to Custom Duration mode to select NOAA depth points from the iso-line preview.
+            </div>
           {/if}
         </div>
       </div>
@@ -2224,6 +2237,21 @@
   .iso-plot {
     width: 100%;
     height: 100%;
+  }
+
+  .iso-plot-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    background: linear-gradient(135deg, rgba(2, 6, 23, 0.7), rgba(8, 47, 73, 0.55));
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
   }
 
   .iso-plot-empty {
