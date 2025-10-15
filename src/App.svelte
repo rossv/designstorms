@@ -1563,9 +1563,9 @@
                 {#each tableRows as row}
                   <tr>
                     <td class="left">{row.time.toFixed(2)}</td>
-                    <td>{row.intensity.toFixed(2)}</td>
-                    <td>{row.incremental.toFixed(3)}</td>
-                    <td>{row.cumulative.toFixed(3)}</td>
+                    <td>{row.intensity.toFixed(5)}</td>
+                    <td>{row.incremental.toFixed(5)}</td>
+                    <td>{row.cumulative.toFixed(5)}</td>
                     {#if hasTimestamp}
                       <td class="left">{row.timestamp}</td>
                     {/if}
