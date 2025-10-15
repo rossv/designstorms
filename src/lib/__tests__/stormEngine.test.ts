@@ -125,4 +125,36 @@ describe('generateStorm', () => {
       1.5
     ])
   })
+
+  it('uses the closest available SCS data for Type I when shorter durations are requested', () => {
+    const storm = generateStorm({
+      depthIn: 1,
+      durationHr: 6,
+      timestepMin: 60,
+      distribution: 'scs_type_i',
+      customCurveCsv: '',
+      durationMode: 'custom'
+    })
+
+    const increments = storm.incrementalIn.slice(1)
+    const first = increments[0] ?? 0
+    const allEqual = increments.every((value) => Math.abs(value - first) < 1e-6)
+    expect(allEqual).toBe(false)
+  })
+
+  it('uses the closest available SCS data for Type IA when shorter durations are requested', () => {
+    const storm = generateStorm({
+      depthIn: 1,
+      durationHr: 6,
+      timestepMin: 60,
+      distribution: 'scs_type_ia',
+      customCurveCsv: '',
+      durationMode: 'custom'
+    })
+
+    const increments = storm.incrementalIn.slice(1)
+    const first = increments[0] ?? 0
+    const allEqual = increments.every((value) => Math.abs(value - first) < 1e-6)
+    expect(allEqual).toBe(false)
+  })
 })
