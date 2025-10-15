@@ -150,14 +150,14 @@
   function increment() {
     if (disabled) return
     const base = Number.isFinite(value) ? value : min ?? 0
-    updateValue(base + getButtonStepValue())
+    updateValue(base + getButtonStepValue(), { snap: false })
     focusInput()
   }
 
   function decrement() {
     if (disabled) return
     const base = Number.isFinite(value) ? value : max ?? 0
-    updateValue(base - getButtonStepValue())
+    updateValue(base - getButtonStepValue(), { snap: false })
     focusInput()
   }
 
