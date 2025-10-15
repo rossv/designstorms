@@ -114,7 +114,7 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
   return out.map((v) => v / maxv)
 }
 
-function getBestScsDistribution(
+export function getBestScsDistribution(
   baseName: string,
   durationHr: number,
   durationMode: 'standard' | 'custom'

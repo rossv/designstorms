@@ -6,7 +6,12 @@
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
-  import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
+  import {
+    generateStorm,
+    getBestScsDistribution,
+    type StormParams,
+    type DistributionName
+  } from './lib/stormEngine'
   import {
     toHours,
     getSortedDurationRows,
@@ -423,6 +428,23 @@
 
   function matchesStandardDurationHours(hours: number) {
     return STANDARD_DURATION_HOURS.some((standard) => Math.abs(hours - standard) < 1e-6)
+  }
+
+  function hasComparisonCurveForDuration(name: DistributionName, duration: number) {
+    if (!name.startsWith('scs_type')) {
+      return true
+    }
+
+    const matched = getBestScsDistribution(name, duration, 'standard')
+    const match = matched.match(/_(\d+)hr$/i)
+    if (!match) {
+      return true
+    }
+    const bestDuration = Number(match[1])
+    if (!Number.isFinite(bestDuration)) {
+      return true
+    }
+    return Math.abs(bestDuration - duration) < 1e-6
   }
 
   function nearestStandardDuration(hours: number) {
@@ -1187,7 +1209,11 @@
 
     lastCurveParamsKey = key
 
-    comparisonCurves = group.members.map((member) => {
+    const availableMembers = group.members.filter((member) =>
+      hasComparisonCurveForDuration(member, duration)
+    )
+
+    comparisonCurves = availableMembers.map((member) => {
       const params: StormParams = {
         depthIn: 1,
         durationHr: duration,
