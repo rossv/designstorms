@@ -59,7 +59,8 @@
   let selectedAri = 10
   let selectedDepth = 1.0
   let selectedDurationHr = 24
-  let durationMode: 'standard' | 'custom' = 'standard';
+  let durationMode: 'standard' | 'custom' = 'standard'
+  const STANDARD_DURATION_HOURS = [6, 12, 24] as const
 
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
@@ -315,8 +316,42 @@
     }
   }
 
+  function matchesStandardDurationHours(hours: number) {
+    return STANDARD_DURATION_HOURS.some((standard) => Math.abs(hours - standard) < 1e-6)
+  }
+
+  function nearestStandardDuration(hours: number) {
+    if (!Number.isFinite(hours)) {
+      return DEFAULT_DURATION_HOURS
+    }
+    return STANDARD_DURATION_HOURS.reduce((best, candidate) => {
+      const bestDiff = Math.abs(best - hours)
+      const candidateDiff = Math.abs(candidate - hours)
+      if (candidateDiff < bestDiff) {
+        return candidate
+      }
+      return best
+    })
+  }
+
+  function durationLabelIsStandard(label: string) {
+    const hours = toHours(label)
+    if (!Number.isFinite(hours)) {
+      return false
+    }
+    return matchesStandardDurationHours(hours)
+  }
+
+  function durationIsSelectable(label: string) {
+    if (durationMode === 'custom') {
+      return true
+    }
+    return durationLabelIsStandard(label)
+  }
+
   function pickCell(durLabel: string, ari: string) {
     if (!table) return
+    if (!durationIsSelectable(durLabel)) return
     selectedDurationLabel = durLabel
     selectedDurationHr = toHours(durLabel)
     selectedAri = Number(ari)
@@ -812,6 +847,24 @@
     makeStorm()
   }
 
+  $: if (durationMode === 'standard') {
+    let adjusted = false
+    if (!matchesStandardDurationHours(selectedDurationHr)) {
+      const nearest = nearestStandardDuration(selectedDurationHr)
+      if (nearest !== selectedDurationHr) {
+        selectedDurationHr = nearest
+        adjusted = true
+      }
+    }
+    if (selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)) {
+      selectedDurationLabel = null
+      adjusted = true
+    }
+    if (adjusted) {
+      recalcFromDepthOrDuration()
+    }
+  }
+
   function recalcFromAri() {
     if (!Number.isFinite(selectedAri) || !Number.isFinite(selectedDurationHr)) {
       return
@@ -903,6 +956,12 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' && showHelp) {
       event.preventDefault()
+      closeHelp()
+    }
+  }
+
+  function handleBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
       closeHelp()
     }
   }
@@ -1097,11 +1156,16 @@
               </div>
               <div class="table-body">
                 {#each table.rows as row}
-                  <div class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''}`}>
+                  <div
+                    class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''} ${
+                      durationIsSelectable(row.label) ? '' : 'disabled'
+                    }`}
+                  >
                     <div>
                       <button
                         type="button"
                         class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
+                        disabled={!durationIsSelectable(row.label)}
                         on:click={() => pickCell(row.label, String(selectedAri))}
                       >
                         {row.label}
@@ -1117,6 +1181,7 @@
                               ? 'selected'
                               : ''
                           } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
+                          disabled={!durationIsSelectable(row.label)}
                           data-ari={a}
                           aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
                           on:click={() => pickCell(row.label, a)}
@@ -1132,26 +1197,25 @@
           </div>
           <div class="small">Tip: Click a table cell to apply the depth, duration, and Average Recurrence Interval to the storm parameters.</div>
         {/if}
+
+        <div class="duration-mode-controls">
+          <div class="duration-mode-select">
+            <label for="duration-mode">Duration Mode</label>
+            <select id="duration-mode" bind:value={durationMode}>
+              <option value="standard">Standard (6, 12, 24-hr)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          {#if durationMode === 'custom'}
+            <div class="disclaimer">
+              <strong>Note:</strong> Custom durations interpolate from standard 24-hour NRCS curves, which may not precisely reflect shorter storm patterns.
+            </div>
+          {/if}
+        </div>
       </div>
 
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
-
-        <div class="grid cols-2 form-grid">
-            <div>
-                <label for="duration-mode">Duration Mode</label>
-                <select id="duration-mode" bind:value={durationMode}>
-                    <option value="standard">Standard (6, 12, 24-hr)</option>
-                    <option value="custom">Custom</option>
-                </select>
-            </div>
-            {#if durationMode === 'custom'}
-                <div class="disclaimer">
-                    <strong>Note:</strong> Custom durations interpolate from standard 24-hour NRCS curves, which may not precisely reflect shorter storm patterns.
-                </div>
-            {/if}
-        </div>
-
 
         <div class="grid cols-3 form-grid">
           <div class="parameter-input">
@@ -1333,7 +1397,13 @@
 </div>
 
 {#if showHelp}
-  <div class="modal-backdrop" role="presentation" on:click={closeHelp} on:keydown={handleKeydown}>
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={handleBackdropClick}
+    on:keydown={handleKeydown}
+  >
     <div
       class="modal"
       role="dialog"
@@ -1341,7 +1411,6 @@
       aria-labelledby="help-title"
       tabindex="-1"
       bind:this={helpDialog}
-      on:click|stopPropagation
     >
       <div class="modal-content">
         <h2 id="help-title">Design Storm Generator</h2>
@@ -1684,6 +1753,14 @@
     background: rgba(110, 231, 255, 0.06);
   }
 
+  .table-row.disabled {
+    opacity: 0.45;
+  }
+
+  .table-row.disabled:hover {
+    background: transparent;
+  }
+
   .table-button {
     background: transparent;
     border: none;
@@ -1703,6 +1780,17 @@
   .table-button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
+  }
+
+  .table-button:disabled,
+  .table-button.disabled {
+    color: rgba(231, 231, 231, 0.4);
+    cursor: not-allowed;
+  }
+
+  .table-button:disabled:hover,
+  .table-button.disabled:hover {
+    background: transparent;
   }
 
   .duration-btn {
@@ -1757,13 +1845,25 @@
   }
 
   .disclaimer {
-      font-size: 12px;
-      color: var(--muted);
-      padding: 8px;
-      background: rgba(234, 179, 8, 0.1);
-      border: 1px solid rgba(234, 179, 8, 0.3);
-      border-radius: 8px;
-      margin-top: auto;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 8px;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 8px;
+  }
+
+  .duration-mode-controls {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .duration-mode-select {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   @media (max-width: 600px) {
