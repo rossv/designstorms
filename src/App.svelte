@@ -364,6 +364,13 @@
     return durationLabelIsStandard(label)
   }
 
+  let previousDurationMode: 'standard' | 'custom' = durationMode
+
+  $: if (durationMode !== previousDurationMode) {
+    previousDurationMode = durationMode
+    makeStorm()
+  }
+
   function pickCell(durLabel: string, ari: string) {
     if (!table) return
     if (!durationIsSelectable(durLabel)) return
@@ -1346,16 +1353,18 @@
               </div>
               <div class="table-body">
                 {#each table.rows as row}
+                  {@const isSelectable =
+                    durationMode === 'custom' || durationLabelIsStandard(row.label)}
                   <div
                     class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''} ${
-                      durationIsSelectable(row.label) ? '' : 'disabled'
+                      isSelectable ? '' : 'disabled'
                     }`}
                   >
                     <div>
                       <button
                         type="button"
                         class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
-                        disabled={!durationIsSelectable(row.label)}
+                        disabled={!isSelectable}
                         on:click={() => pickCell(row.label, String(selectedAri))}
                       >
                         {row.label}
@@ -1371,7 +1380,7 @@
                               ? 'selected'
                               : ''
                           } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
-                          disabled={!durationIsSelectable(row.label)}
+                          disabled={!isSelectable}
                           data-ari={a}
                           aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
                           on:click={() => pickCell(row.label, a)}
