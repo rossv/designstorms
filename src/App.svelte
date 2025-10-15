@@ -59,6 +59,7 @@
   let selectedAri = 10
   let selectedDepth = 1.0
   let selectedDurationHr = 24
+  let durationMode: 'standard' | 'custom' = 'standard';
 
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
@@ -359,7 +360,8 @@
       timestepMin,
       distribution,
       startISO,
-      customCurveCsv: customCurveCsv.trim() || undefined
+      customCurveCsv: customCurveCsv.trim() || undefined,
+      durationMode
     }
     lastStorm = generateStorm(params)
     totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
@@ -853,6 +855,13 @@
 
   function handleDurationInput() {
     lastChangedBy = 'user';
+    if (durationMode === 'standard') {
+        if (selectedDurationHr !== 6 && selectedDurationHr !== 12 && selectedDurationHr !== 24) {
+            if (selectedDurationHr < 9) selectedDurationHr = 6;
+            else if (selectedDurationHr < 18) selectedDurationHr = 12;
+            else selectedDurationHr = 24;
+        }
+    }
     recalcFromDepthOrDuration()
   }
 
@@ -1127,6 +1136,23 @@
 
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
+
+        <div class="grid cols-2 form-grid">
+            <div>
+                <label for="duration-mode">Duration Mode</label>
+                <select id="duration-mode" bind:value={durationMode}>
+                    <option value="standard">Standard (6, 12, 24-hr)</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            {#if durationMode === 'custom'}
+                <div class="disclaimer">
+                    <strong>Note:</strong> Custom durations interpolate from standard 24-hour NRCS curves, which may not precisely reflect shorter storm patterns.
+                </div>
+            {/if}
+        </div>
+
+
         <div class="grid cols-3 form-grid">
           <div class="parameter-input">
             <label for="depth">Depth (in)</label>
@@ -1142,16 +1168,24 @@
           </div>
           <div class="parameter-input">
             <label for="duration">Duration (hr)</label>
-            <NumericStepper
-              id="duration"
-              label="Duration (hr)"
-              min={MIN_DURATION_HOURS}
-              step={MIN_DURATION_HOURS}
-              buttonStep={1}
-              bind:value={selectedDurationHr}
-              on:change={handleDurationInput}
-              recalculated={recentlyRecalculated === 'duration'}
-            />
+            {#if durationMode === 'standard'}
+                 <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
+                    <option value={6}>6-hr</option>
+                    <option value={12}>12-hr</option>
+                    <option value={24}>24-hr</option>
+                </select>
+            {:else}
+                <NumericStepper
+                  id="duration"
+                  label="Duration (hr)"
+                  min={MIN_DURATION_HOURS}
+                  step={MIN_DURATION_HOURS}
+                  buttonStep={1}
+                  bind:value={selectedDurationHr}
+                  on:change={handleDurationInput}
+                  recalculated={recentlyRecalculated === 'duration'}
+                />
+            {/if}
           </div>
           <div class="parameter-input">
             <label for="ari">Average Recurrence Interval (years)</label>
@@ -1208,6 +1242,8 @@
             bind:value={customCurveCsv}
           ></textarea>
         </div>
+        <div class="small">Note: Huff distributions are approximated using Beta distributions.</div>
+
 
         <div class="actions">
           <button class="primary" on:click={makeStorm}>Generate Storm</button>
@@ -1336,19 +1372,14 @@
         <p>
           When <i>Use NOAA selection</i> is <b>unchecked</b>, editing <i>Return period</i> will interpolate
           <i>Depth</i> along the selected duration row. Editing <i>Duration</i> or <i>Total depth</i> updates
-          <i>Return period</i> to stay consistent. Durations that fall between published NOAA rows trigger a
-          bilinear interpolation: depths are first blended across the bounding return periods for each
-          duration, then those results are interpolated between the surrounding durations. This keeps the
-          depth, duration, and return-period trio internally consistent even when no exact table cell exists.
+          <i>Return period</i> to stay consistent.
         </p>
         <h3>Methods</h3>
         <p>
-          Total storm depth is obtained from the NOAA Atlas 14 table with the interpolation rules above. The
-          resulting depth is mapped onto a temporal pattern sourced from NRCS dimensionless cumulative
-          rainfall tables (Types I, IA, II, III), Huff/Beta presets, or an uploaded CSV. Each cumulative curve
-          is linearly resampled to the requested timestep, normalized so the final value equals the storm
-          depth, and differenced to yield incremental rainfall and intensities. No circular shifting is
-          applied. User-supplied curves are normalized and resampled in the same way.
+          Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
+          II, III) resampled to the storm duration or from predefined Beta(α,β) distributions on [0,1] for the
+          remaining presets. No circular shifting is applied. User-supplied curves are normalized and
+          resampled.
         </p>
       </div>
       <div class="modal-actions">
@@ -1723,6 +1754,16 @@
 
   textarea {
     resize: vertical;
+  }
+
+  .disclaimer {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px;
+      background: rgba(234, 179, 8, 0.1);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      border-radius: 8px;
+      margin-top: auto;
   }
 
   @media (max-width: 600px) {
