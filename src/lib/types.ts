@@ -1,4 +1,9 @@
-export type DistributionName = 'scs_type_i' | 'scs_type_ia' | 'scs_type_ii' | 'scs_type_iii' | 'huff_q1' | 'huff_q2' | 'huff_q3' | 'huff_q4' | 'user'
+export type DistributionName = 
+  'scs_type_i' | 'scs_type_ia' | 'scs_type_ii' | 'scs_type_iii' | 
+  'scs_type_i_24hr' | 'scs_type_ia_24hr' |
+  'scs_type_ii_6hr' | 'scs_type_ii_12hr' | 'scs_type_ii_24hr' |
+  'scs_type_iii_6hr' | 'scs_type_iii_12hr' | 'scs_type_iii_24hr' |
+  'huff_q1' | 'huff_q2' | 'huff_q3' | 'huff_q4' | 'user'
 
 export interface StormResult {
   timeMin: number[]
@@ -14,4 +19,5 @@ export interface StormParams {
   distribution: DistributionName
   startISO?: string
   customCurveCsv?: string
+  durationMode?: 'standard' | 'custom'
 }
