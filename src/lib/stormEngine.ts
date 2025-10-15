@@ -40,6 +40,10 @@ function lgamma(z:number): number {
 function cumulativeFromDistribution(name: DistributionName, n: number, customCsv?: string): number[] {
   if (name.startsWith('scs_')) {
     const base = (SCS_TABLES as any)[name] as number[]
+    if (!base) {
+      console.warn(`SCS table for ${name} not found. Falling back to linear.`);
+      return linspace(n);
+    }
     const m = base.length
     const out: number[] = []
     const denom = Math.max(1, n - 1)
@@ -94,8 +98,27 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
   return out.map((v) => v / maxv)
 }
 
+function getBestScsDistribution(baseName: string, durationHr: number, durationMode: 'standard' | 'custom'): DistributionName {
+    if (!baseName.startsWith('scs_')) return baseName as DistributionName;
+
+    const type = baseName.replace('scs_', '');
+    
+    if (durationMode === 'custom') {
+        // For custom durations, we interpolate from the closest standard distribution table.
+        if (durationHr <= 6) return `scs_${type}_6hr` as DistributionName;
+        if (durationHr <= 12) return `scs_${type}_12hr` as DistributionName;
+        return `scs_${type}_24hr` as DistributionName;
+    }
+
+    // For standard durations, find an exact match or the next one up.
+    if (durationHr <= 6) return `scs_${type}_6hr` as DistributionName;
+    if (durationHr <= 12) return `scs_${type}_12hr` as DistributionName;
+    return `scs_${type}_24hr` as DistributionName;
+}
+
+
 export function generateStorm(params: StormParams): StormResult {
-  const { depthIn, durationHr, timestepMin, distribution, customCurveCsv } = params
+  const { depthIn, durationHr, timestepMin, distribution, customCurveCsv, durationMode } = params
   const durationMin = durationHr * 60
 
   if (durationMin <= 0 || timestepMin <= 0) {
@@ -107,6 +130,11 @@ export function generateStorm(params: StormParams): StormResult {
     }
   }
 
+  let finalDistribution = distribution;
+  if (distribution.startsWith('scs_')) {
+      finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom');
+  }
+
   const n = Math.ceil(durationMin / timestepMin) + 1
   const timeMin = Array.from({ length: n }, (_, i) => {
     if (i === n - 1) return durationMin
@@ -114,7 +142,7 @@ export function generateStorm(params: StormParams): StormResult {
   })
 
   const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
-  const baseCumulative = cumulativeFromDistribution(distribution, n, customCurveCsv)
+  const baseCumulative = cumulativeFromDistribution(finalDistribution, n, customCurveCsv)
 
   const cumulativeIn = normalizedTimes.map((nt) => {
     if (n === 1) {
