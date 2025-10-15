@@ -78,8 +78,13 @@
     return snapValueToStep(val, step, { min })
   }
 
-  function updateValue(next: number, options: { preserveInput?: boolean } = {}) {
-    const clamped = clamp(roundToStep(next))
+  function updateValue(
+    next: number,
+    options: { preserveInput?: boolean; snap?: boolean } = {},
+  ) {
+    const shouldSnap = options.snap ?? true
+    const normalized = shouldSnap ? roundToStep(next) : next
+    const clamped = clamp(normalized)
     const previous = value
     value = clamped
     if (!options.preserveInput) {
@@ -99,7 +104,7 @@
     }
     const parsed = Number(target.value)
     if (Number.isFinite(parsed)) {
-      updateValue(parsed, { preserveInput: true })
+      updateValue(parsed, { preserveInput: true, snap: false })
     }
   }
 
@@ -131,7 +136,7 @@
       inputValue = formatValue(value)
       return
     }
-    updateValue(parsed)
+    updateValue(parsed, { snap: false })
   }
 
   function getButtonStepValue() {
