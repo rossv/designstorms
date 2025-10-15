@@ -64,6 +64,82 @@
   let durationMode: 'standard' | 'custom' = 'standard'
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
 
+  const SCS_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
+    'scs_type_i',
+    'scs_type_ia',
+    'scs_type_ii',
+    'scs_type_iii'
+  ]
+
+  const HUFF_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
+    'huff_q1',
+    'huff_q2',
+    'huff_q3',
+    'huff_q4'
+  ]
+
+  type ComparisonGroup = {
+    key: string
+    label: string
+    members: DistributionName[]
+  }
+
+  const DISTRIBUTION_LABELS: Partial<Record<DistributionName, string>> = {
+    scs_type_i: 'SCS Type I',
+    scs_type_ia: 'SCS Type IA',
+    scs_type_ii: 'SCS Type II',
+    scs_type_iii: 'SCS Type III',
+    scs_type_i_24hr: 'SCS Type I (24-hr)',
+    scs_type_ia_24hr: 'SCS Type IA (24-hr)',
+    scs_type_ii_6hr: 'SCS Type II (6-hr)',
+    scs_type_ii_12hr: 'SCS Type II (12-hr)',
+    scs_type_ii_24hr: 'SCS Type II (24-hr)',
+    scs_type_iii_6hr: 'SCS Type III (6-hr)',
+    scs_type_iii_12hr: 'SCS Type III (12-hr)',
+    scs_type_iii_24hr: 'SCS Type III (24-hr)',
+    huff_q1: 'Huff Q1',
+    huff_q2: 'Huff Q2',
+    huff_q3: 'Huff Q3',
+    huff_q4: 'Huff Q4',
+    user: 'User CSV'
+  }
+
+  function getDistributionLabel(name: DistributionName) {
+    if (DISTRIBUTION_LABELS[name]) {
+      return DISTRIBUTION_LABELS[name] as string
+    }
+    return name
+      .replace(/scs_/i, 'SCS ')
+      .replace(/_/g, ' ')
+      .replace(/\b(hr)\b/i, 'hr')
+      .replace(/\b(q)(\d)/i, 'Q$2')
+      .replace(/\btype\b/i, 'Type')
+      .replace(/\biii\b/i, 'III')
+      .replace(/\bia\b/i, 'IA')
+  }
+
+  function getComparisonGroup(name: DistributionName): ComparisonGroup {
+    if (name.startsWith('huff_')) {
+      return {
+        key: 'huff',
+        label: 'Huff Quartiles',
+        members: HUFF_COMPARISON_DISTRIBUTIONS
+      }
+    }
+    if (name.startsWith('scs_type')) {
+      return {
+        key: 'scs',
+        label: 'SCS Dimensionless Distributions',
+        members: SCS_COMPARISON_DISTRIBUTIONS
+      }
+    }
+    return {
+      key: name,
+      label: getDistributionLabel(name),
+      members: [name]
+    }
+  }
+
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
 
@@ -124,17 +200,20 @@
   let observedTableScrollEl: HTMLDivElement | null = null
   let tableScrollMaxHeight = 320
 
-  type DurationCurve = {
-    duration: number
+  type ComparisonCurve = {
+    distribution: DistributionName
+    label: string
     timeHr: number[]
     fraction: number[]
     rows: { time: number; fraction: number }[]
   }
 
-  let durationCurves: DurationCurve[] = []
-  let selectedCurveDuration: number | null = null
+  let comparisonCurves: ComparisonCurve[] = []
+  let selectedCurveDuration: (typeof STANDARD_DURATION_HOURS)[number] | null = null
+  let selectedCurveDistribution: DistributionName | null = null
   let lastCurveParamsKey = ''
-  let selectedCurveData: DurationCurve | null = null
+  let selectedCurveData: ComparisonCurve | null = null
+  let comparisonGroupLabel = ''
 
   function formatTimestamp(date: Date) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -977,7 +1056,7 @@
     showCurveModal = true
     await tick()
     curveModalDialog?.focus()
-    refreshDurationCurves()
+    refreshComparisonCurves()
   }
 
   function closeCurveModal() {
@@ -1014,24 +1093,60 @@
     }
   }
 
-  function refreshDurationCurves() {
+  function updateSelectedCurveData() {
+    selectedCurveData =
+      selectedCurveDistribution != null
+        ? comparisonCurves.find((curve) => curve.distribution === selectedCurveDistribution) ?? null
+        : null
+  }
+
+  function setComparisonDuration(duration: (typeof STANDARD_DURATION_HOURS)[number]) {
+    if (selectedCurveDuration === duration) {
+      return
+    }
+    selectedCurveDuration = duration
+    refreshComparisonCurves()
+  }
+
+  function refreshComparisonCurves() {
     if (!showCurveModal) return
 
+    const group = getComparisonGroup(distribution)
+    comparisonGroupLabel = group.label
+
+    if (!selectedCurveDuration || !matchesStandardDurationHours(selectedCurveDuration)) {
+      const preferred = matchesStandardDurationHours(selectedDurationHr)
+        ? (nearestStandardDuration(selectedDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
+        : STANDARD_DURATION_HOURS[0]
+      selectedCurveDuration = preferred
+    }
+
+    const duration = selectedCurveDuration ?? STANDARD_DURATION_HOURS[0]
     const trimmedCsv = customCurveCsv.trim()
-    const key = `${distribution}|${timestepMin}|${trimmedCsv}`
-    if (key === lastCurveParamsKey && durationCurves.length) {
-      drawDurationCurves()
+    const key = `${group.key}|${duration}|${timestepMin}|${trimmedCsv}`
+
+    if (key === lastCurveParamsKey && comparisonCurves.length) {
+      if (
+        !selectedCurveDistribution ||
+        !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
+      ) {
+        const fallback = comparisonCurves.find((curve) => curve.distribution === distribution)
+          ?? comparisonCurves[0]
+        selectedCurveDistribution = fallback ? fallback.distribution : null
+      }
+      updateSelectedCurveData()
+      drawComparisonCurves()
       return
     }
 
     lastCurveParamsKey = key
 
-    durationCurves = STANDARD_DURATION_HOURS.map((duration) => {
+    comparisonCurves = group.members.map((member) => {
       const params: StormParams = {
         depthIn: 1,
         durationHr: duration,
         timestepMin,
-        distribution,
+        distribution: member,
         startISO,
         customCurveCsv: trimmedCsv || undefined,
         durationMode: 'standard'
@@ -1056,24 +1171,49 @@
         fraction: fraction[index] ?? 0
       }))
 
-      return { duration, timeHr, fraction, rows }
+      return {
+        distribution: member,
+        label: getDistributionLabel(member),
+        timeHr,
+        fraction,
+        rows
+      }
     })
 
-    if (!selectedCurveDuration || !matchesStandardDurationHours(selectedCurveDuration)) {
-      const preferred = matchesStandardDurationHours(selectedDurationHr)
-        ? (nearestStandardDuration(selectedDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
-        : STANDARD_DURATION_HOURS[0]
-      selectedCurveDuration = preferred
+    if (comparisonCurves.length === 0) {
+      selectedCurveDistribution = null
+      selectedCurveData = null
+      drawComparisonCurves()
+      return
     }
 
-    drawDurationCurves()
+    if (
+      !selectedCurveDistribution ||
+      !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
+    ) {
+      const preferred =
+        comparisonCurves.find((curve) => curve.distribution === distribution) ?? comparisonCurves[0]
+      selectedCurveDistribution = preferred ? preferred.distribution : null
+    }
+
+    updateSelectedCurveData()
+    drawComparisonCurves()
+  }
+
+  function setSelectedCurveDistribution(name: DistributionName) {
+    if (!comparisonCurves.some((curve) => curve.distribution === name)) {
+      return
+    }
+    selectedCurveDistribution = name
+    updateSelectedCurveData()
+    drawComparisonCurves()
   }
 
   const handleCurvePlotClick = (event: any) => {
     const point = event?.points?.[0]
-    const duration = point?.data?.meta
-    if (typeof duration === 'number') {
-      selectedCurveDuration = duration
+    const dist = point?.data?.meta
+    if (typeof dist === 'string') {
+      setSelectedCurveDistribution(dist as DistributionName)
     }
   }
 
@@ -1099,33 +1239,34 @@
     }
   }
 
-  function drawDurationCurves() {
+  function drawComparisonCurves() {
     if (!curvePlotDiv) return
-    if (!durationCurves.length) {
+    if (!comparisonCurves.length) {
       Plotly.purge(curvePlotDiv)
       detachCurvePlotClickHandler()
       return
     }
 
-    const traces = durationCurves.map((curve) => ({
+    const traces = comparisonCurves.map((curve) => ({
       x: curve.timeHr,
       y: curve.fraction,
       type: 'scatter',
       mode: 'lines',
-      name: `${curve.duration}-hr`,
-      line: { width: 3 },
+      name: curve.label,
+      line: { width: curve.distribution === selectedCurveDistribution ? 4 : 2 },
+      opacity: curve.distribution === selectedCurveDistribution ? 1 : 0.55,
       hovertemplate: `Time: %{x:.2f} hr<br>Rain fraction: %{y:.3f}<extra></extra>`,
-      meta: curve.duration
+      meta: curve.distribution
     }))
 
-    const maxDuration = Math.max(...durationCurves.map((curve) => curve.duration))
+    const maxDuration = selectedCurveDuration ?? Math.max(...comparisonCurves.map((curve) => curve.timeHr[curve.timeHr.length - 1] ?? 0))
 
     Plotly.react(
       curvePlotDiv,
       traces,
       {
         ...plotLayoutBase,
-        title: 'Distribution Rain Fraction Comparison',
+        title: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr`,
         xaxis: {
           ...plotLayoutBase.xaxis,
           title: 'Time (hr)',
@@ -1213,12 +1354,12 @@
   }
 
   $: if (showCurveModal) {
-    refreshDurationCurves()
+    refreshComparisonCurves()
   }
 
   $: selectedCurveData =
-    selectedCurveDuration != null
-      ? durationCurves.find((curve) => curve.duration === selectedCurveDuration) ?? null
+    selectedCurveDistribution != null
+      ? comparisonCurves.find((curve) => curve.distribution === selectedCurveDistribution) ?? null
       : null
 
   afterUpdate(() => {
@@ -1456,7 +1597,7 @@
         </div>
 
         <div class="grid cols-3 form-grid form-grid--secondary">
-          <div class="align-center">
+          <div class="align-center distribution-control">
             <label for="dist">Distribution</label>
             <select id="dist" bind:value={distribution}>
               <option value="scs_type_i">SCS Type I</option>
@@ -1469,6 +1610,13 @@
               <option value="huff_q4">Huff Q4</option>
               <option value="user">User CSV (cumulative 0..1)</option>
             </select>
+            <button
+              type="button"
+              class="ghost distribution-compare-button"
+              on:click={openCurveModal}
+            >
+              Compare Distributions
+            </button>
           </div>
           <div>
             <label for="timestep">Timestep (min)</label>
@@ -1503,7 +1651,6 @@
           <button class="primary" on:click={makeStorm}>Generate Storm</button>
           <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
           <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
-          <button type="button" on:click={openCurveModal}>Compare Durations</button>
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
 
@@ -1674,16 +1821,37 @@
       bind:this={curveModalDialog}
     >
       <div class="modal-content">
-        <h2 id="curve-modal-title">Standard Duration Distribution Curves</h2>
+        <h2 id="curve-modal-title">Distribution Comparison Curves</h2>
         <p class="small">
-          Compare cumulative rain fraction over time for 6, 12, and 24 hour storms using the current temporal
-          distribution. Click a curve to view the underlying table of normalized values.
+          Compare cumulative rain fraction over time across available {comparisonGroupLabel || 'selected'}
+          distributions. Choose a standard duration to update the plot, and click a curve to inspect its normalized
+          values.
         </p>
-        <div class="curve-plot" bind:this={curvePlotDiv} aria-label="Cumulative rain fraction by standard duration"></div>
-        {#if durationCurves.length}
+        <div class="curve-controls">
+          <span class="curve-group-label">{comparisonGroupLabel || 'Distributions'}</span>
+          <div class="curve-duration-toggle" role="group" aria-label="Select storm duration">
+            {#each STANDARD_DURATION_HOURS as option}
+              <button
+                type="button"
+                class={`curve-duration-button ${option === selectedCurveDuration ? 'active' : ''}`}
+                aria-pressed={option === selectedCurveDuration}
+                on:click={() => setComparisonDuration(option)}
+              >
+                {option}-hr
+              </button>
+            {/each}
+          </div>
+        </div>
+        <div class="curve-plot" bind:this={curvePlotDiv} aria-label="Cumulative rain fraction by distribution"></div>
+        {#if comparisonCurves.length}
           {#if selectedCurveData}
             <div class="curve-table">
-              <h3>{selectedCurveData.duration}-hr Curve Values</h3>
+              <h3>
+                {selectedCurveData.label}
+                {#if selectedCurveDuration != null}
+                  — {selectedCurveDuration}-hr Values
+                {/if}
+              </h3>
               <div class="table-scroll curve-table-scroll">
                 <table class="data-table">
                   <thead>
@@ -1926,6 +2094,18 @@
     justify-content: center;
     gap: 6px;
     height: 100%;
+  }
+
+  .distribution-control {
+    align-items: stretch;
+  }
+
+  .distribution-compare-button {
+    width: 100%;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 10px;
   }
 
   .checkbox {
@@ -2428,6 +2608,46 @@
 
   .curve-modal .modal-content {
     max-width: min(640px, 90vw);
+  }
+
+  .curve-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 16px 0 12px;
+    flex-wrap: wrap;
+  }
+
+  .curve-group-label {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .curve-duration-toggle {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .curve-duration-button {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .curve-duration-button.active,
+  .curve-duration-button:hover {
+    background: rgba(110, 231, 255, 0.15);
+    border-color: rgba(110, 231, 255, 0.4);
   }
 
   .curve-plot {
