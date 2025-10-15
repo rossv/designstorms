@@ -1557,28 +1557,38 @@
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
 
-        <div class="grid cols-3 form-grid">
-          <div class="parameter-input">
-            <label for="depth">Depth (in)</label>
-            <NumericStepper
-              id="depth"
-              label="Depth (in)"
-              min={0}
-              step={0.1}
-              bind:value={selectedDepth}
-              on:change={handleDepthInput}
-              recalculated={recentlyRecalculated === 'depth'}
-            />
-          </div>
-          <div class="parameter-input">
-            <label for="duration">Duration (hr)</label>
-            {#if durationMode === 'standard'}
-                 <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
-                    <option value={6}>6-hr</option>
-                    <option value={12}>12-hr</option>
-                    <option value={24}>24-hr</option>
+        <div class="storm-form">
+          <div class="form-grid form-grid--primary">
+            <div class="field">
+              <label for="depth">Depth (in)</label>
+              <NumericStepper
+                id="depth"
+                label="Depth (in)"
+                min={0}
+                step={0.1}
+                bind:value={selectedDepth}
+                on:change={handleDepthInput}
+                recalculated={recentlyRecalculated === 'depth'}
+              />
+            </div>
+            <div class="field field--duration">
+              <div class="field-header">
+                <label for="duration">Duration (hr)</label>
+                <div class="field-header-control">
+                  <label for="duration-mode">Mode</label>
+                  <select id="duration-mode" bind:value={durationMode}>
+                    <option value="standard">Standard</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+              </div>
+              {#if durationMode === 'standard'}
+                <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
+                  <option value={6}>6-hr</option>
+                  <option value={12}>12-hr</option>
+                  <option value={24}>24-hr</option>
                 </select>
-            {:else}
+              {:else}
                 <NumericStepper
                   id="duration"
                   label="Duration (hr)"
@@ -1589,71 +1599,80 @@
                   on:change={handleDurationInput}
                   recalculated={recentlyRecalculated === 'duration'}
                 />
-            {/if}
+              {/if}
+              {#if durationMode === 'custom'}
+                <div class="field-hint field-hint--warning">
+                  <strong>Note:</strong> Custom durations interpolate from standard 24-hour NRCS curves, which may not precisely
+                  reflect shorter storm patterns.
+                </div>
+              {/if}
+            </div>
+            <div class="field">
+              <label for="ari">Average Recurrence Interval (years)</label>
+              <NumericStepper
+                id="ari"
+                label="Average Recurrence Interval (years)"
+                min={0}
+                step={1}
+                bind:value={selectedAri}
+                on:change={handleAriInput}
+                recalculated={recentlyRecalculated === 'ari'}
+              />
+            </div>
           </div>
-          <div class="parameter-input">
-            <label for="ari">Average Recurrence Interval (years)</label>
-            <NumericStepper
-              id="ari"
-              label="Average Recurrence Interval (years)"
-              min={0}
-              step={1}
-              bind:value={selectedAri}
-              on:change={handleAriInput}
-              recalculated={recentlyRecalculated === 'ari'}
-            />
-          </div>
-        </div>
 
-        <div class="grid cols-3 form-grid form-grid--secondary">
-          <div class="align-center distribution-control">
-            <label for="dist">Distribution</label>
-            <select id="dist" bind:value={distribution}>
-              <option value="scs_type_i">SCS Type I</option>
-              <option value="scs_type_ia">SCS Type IA</option>
-              <option value="scs_type_ii">SCS Type II</option>
-              <option value="scs_type_iii">SCS Type III</option>
-              <option value="huff_q1">Huff Q1</option>
-              <option value="huff_q2">Huff Q2</option>
-              <option value="huff_q3">Huff Q3</option>
-              <option value="huff_q4">Huff Q4</option>
-              <option value="user">User CSV (cumulative 0..1)</option>
-            </select>
-            <button
-              type="button"
-              class="ghost distribution-compare-button"
-              on:click={openCurveModal}
-            >
-              Compare Distributions
-            </button>
+          <div class="form-grid form-grid--secondary">
+            <div class="field field--distribution">
+              <div class="field-header">
+                <label for="dist">Distribution</label>
+                <button
+                  type="button"
+                  class="ghost distribution-compare-button"
+                  on:click={openCurveModal}
+                >
+                  Compare Distributions
+                </button>
+              </div>
+              <select id="dist" bind:value={distribution}>
+                <option value="scs_type_i">SCS Type I</option>
+                <option value="scs_type_ia">SCS Type IA</option>
+                <option value="scs_type_ii">SCS Type II</option>
+                <option value="scs_type_iii">SCS Type III</option>
+                <option value="huff_q1">Huff Q1</option>
+                <option value="huff_q2">Huff Q2</option>
+                <option value="huff_q3">Huff Q3</option>
+                <option value="huff_q4">Huff Q4</option>
+                <option value="user">User CSV (cumulative 0..1)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="timestep">Timestep (min)</label>
+              <NumericStepper
+                id="timestep"
+                label="Timestep (min)"
+                min={0.1}
+                step={1}
+                bind:value={timestepMin}
+                on:change={handleTimestepInput}
+              />
+            </div>
+            <div class="field">
+              <label for="start">Start (ISO)</label>
+              <input id="start" type="datetime-local" bind:value={startISO} />
+            </div>
           </div>
-          <div>
-            <label for="timestep">Timestep (min)</label>
-            <NumericStepper
-              id="timestep"
-              label="Timestep (min)"
-              min={0.1}
-              step={1}
-              bind:value={timestepMin}
-              on:change={handleTimestepInput}
-            />
-          </div>
-          <div class="align-center">
-            <label for="start">Start (ISO)</label>
-            <input id="start" type="datetime-local" bind:value={startISO} />
-          </div>
-        </div>
 
-        <div>
-          <label for="curve">Custom Curve CSV</label>
-          <textarea
-            id="curve"
-            rows="3"
-            placeholder="t (0..1), cumulative (0..1)"
-            bind:value={customCurveCsv}
-          ></textarea>
+          <div class="field field--textarea">
+            <label for="curve">Custom Curve CSV</label>
+            <textarea
+              id="curve"
+              rows="3"
+              placeholder="t (0..1), cumulative (0..1)"
+              bind:value={customCurveCsv}
+            ></textarea>
+            <div class="field-hint">Note: Huff distributions are approximated using Beta distributions.</div>
+          </div>
         </div>
-        <div class="small">Note: Huff distributions are approximated using Beta distributions.</div>
 
 
         <div class="actions">
@@ -2085,36 +2104,112 @@
     flex-wrap: wrap;
   }
 
-  .form-grid {
-    gap: 14px;
+  .storm-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
 
-  .form-grid + .form-grid {
-    margin-top: 18px;
+  .form-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   .form-grid--secondary {
-    align-items: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
-  .form-grid--secondary .align-center {
+  .field {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 6px;
-    height: 100%;
+    gap: 10px;
+    min-width: 0;
   }
 
-  .distribution-control {
-    align-items: stretch;
+  .field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
-  .distribution-compare-button {
-    width: 100%;
+  .field-header > label {
+    margin: 0;
+    flex: 1;
+  }
+
+  .field-header-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    padding: 6px 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .field-header-control label {
+    margin: 0;
+  }
+
+  .field-header-control select {
+    width: auto;
+    min-width: 140px;
+  }
+
+  .field-hint {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  .field-hint--warning {
+    padding: 8px 10px;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 8px;
+  }
+
+  .field--distribution .distribution-compare-button {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 12px;
+    white-space: nowrap;
+  }
+
+  .field--textarea textarea {
+    min-height: 120px;
+  }
+
+  @media (max-width: 720px) {
+    .form-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .field-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .field-header-control {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .field-header-control select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .field--distribution .distribution-compare-button {
+      width: 100%;
+      text-align: center;
+    }
   }
 
   .checkbox {
@@ -2290,28 +2385,6 @@
 
   textarea {
     resize: vertical;
-  }
-
-  .disclaimer {
-    font-size: 12px;
-    color: var(--muted);
-    padding: 8px;
-    background: rgba(234, 179, 8, 0.1);
-    border: 1px solid rgba(234, 179, 8, 0.3);
-    border-radius: 8px;
-  }
-
-  .duration-mode-controls {
-    margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .duration-mode-select {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
   }
 
   @media (max-width: 600px) {
