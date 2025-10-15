@@ -1,6 +1,22 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
+const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
+  .reduce((acc, key) => {
+    const match = key.match(/^scs_(type_[a-z0-9]+)_(\d+)hr$/i)
+    if (!match) return acc
+    const [, type, hoursStr] = match
+    const hours = Number(hoursStr)
+    if (!Number.isFinite(hours)) return acc
+    const list = acc[type] ?? []
+    if (!list.includes(hours)) {
+      list.push(hours)
+      list.sort((a, b) => a - b)
+    }
+    acc[type] = list
+    return acc
+  }, {} as Record<string, number[]>)
+
 function linspace(n: number): number[] {
   if (n <= 0) return []
   if (n === 1) return [0]
@@ -98,22 +114,40 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
   return out.map((v) => v / maxv)
 }
 
-function getBestScsDistribution(baseName: string, durationHr: number, durationMode: 'standard' | 'custom'): DistributionName {
-    if (!baseName.startsWith('scs_')) return baseName as DistributionName;
+function getBestScsDistribution(
+  baseName: string,
+  durationHr: number,
+  durationMode: 'standard' | 'custom'
+): DistributionName {
+  if (!baseName.startsWith('scs_')) return baseName as DistributionName
+  if (baseName in SCS_TABLES) return baseName as DistributionName
 
-    const type = baseName.replace('scs_', '');
-    
-    if (durationMode === 'custom') {
-        // For custom durations, we interpolate from the closest standard distribution table.
-        if (durationHr <= 6) return `scs_${type}_6hr` as DistributionName;
-        if (durationHr <= 12) return `scs_${type}_12hr` as DistributionName;
-        return `scs_${type}_24hr` as DistributionName;
+  const type = baseName.replace('scs_', '')
+  const available = SCS_AVAILABLE_DURATIONS[type]
+  if (!available || available.length === 0) {
+    return baseName as DistributionName
+  }
+
+  const sorted = [...available].sort((a, b) => a - b)
+
+  if (durationMode === 'standard') {
+    const desired = durationHr
+    const match = sorted.find((hours) => desired <= hours)
+    const best = match ?? sorted[sorted.length - 1]
+    return `scs_${type}_${best}hr` as DistributionName
+  }
+
+  const desired = durationHr
+  let best = sorted[0]
+  let bestDiff = Math.abs(best - desired)
+  for (const hours of sorted) {
+    const diff = Math.abs(hours - desired)
+    if (diff < bestDiff || (diff === bestDiff && hours > best)) {
+      best = hours
+      bestDiff = diff
     }
-
-    // For standard durations, find an exact match or the next one up.
-    if (durationHr <= 6) return `scs_${type}_6hr` as DistributionName;
-    if (durationHr <= 12) return `scs_${type}_12hr` as DistributionName;
-    return `scs_${type}_24hr` as DistributionName;
+  }
+  return `scs_${type}_${best}hr` as DistributionName
 }
 
 
