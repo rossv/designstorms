@@ -1336,14 +1336,19 @@
         <p>
           When <i>Use NOAA selection</i> is <b>unchecked</b>, editing <i>Return period</i> will interpolate
           <i>Depth</i> along the selected duration row. Editing <i>Duration</i> or <i>Total depth</i> updates
-          <i>Return period</i> to stay consistent.
+          <i>Return period</i> to stay consistent. Durations that fall between published NOAA rows trigger a
+          bilinear interpolation: depths are first blended across the bounding return periods for each
+          duration, then those results are interpolated between the surrounding durations. This keeps the
+          depth, duration, and return-period trio internally consistent even when no exact table cell exists.
         </p>
         <h3>Methods</h3>
         <p>
-          Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
-          II, III) resampled to the storm duration or from predefined Beta(α,β) distributions on [0,1] for the
-          remaining presets. No circular shifting is applied. User-supplied curves are normalized and
-          resampled.
+          Total storm depth is obtained from the NOAA Atlas 14 table with the interpolation rules above. The
+          resulting depth is mapped onto a temporal pattern sourced from NRCS dimensionless cumulative
+          rainfall tables (Types I, IA, II, III), Huff/Beta presets, or an uploaded CSV. Each cumulative curve
+          is linearly resampled to the requested timestep, normalized so the final value equals the storm
+          depth, and differenced to yield incremental rainfall and intensities. No circular shifting is
+          applied. User-supplied curves are normalized and resampled in the same way.
         </p>
       </div>
       <div class="modal-actions">
