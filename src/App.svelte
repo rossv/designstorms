@@ -780,9 +780,6 @@
     const pointYs: number[] = []
     const pointLabels: string[] = []
     durationEntries.forEach((duration) => {
-      if (durationMode === 'standard' && !durationIsSelectable(duration.label)) {
-        return
-      }
       ariEntries.forEach((ari) => {
         const depth = duration.row.values[ari.key]
         if (Number.isFinite(depth)) {
@@ -809,29 +806,6 @@
         'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<extra></extra>',
       name: 'NOAA data points',
       showlegend: false
-    }
-
-    let stormParametersTrace: any = null
-    const stormDuration = Number(selectedDurationHr)
-    const stormAri = Number(selectedAri)
-    const stormDepth = Number(selectedDepth)
-    if (stormDuration > 0 && Number.isFinite(stormDuration) && stormAri > 0 && Number.isFinite(stormAri)) {
-      const depthLine = Number.isFinite(stormDepth) ? `<br>Depth: ${stormDepth.toFixed(3)} in` : ''
-      stormParametersTrace = {
-        type: 'scatter',
-        mode: 'markers',
-        x: [stormAri],
-        y: [stormDuration],
-        marker: {
-          color: '#ef4444',
-          size: 12,
-          line: { color: '#fee2e2', width: 2 },
-          symbol: 'diamond'
-        },
-        name: 'Current storm parameters',
-        showlegend: false,
-        hovertemplate: `Selected Storm — ARI: ${stormAri}<br>Duration: ${stormDuration.toFixed(2)} hr${depthLine}<extra></extra>`
-      }
     }
 
     let highlightTrace: any = null
@@ -901,23 +875,16 @@
       }
     }
 
-    const data: any[] = [contourTrace]
-    if (pointXs.length) {
-      data.push(pointsTrace)
-    }
-    if (stormParametersTrace) {
-      data.push(stormParametersTrace)
-    }
-    if (highlightTrace) {
-      data.push(highlightTrace)
-    }
+    const data = highlightTrace
+      ? [contourTrace, pointsTrace, highlightTrace]
+      : [contourTrace, pointsTrace]
 
     Plotly.react(isoPlotDiv, data, layout, {
       ...plotConfig,
       displayModeBar: false
     })
 
-    if (pointXs.length) {
+    if (durationMode === 'custom') {
       attachIsoPlotClickHandler()
     } else {
       detachIsoPlotClickHandler()
@@ -926,15 +893,16 @@
 
   const handleIsoPlotClick = (event: any) => {
     if (durationMode !== 'custom') return
+    if (!table) return
     const point = event?.points?.[0]
-    if (!point || point.data?.name !== 'NOAA data points') return
+    if (!point) return
 
     const ariEntries = aris
       .map((key) => ({ key, value: Number(key) }))
       .filter((entry) => Number.isFinite(entry.value))
       .sort((a, b) => a.value - b.value)
 
-    const durationEntries = getSortedDurationRows(table!)
+    const durationEntries = getSortedDurationRows(table)
     if (!ariEntries.length || !durationEntries.length) return
 
     const nearestAri = ariEntries.reduce(
@@ -958,10 +926,6 @@
     const depth = selectedRow.values[ariKey]
 
     if (!Number.isFinite(depth)) {
-      return
-    }
-
-    if (!durationIsSelectable(nearestDuration.entry.label)) {
       return
     }
 
@@ -1655,14 +1619,101 @@
           </div>
           <div class="small">Tip: Click a table cell to apply the depth, duration, and Average Recurrence Interval to the storm parameters.</div>
         {/if}
+
+        <div class="duration-mode-controls">
+          <div class="duration-mode-select">
+            <label for="duration-mode">Duration Mode</label>
+            <select id="duration-mode" bind:value={durationMode}>
+              <option value="standard">Standard (6, 12, 24-hr)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          {#if durationMode === 'custom'}
+            <div class="disclaimer">
+              <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
+            </div>
+          {/if}
+        </div>
       </div>
 
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
 
-        <div class="storm-parameters-grid">
+        <div class="storm-form">
+          <div class="form-grid form-grid--primary">
+            <div class="field">
+              <label for="depth">Depth (in)</label>
+              <NumericStepper
+                id="depth"
+                label="Depth (in)"
+                min={0}
+                step={0.1}
+                bind:value={selectedDepth}
+                on:change={handleDepthInput}
+                recalculated={recentlyRecalculated === 'depth'}
+              />
+            </div>
+            <div class="field field--duration">
+              <div class="field-header">
+                <label for="duration">Duration (hr)</label>
+                <div class="field-header-control">
+                  <label for="duration-mode">Mode</label>
+                  <select id="duration-mode" bind:value={durationMode}>
+                    <option value="standard">Standard</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+              </div>
+              {#if durationMode === 'standard'}
+                <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
+                  <option value={6}>6-hr</option>
+                  <option value={12}>12-hr</option>
+                  <option value={24}>24-hr</option>
+                </select>
+              {:else}
+                <NumericStepper
+                  id="duration"
+                  label="Duration (hr)"
+                  min={MIN_DURATION_HOURS}
+                  step={MIN_DURATION_HOURS}
+                  buttonStep={1}
+                  bind:value={selectedDurationHr}
+                  on:change={handleDurationInput}
+                  recalculated={recentlyRecalculated === 'duration'}
+                />
+              {/if}
+              {#if durationMode === 'custom'}
+                <div class="field-hint field-hint--warning">
+                  <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
+                </div>
+              {/if}
+            </div>
+            <div class="field">
+              <label for="ari">Average Recurrence Interval (years)</label>
+              <NumericStepper
+                id="ari"
+                label="Average Recurrence Interval (years)"
+                min={0}
+                step={1}
+                bind:value={selectedAri}
+                on:change={handleAriInput}
+                recalculated={recentlyRecalculated === 'ari'}
+              />
+            </div>
+          </div>
+
+          <div class="form-grid form-grid--secondary">
             <div class="field field--distribution">
-              <label for="dist">Distribution</label>
+              <div class="field-header">
+                <label for="dist">Distribution</label>
+                <button
+                  type="button"
+                  class="ghost distribution-compare-button"
+                  on:click={openCurveModal}
+                >
+                  Compare Distributions
+                </button>
+              </div>
               <select id="dist" bind:value={distribution}>
                 <option value="scs_type_i">SCS Type I</option>
                 <option value="scs_type_ia">SCS Type IA</option>
@@ -1675,98 +1726,48 @@
                 <option value="user">User CSV (cumulative 0..1)</option>
               </select>
             </div>
-
-            <div class="field field--duration-mode">
-                <label for="duration-mode-tabs">Duration Mode</label>
-                <div class="tabs" id="duration-mode-tabs">
-                    <button class={durationMode === 'standard' ? 'active' : ''} on:click={() => durationMode = 'standard'}>Standard</button>
-                    <button class={durationMode === 'custom' ? 'active' : ''} on:click={() => durationMode = 'custom'}>Custom</button>
-                </div>
-            </div>
-
             <div class="field">
-                <label for="depth">Depth (in)</label>
-                <NumericStepper
-                  id="depth"
-                  label="Depth (in)"
-                  min={0}
-                  step={0.1}
-                  bind:value={selectedDepth}
-                  on:change={handleDepthInput}
-                  recalculated={recentlyRecalculated === 'depth'}
-                />
+              <label for="timestep">Timestep (min)</label>
+              <NumericStepper
+                id="timestep"
+                label="Timestep (min)"
+                min={0.1}
+                step={1}
+                bind:value={timestepMin}
+                on:change={handleTimestepInput}
+              />
             </div>
             <div class="field">
-                <label for="duration">Duration (hr)</label>
-                {#if durationMode === 'standard'}
-                     <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
-                        <option value={6}>6-hr</option>
-                        <option value={12}>12-hr</option>
-                        <option value={24}>24-hr</option>
-                    </select>
-                {:else}
-                    <NumericStepper
-                      id="duration-custom"
-                      label="Duration (hr)"
-                      min={MIN_DURATION_HOURS}
-                      step={MIN_DURATION_HOURS}
-                      buttonStep={1}
-                      bind:value={selectedDurationHr}
-                      on:change={handleDurationInput}
-                      recalculated={recentlyRecalculated === 'duration'}
-                    />
+              <label for="start">Start (ISO)</label>
+              <input id="start" type="datetime-local" bind:value={startISO} />
+            </div>
+          </div>
+
+          <div class="field field--custom-curve">
+            <label for="curve-button">Custom Curve CSV</label>
+            <button
+              id="curve-button"
+              type="button"
+              class="ghost custom-curve-button"
+              on:click={openCustomCurveModal}
+            >
+              {customCurveLines.length ? 'Edit Custom Curve' : 'Add Custom Curve'}
+            </button>
+            {#if customCurveLines.length}
+              <div class="custom-curve-preview" aria-live="polite">
+                <pre>{customCurveLines.slice(0, 3).join('\n')}</pre>
+                {#if customCurveLines.length > 3}
+                  <div class="custom-curve-preview-more">
+                    +{customCurveLines.length - 3} additional row{customCurveLines.length - 3 === 1 ? '' : 's'}
+                  </div>
                 {/if}
-            </div>
-
-            <div class="field">
-                <label for="ari">Recurrence (years)</label>
-                <NumericStepper
-                  id="ari"
-                  label="Average Recurrence Interval (years)"
-                  min={0}
-                  step={1}
-                  bind:value={selectedAri}
-                  on:change={handleAriInput}
-                  recalculated={recentlyRecalculated === 'ari'}
-                />
-            </div>
-            <div class="field">
-                <label for="timestep">Timestep (min)</label>
-                <NumericStepper
-                  id="timestep"
-                  label="Timestep (min)"
-                  min={0.1}
-                  step={1}
-                  bind:value={timestepMin}
-                  on:change={handleTimestepInput}
-                />
-            </div>
-
-            <div class="field field--start-time">
-                <label for="start">Start (ISO)</label>
-                <input id="start" type="datetime-local" bind:value={startISO} />
-            </div>
-
-            <div class="field field--custom-curve">
-              <label for="curve-button">Custom Curve CSV</label>
-              <button
-                id="curve-button"
-                type="button"
-                class="ghost custom-curve-button"
-                on:click={openCustomCurveModal}
-              >
-                {customCurveLines.length ? `Edit Curve (${customCurveLines.length} points)` : 'Add Custom Curve'}
-              </button>
-            </div>
-
+              </div>
+            {:else}
+              <div class="field-hint">No custom curve provided yet.</div>
+            {/if}
+            <div class="field-hint">Note: Huff distributions are approximated using Beta distributions.</div>
+          </div>
         </div>
-
-        {#if durationMode === 'custom'}
-            <div class="disclaimer">
-                <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II & III include 6, 12, and 24-hr tables), which may differ from true short-duration storm patterns.
-            </div>
-        {/if}
-        <div class="small">Note: Huff distributions are approximated using Beta distributions.</div>
 
 
         <div class="actions">
@@ -1795,9 +1796,17 @@
       <div class="panel">
         <h2 class="section-title">NOAA Depth Iso-Lines</h2>
         <div class="iso-plot-container">
-          <div class="iso-plot" bind:this={isoPlotDiv} aria-label="Contour plot of NOAA depths by duration and recurrence interval"></div>
+          <div
+            class="iso-plot"
+            bind:this={isoPlotDiv}
+            aria-label="Contour plot of NOAA depths by duration and recurrence interval"
+          ></div>
           {#if !table}
             <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
+          {:else if durationMode === 'standard'}
+            <div class="iso-plot-overlay">
+              Switch to Custom Duration mode to select NOAA depth points from the iso-line preview.
+            </div>
           {/if}
         </div>
       </div>
@@ -1871,7 +1880,6 @@
       aria-labelledby="custom-curve-title"
       tabindex="-1"
       bind:this={customCurveModalDialog}
-      on:click|stopPropagation
     >
       <div class="modal-content">
         <h2 id="custom-curve-title">Custom Curve CSV</h2>
@@ -1915,7 +1923,6 @@
       aria-labelledby="help-title"
       tabindex="-1"
       bind:this={helpDialog}
-      on:click|stopPropagation
     >
       <div class="modal-content">
         <h2 id="help-title">Design Storm Generator</h2>
@@ -1980,7 +1987,6 @@
       aria-labelledby="curve-modal-title"
       tabindex="-1"
       bind:this={curveModalDialog}
-      on:click|stopPropagation
     >
       <div class="modal-content">
         <h2 id="curve-modal-title">Distribution Comparison Curves</h2>
@@ -2125,55 +2131,6 @@
     flex: 1;
   }
 
-  .storm-form-layout {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px 20px;
-    align-items: end;
-  }
-
-  .field--distribution { grid-column: 1 / 3; }
-  .field--duration-mode { grid-column: 3 / 5; }
-  .field--start-time { grid-column: 1 / 3; }
-  .field--custom-curve { grid-column: 3 / 5; }
-
-
-  .form-col {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-  }
-
-    .duration-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .tabs {
-        display: flex;
-        background-color: #0f131a;
-        border-radius: 8px;
-        padding: 4px;
-    }
-
-    .tabs button {
-        flex: 1;
-        padding: 6px 12px;
-        border: none;
-        background: transparent;
-        color: var(--muted);
-        cursor: pointer;
-        border-radius: 6px;
-        transition: background-color 0.2s, color 0.2s;
-    }
-
-    .tabs button.active {
-        background-color: var(--accent);
-        color: #05121a;
-        font-weight: 600;
-    }
-
   @media (min-width: 600px) {
     .layout {
       gap: clamp(1.5rem, 1vw + 1.25rem, 2.25rem);
@@ -2287,24 +2244,158 @@
     flex-wrap: wrap;
   }
 
-  .form-grid {
-    gap: 14px;
+  .storm-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
 
-  .form-grid + .form-grid {
-    margin-top: 18px;
+  .form-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   .form-grid--secondary {
-    align-items: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
-  .form-grid--secondary .align-center {
+  .field {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 6px;
-    height: 100%;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .field-header > label {
+    margin: 0;
+    flex: 1;
+  }
+
+  .field-header-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .field-header-control label {
+    margin: 0;
+  }
+
+  .field-header-control select {
+    width: auto;
+    min-width: 140px;
+  }
+
+  .field-hint {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  .field-hint--warning {
+    padding: 8px 10px;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 8px;
+  }
+
+  .field--distribution .distribution-compare-button {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 12px;
+    white-space: nowrap;
+  }
+
+  .field--custom-curve {
+    gap: 12px;
+  }
+
+  .custom-curve-button {
+    align-self: flex-start;
+  }
+
+  .custom-curve-preview {
+    width: 100%;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .custom-curve-preview pre {
+    margin: 0;
+    font-family: 'JetBrains Mono', 'Fira Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .custom-curve-preview-more {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .custom-curve-modal textarea {
+    width: 100%;
+    min-height: 160px;
+    resize: vertical;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 720px) {
+    .form-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .field-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .field-header-control {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .field-header-control select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .field--distribution .distribution-compare-button {
+      width: 100%;
+      text-align: center;
+    }
   }
 
   .checkbox {
@@ -2391,6 +2482,14 @@
     background: rgba(110, 231, 255, 0.06);
   }
 
+  .table-row.disabled {
+    opacity: 0.45;
+  }
+
+  .table-row.disabled:hover {
+    background: transparent;
+  }
+
   .table-button {
     background: transparent;
     border: none;
@@ -2410,6 +2509,17 @@
   .table-button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
+  }
+
+  .table-button:disabled,
+  .table-button.disabled {
+    color: rgba(231, 231, 231, 0.4);
+    cursor: not-allowed;
+  }
+
+  .table-button:disabled:hover,
+  .table-button.disabled:hover {
+    background: transparent;
   }
 
   .duration-btn {
@@ -2461,16 +2571,6 @@
 
   textarea {
     resize: vertical;
-  }
-
-  .disclaimer {
-      font-size: 12px;
-      color: var(--muted);
-      padding: 8px;
-      background: rgba(234, 179, 8, 0.1);
-      border: 1px solid rgba(234, 179, 8, 0.3);
-      border-radius: 8px;
-      margin-top: 12px;
   }
 
   @media (max-width: 600px) {
@@ -2585,6 +2685,21 @@
   .iso-plot {
     width: 100%;
     height: 100%;
+  }
+
+  .iso-plot-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    background: linear-gradient(135deg, rgba(2, 6, 23, 0.7), rgba(8, 47, 73, 0.55));
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
   }
 
   .iso-plot-empty {
@@ -2702,9 +2817,6 @@
   }
 
   @media (max-width: 720px) {
-    .storm-form-layout {
-      grid-template-columns: 1fr;
-    }
     .form-grid {
       gap: 18px;
     }
@@ -2884,4 +2996,3 @@
     }
   }
 </style>
-
