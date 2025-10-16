@@ -823,7 +823,7 @@
       const highlightDuration = durationEntries.find(
         (entry) => entry.label === selectedDurationLabel
       )
-      const highlightAri = ariEntries.find((entry) => entry.key === String(selectedAri))
+      const highlightAri = ariEntries.find((entry) => entry.key === String($selectedAri))
       const depth = highlightDuration?.row.values[highlightAri?.key ?? '']
       if (highlightDuration && highlightAri && Number.isFinite(depth)) {
         highlightTrace = {
@@ -885,21 +885,21 @@
       }
     }
 
-    const durationHrNumeric = Number(selectedDurationHr);
+    const durationHrNumeric = Number($selectedDurationHr)
 
     let stormTrace: any = null
     if (
-      Number.isFinite(selectedAri) &&
-      selectedAri > 0 &&
+      Number.isFinite($selectedAri) &&
+      $selectedAri > 0 &&
       Number.isFinite(durationHrNumeric) &&
       durationHrNumeric > 0
     ) {
-      const hasDepth = Number.isFinite(selectedDepth)
-      const depthText = hasDepth ? `<br>Depth: ${selectedDepth.toFixed(3)} in` : ''
+      const hasDepth = Number.isFinite($selectedDepth)
+      const depthText = hasDepth ? `<br>Depth: ${$selectedDepth.toFixed(3)} in` : ''
       stormTrace = {
         type: 'scatter',
         mode: 'markers',
-        x: [selectedAri],
+        x: [$selectedAri],
         y: [durationHrNumeric],
         marker: {
           color: '#ef4444',
@@ -910,7 +910,7 @@
         name: 'Current storm parameters',
         showlegend: false,
         hovertemplate: `Current Storm` +
-          `<br>ARI: ${selectedAri}` +
+          `<br>ARI: ${$selectedAri}` +
           `<br>Duration: ${durationHrNumeric.toFixed(2)} hr` +
           depthText +
           '<extra></extra>'
@@ -933,6 +933,7 @@
   }
 
   const handleIsoPlotClick = (event: any) => {
+    const table = $tableStore
     if (!table) return
     const point = event?.points?.[0]
     if (!point) return
@@ -1933,7 +1934,7 @@
           </div>
           <div class="stat-box">
             <div class="stat-title">Selected Average Recurrence Interval</div>
-            <div class="stat-value">{selectedAri} years</div>
+            <div class="stat-value">{$selectedAri} years</div>
           </div>
         </div>
       </div>
