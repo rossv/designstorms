@@ -8,7 +8,7 @@
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import {
     generateStorm,
-    SCS_AVAILABLE_DURATIONS,
+    getBestScsDistribution,
     type StormParams,
     type DistributionName
   } from './lib/stormEngine'
@@ -29,6 +29,10 @@
   let plotDiv2: HTMLDivElement
   let plotDiv3: HTMLDivElement
   let isoPlotDiv: HTMLDivElement
+  let curvePlotDiv: HTMLDivElement | null = null
+  let curveModalDialog: HTMLDivElement | null = null
+  let customCurveModalDialog: HTMLDivElement | null = null
+  let customCurveTextarea: HTMLTextAreaElement | null = null
 
   let map: L.Map
   let marker: L.Marker
@@ -54,6 +58,8 @@
   let lastFetchKey = ''
 
   let table: NoaaTable | null = null
+  let noaaTableScrollEl: HTMLDivElement | null = null
+  let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
   let aris: string[] = []
   let selectedDurationLabel: string | null = null
@@ -64,9 +70,84 @@
   let selectedAri = 10
   let selectedDepth = 1.0
   let selectedDurationHr = 24
-  let durationMode: 'standard' | 'custom' = 'standard';
-  let allowedStandardDurations: number[] | null = null
-  const DURATION_MATCH_EPSILON = 1e-6
+  let durationMode: 'standard' | 'custom' = 'standard'
+  const STANDARD_DURATION_HOURS = [6, 12, 24] as const
+
+  const SCS_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
+    'scs_type_i',
+    'scs_type_ia',
+    'scs_type_ii',
+    'scs_type_iii'
+  ]
+
+  const HUFF_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
+    'huff_q1',
+    'huff_q2',
+    'huff_q3',
+    'huff_q4'
+  ]
+
+  type ComparisonGroup = {
+    key: string
+    label: string
+    members: DistributionName[]
+  }
+
+  const DISTRIBUTION_LABELS: Partial<Record<DistributionName, string>> = {
+    scs_type_i: 'SCS Type I',
+    scs_type_ia: 'SCS Type IA',
+    scs_type_ii: 'SCS Type II',
+    scs_type_iii: 'SCS Type III',
+    scs_type_i_24hr: 'SCS Type I (24-hr)',
+    scs_type_ia_24hr: 'SCS Type IA (24-hr)',
+    scs_type_ii_6hr: 'SCS Type II (6-hr)',
+    scs_type_ii_12hr: 'SCS Type II (12-hr)',
+    scs_type_ii_24hr: 'SCS Type II (24-hr)',
+    scs_type_iii_6hr: 'SCS Type III (6-hr)',
+    scs_type_iii_12hr: 'SCS Type III (12-hr)',
+    scs_type_iii_24hr: 'SCS Type III (24-hr)',
+    huff_q1: 'Huff Q1',
+    huff_q2: 'Huff Q2',
+    huff_q3: 'Huff Q3',
+    huff_q4: 'Huff Q4',
+    user: 'User CSV'
+  }
+
+  function getDistributionLabel(name: DistributionName) {
+    if (DISTRIBUTION_LABELS[name]) {
+      return DISTRIBUTION_LABELS[name] as string
+    }
+    return name
+      .replace(/scs_/i, 'SCS ')
+      .replace(/_/g, ' ')
+      .replace(/\b(hr)\b/i, 'hr')
+      .replace(/\b(q)(\d)/i, 'Q$2')
+      .replace(/\btype\b/i, 'Type')
+      .replace(/\biii\b/i, 'III')
+      .replace(/\bia\b/i, 'IA')
+  }
+
+  function getComparisonGroup(name: DistributionName): ComparisonGroup {
+    if (name.startsWith('huff_')) {
+      return {
+        key: 'huff',
+        label: 'Huff Quartiles',
+        members: HUFF_COMPARISON_DISTRIBUTIONS
+      }
+    }
+    if (name.startsWith('scs_type')) {
+      return {
+        key: 'scs',
+        label: 'SCS Dimensionless Distributions',
+        members: SCS_COMPARISON_DISTRIBUTIONS
+      }
+    }
+    return {
+      key: name,
+      label: getDistributionLabel(name),
+      members: [name]
+    }
+  }
 
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
@@ -75,7 +156,17 @@
   let distribution: DistributionName = 'scs_type_ii'
   let startISO = '2003-01-01T00:00'
   let customCurveCsv = ''
+  let customCurveDraft = ''
+  let showCustomCurveModal = false
+  let customCurveLines: string[] = []
+
+  $: customCurveLines = customCurveCsv.trim()
+    ? customCurveCsv
+        .trim()
+        .split(/\r?\n/)
+    : []
   let showHelp = false
+  let showCurveModal = false
   let helpDialog: HTMLDivElement | null = null
 
   let isLoadingNoaa = false
@@ -126,6 +217,21 @@
   let tableScrollObserver: ResizeObserver | null = null
   let observedTableScrollEl: HTMLDivElement | null = null
   let tableScrollMaxHeight = 320
+
+  type ComparisonCurve = {
+    distribution: DistributionName
+    label: string
+    timeHr: number[]
+    fraction: number[]
+    rows: { time: number; fraction: number }[]
+  }
+
+  let comparisonCurves: ComparisonCurve[] = []
+  let selectedCurveDuration: (typeof STANDARD_DURATION_HOURS)[number] | null = null
+  let selectedCurveDistribution: DistributionName | null = null
+  let lastCurveParamsKey = ''
+  let selectedCurveData: ComparisonCurve | null = null
+  let comparisonGroupLabel = ''
 
   function formatTimestamp(date: Date) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -194,39 +300,6 @@
       void loadNoaa()
     }, delay)
   }
-
-  function getAllowedDurationsForDistribution(name: DistributionName): number[] | null {
-    const match = name.match(/^scs_(type_[a-z0-9]+)(?:_(\d+)hr)?$/i)
-    if (!match) {
-      return null
-    }
-    const [, type] = match
-    const durations = SCS_AVAILABLE_DURATIONS[type]
-    if (!durations || durations.length === 0) {
-      return null
-    }
-    return durations
-  }
-
-  function durationIsDisabled(label: string): boolean {
-    if (durationMode !== 'standard') {
-      return false
-    }
-    if (!allowedStandardDurations || allowedStandardDurations.length === 0) {
-      return false
-    }
-    const hours = toHours(label)
-    if (!Number.isFinite(hours)) {
-      return false
-    }
-    return !allowedStandardDurations.some(
-      (allowed) => Math.abs(allowed - hours) < DURATION_MATCH_EPSILON
-    )
-  }
-
-  $:
-    allowedStandardDurations =
-      durationMode === 'standard' ? getAllowedDurationsForDistribution(distribution) : null
 
   type NominatimResult = {
     lat: string
@@ -324,6 +397,10 @@
       const defaultDurationLabel = parsed.rows.find(
         (r) => Math.abs(toHours(r.label) - DEFAULT_DURATION_HOURS) < 1e-6
       )?.label
+      const defaultDurationIndex = defaultDurationLabel
+        ? parsed.rows.findIndex((r) => r.label === defaultDurationLabel)
+        : -1
+      pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
       if (!hadTable && defaultDurationLabel) {
         selectedDurationLabel = defaultDurationLabel
       } else if (
@@ -355,11 +432,66 @@
     }
   }
 
+  function matchesStandardDurationHours(hours: number) {
+    return STANDARD_DURATION_HOURS.some((standard) => Math.abs(hours - standard) < 1e-6)
+  }
+
+  function hasComparisonCurveForDuration(name: DistributionName, duration: number) {
+    if (!name.startsWith('scs_type')) {
+      return true
+    }
+
+    const matched = getBestScsDistribution(name, duration, 'standard')
+    const match = matched.match(/_(\d+)hr$/i)
+    if (!match) {
+      return true
+    }
+    const bestDuration = Number(match[1])
+    if (!Number.isFinite(bestDuration)) {
+      return true
+    }
+    return Math.abs(bestDuration - duration) < 1e-6
+  }
+
+  function nearestStandardDuration(hours: number) {
+    if (!Number.isFinite(hours)) {
+      return DEFAULT_DURATION_HOURS
+    }
+    return STANDARD_DURATION_HOURS.reduce((best, candidate) => {
+      const bestDiff = Math.abs(best - hours)
+      const candidateDiff = Math.abs(candidate - hours)
+      if (candidateDiff < bestDiff) {
+        return candidate
+      }
+      return best
+    })
+  }
+
+  function durationLabelIsStandard(label: string) {
+    const hours = toHours(label)
+    if (!Number.isFinite(hours)) {
+      return false
+    }
+    return matchesStandardDurationHours(hours)
+  }
+
+  function durationIsSelectable(label: string) {
+    if (durationMode === 'custom') {
+      return true
+    }
+    return durationLabelIsStandard(label)
+  }
+
+  let previousDurationMode: 'standard' | 'custom' = durationMode
+
+  $: if (durationMode !== previousDurationMode) {
+    previousDurationMode = durationMode
+    makeStorm()
+  }
+
   function pickCell(durLabel: string, ari: string) {
     if (!table) return
-    if (durationIsDisabled(durLabel)) {
-      return
-    }
+    if (!durationIsSelectable(durLabel)) return
     selectedDurationLabel = durLabel
     selectedDurationHr = toHours(durLabel)
     selectedAri = Number(ari)
@@ -647,13 +779,8 @@
     const pointXs: number[] = []
     const pointYs: number[] = []
     const pointLabels: string[] = []
-    const isStandardDurationMode = durationMode === 'standard'
-    const standardDurationHours = [6, 12, 24]
-    const isAllowedStandardDuration = (hours: number) =>
-      standardDurationHours.some((allowed) => Math.abs(hours - allowed) < 1e-6)
-
     durationEntries.forEach((duration) => {
-      if (isStandardDurationMode && !isAllowedStandardDuration(duration.hr)) {
+      if (durationMode === 'standard' && !durationIsSelectable(duration.label)) {
         return
       }
       ariEntries.forEach((ari) => {
@@ -684,6 +811,29 @@
       showlegend: false
     }
 
+    let stormParametersTrace: any = null
+    const stormDuration = Number(selectedDurationHr)
+    const stormAri = Number(selectedAri)
+    const stormDepth = Number(selectedDepth)
+    if (stormDuration > 0 && Number.isFinite(stormDuration) && stormAri > 0 && Number.isFinite(stormAri)) {
+      const depthLine = Number.isFinite(stormDepth) ? `<br>Depth: ${stormDepth.toFixed(3)} in` : ''
+      stormParametersTrace = {
+        type: 'scatter',
+        mode: 'markers',
+        x: [stormAri],
+        y: [stormDuration],
+        marker: {
+          color: '#ef4444',
+          size: 12,
+          line: { color: '#fee2e2', width: 2 },
+          symbol: 'diamond'
+        },
+        name: 'Current storm parameters',
+        showlegend: false,
+        hovertemplate: `Selected Storm — ARI: ${stormAri}<br>Duration: ${stormDuration.toFixed(2)} hr${depthLine}<extra></extra>`
+      }
+    }
+
     let highlightTrace: any = null
     if (table && selectedDurationLabel) {
       const highlightDuration = durationEntries.find(
@@ -709,32 +859,6 @@
             2
           )} hr)<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
         }
-      }
-    }
-
-    let currentStormTrace: any = null
-    if (
-      Number.isFinite(selectedAri) &&
-      Number.isFinite(selectedDurationHr) &&
-      Number.isFinite(selectedDepth)
-    ) {
-      currentStormTrace = {
-        type: 'scatter',
-        mode: 'markers',
-        x: [selectedAri],
-        y: [selectedDurationHr],
-        marker: {
-          color: '#ef4444',
-          size: 14,
-          line: { color: '#fee2e2', width: 2 },
-          symbol: 'x'
-        },
-        name: 'Current storm',
-        showlegend: false,
-        hovertemplate:
-          `Current storm<br>ARI: ${selectedAri.toFixed(3)} years` +
-          `<br>Duration: ${selectedDurationHr.toFixed(2)} hr` +
-          `<br>Depth: ${selectedDepth.toFixed(3)} in<extra></extra>`
       }
     }
 
@@ -777,29 +901,40 @@
       }
     }
 
-    const data = [contourTrace, pointsTrace, highlightTrace, currentStormTrace].filter(
-      (trace): trace is Partial<Plotly.PlotData> => Boolean(trace)
-    )
+    const data: any[] = [contourTrace]
+    if (pointXs.length) {
+      data.push(pointsTrace)
+    }
+    if (stormParametersTrace) {
+      data.push(stormParametersTrace)
+    }
+    if (highlightTrace) {
+      data.push(highlightTrace)
+    }
 
     Plotly.react(isoPlotDiv, data, layout, {
       ...plotConfig,
       displayModeBar: false
     })
 
-    attachIsoPlotClickHandler()
+    if (pointXs.length) {
+      attachIsoPlotClickHandler()
+    } else {
+      detachIsoPlotClickHandler()
+    }
   }
 
   const handleIsoPlotClick = (event: any) => {
-    if (!table) return
+    if (durationMode !== 'custom') return
     const point = event?.points?.[0]
-    if (!point) return
+    if (!point || point.data?.name !== 'NOAA data points') return
 
     const ariEntries = aris
       .map((key) => ({ key, value: Number(key) }))
       .filter((entry) => Number.isFinite(entry.value))
       .sort((a, b) => a.value - b.value)
 
-    const durationEntries = getSortedDurationRows(table)
+    const durationEntries = getSortedDurationRows(table!)
     if (!ariEntries.length || !durationEntries.length) return
 
     const nearestAri = ariEntries.reduce(
@@ -823,6 +958,10 @@
     const depth = selectedRow.values[ariKey]
 
     if (!Number.isFinite(depth)) {
+      return
+    }
+
+    if (!durationIsSelectable(nearestDuration.entry.label)) {
       return
     }
 
@@ -887,6 +1026,24 @@
     }
     interpolatedCells = result.highlight ?? []
     makeStorm()
+  }
+
+  $: if (durationMode === 'standard') {
+    let adjusted = false
+    if (!matchesStandardDurationHours(selectedDurationHr)) {
+      const nearest = nearestStandardDuration(selectedDurationHr)
+      if (nearest !== selectedDurationHr) {
+        selectedDurationHr = nearest
+        adjusted = true
+      }
+    }
+    if (selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)) {
+      selectedDurationLabel = null
+      adjusted = true
+    }
+    if (adjusted) {
+      recalcFromDepthOrDuration()
+    }
   }
 
   function recalcFromAri() {
@@ -967,6 +1124,23 @@
     savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat', 'System', start)
   }
 
+  async function openCustomCurveModal() {
+    customCurveDraft = customCurveCsv
+    showCustomCurveModal = true
+    await tick()
+    customCurveModalDialog?.focus()
+    customCurveTextarea?.focus()
+  }
+
+  function closeCustomCurveModal() {
+    showCustomCurveModal = false
+  }
+
+  function applyCustomCurveDraft() {
+    customCurveCsv = customCurveDraft
+    closeCustomCurveModal()
+  }
+
   async function openHelp() {
     showHelp = true
     await tick()
@@ -977,11 +1151,251 @@
     showHelp = false
   }
 
+  async function openCurveModal() {
+    showCurveModal = true
+    await tick()
+    curveModalDialog?.focus()
+    refreshComparisonCurves()
+  }
+
+  function closeCurveModal() {
+    showCurveModal = false
+    detachCurvePlotClickHandler()
+    if (curvePlotDiv) {
+      Plotly.purge(curvePlotDiv)
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && showHelp) {
-      event.preventDefault()
+    if (event.key === 'Escape') {
+      if (showCustomCurveModal) {
+        event.preventDefault()
+        closeCustomCurveModal()
+        return
+      }
+      if (showCurveModal) {
+        event.preventDefault()
+        closeCurveModal()
+        return
+      }
+      if (showHelp) {
+        event.preventDefault()
+        closeHelp()
+      }
+    }
+  }
+
+  function handleBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
       closeHelp()
     }
+  }
+
+  function handleCurveBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
+      closeCurveModal()
+    }
+  }
+
+  function handleCustomCurveBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
+      closeCustomCurveModal()
+    }
+  }
+
+  function updateSelectedCurveData() {
+    selectedCurveData =
+      selectedCurveDistribution != null
+        ? comparisonCurves.find((curve) => curve.distribution === selectedCurveDistribution) ?? null
+        : null
+  }
+
+  function setComparisonDuration(duration: (typeof STANDARD_DURATION_HOURS)[number]) {
+    if (selectedCurveDuration === duration) {
+      return
+    }
+    selectedCurveDuration = duration
+    refreshComparisonCurves()
+  }
+
+  function refreshComparisonCurves() {
+    if (!showCurveModal) return
+
+    const group = getComparisonGroup(distribution)
+    comparisonGroupLabel = group.label
+
+    if (!selectedCurveDuration || !matchesStandardDurationHours(selectedCurveDuration)) {
+      const preferred = matchesStandardDurationHours(selectedDurationHr)
+        ? (nearestStandardDuration(selectedDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
+        : STANDARD_DURATION_HOURS[0]
+      selectedCurveDuration = preferred
+    }
+
+    const duration = selectedCurveDuration ?? STANDARD_DURATION_HOURS[0]
+    const trimmedCsv = customCurveCsv.trim()
+    const key = `${group.key}|${duration}|${timestepMin}|${trimmedCsv}`
+
+    if (key === lastCurveParamsKey && comparisonCurves.length) {
+      if (
+        !selectedCurveDistribution ||
+        !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
+      ) {
+        const fallback = comparisonCurves.find((curve) => curve.distribution === distribution)
+          ?? comparisonCurves[0]
+        selectedCurveDistribution = fallback ? fallback.distribution : null
+      }
+      updateSelectedCurveData()
+      drawComparisonCurves()
+      return
+    }
+
+    lastCurveParamsKey = key
+
+    const availableMembers = group.members.filter((member) =>
+      hasComparisonCurveForDuration(member, duration)
+    )
+
+    comparisonCurves = availableMembers.map((member) => {
+      const params: StormParams = {
+        depthIn: 1,
+        durationHr: duration,
+        timestepMin,
+        distribution: member,
+        startISO,
+        customCurveCsv: trimmedCsv || undefined,
+        durationMode: 'standard'
+      }
+
+      const result = generateStorm(params)
+      const totalDepth = result.cumulativeIn[result.cumulativeIn.length - 1] || 1
+      const timeHr = result.timeMin.map((t) => t / 60)
+      const fraction = result.cumulativeIn.map((value) =>
+        totalDepth === 0 ? 0 : Math.min(1, Math.max(0, value / totalDepth))
+      )
+
+      if (timeHr.length > 0) {
+        timeHr[timeHr.length - 1] = duration
+      }
+      if (fraction.length > 0) {
+        fraction[fraction.length - 1] = 1
+      }
+
+      const rows = timeHr.map((time, index) => ({
+        time,
+        fraction: fraction[index] ?? 0
+      }))
+
+      return {
+        distribution: member,
+        label: getDistributionLabel(member),
+        timeHr,
+        fraction,
+        rows
+      }
+    })
+
+    if (comparisonCurves.length === 0) {
+      selectedCurveDistribution = null
+      selectedCurveData = null
+      drawComparisonCurves()
+      return
+    }
+
+    if (
+      !selectedCurveDistribution ||
+      !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
+    ) {
+      const preferred =
+        comparisonCurves.find((curve) => curve.distribution === distribution) ?? comparisonCurves[0]
+      selectedCurveDistribution = preferred ? preferred.distribution : null
+    }
+
+    updateSelectedCurveData()
+    drawComparisonCurves()
+  }
+
+  function setSelectedCurveDistribution(name: DistributionName) {
+    if (!comparisonCurves.some((curve) => curve.distribution === name)) {
+      return
+    }
+    selectedCurveDistribution = name
+    updateSelectedCurveData()
+    drawComparisonCurves()
+  }
+
+  const handleCurvePlotClick = (event: any) => {
+    const point = event?.points?.[0]
+    const dist = point?.data?.meta
+    if (typeof dist === 'string') {
+      setSelectedCurveDistribution(dist as DistributionName)
+    }
+  }
+
+  function attachCurvePlotClickHandler() {
+    if (!curvePlotDiv) return
+    const plotElement = curvePlotDiv as any
+    if (plotElement && typeof plotElement.on === 'function') {
+      detachCurvePlotClickHandler()
+      plotElement.on('plotly_click', handleCurvePlotClick)
+    }
+  }
+
+  function detachCurvePlotClickHandler() {
+    if (!curvePlotDiv) return
+    const plotElement = curvePlotDiv as any
+    if (plotElement) {
+      if (typeof plotElement.removeListener === 'function') {
+        plotElement.removeListener('plotly_click', handleCurvePlotClick)
+      }
+      if (typeof plotElement.off === 'function') {
+        plotElement.off('plotly_click', handleCurvePlotClick)
+      }
+    }
+  }
+
+  function drawComparisonCurves() {
+    if (!curvePlotDiv) return
+    if (!comparisonCurves.length) {
+      Plotly.purge(curvePlotDiv)
+      detachCurvePlotClickHandler()
+      return
+    }
+
+    const traces = comparisonCurves.map((curve) => ({
+      x: curve.timeHr,
+      y: curve.fraction,
+      type: 'scatter',
+      mode: 'lines',
+      name: curve.label,
+      line: { width: curve.distribution === selectedCurveDistribution ? 4 : 2 },
+      opacity: curve.distribution === selectedCurveDistribution ? 1 : 0.55,
+      hovertemplate: `Time: %{x:.2f} hr<br>Rain fraction: %{y:.3f}<extra></extra>`,
+      meta: curve.distribution
+    }))
+
+    const maxDuration = selectedCurveDuration ?? Math.max(...comparisonCurves.map((curve) => curve.timeHr[curve.timeHr.length - 1] ?? 0))
+
+    Plotly.react(
+      curvePlotDiv,
+      traces,
+      {
+        ...plotLayoutBase,
+        title: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr`,
+        xaxis: {
+          ...plotLayoutBase.xaxis,
+          title: 'Time (hr)',
+          range: [0, Math.max(6, maxDuration)]
+        },
+        yaxis: {
+          ...plotLayoutBase.yaxis,
+          title: 'Rain Fraction',
+          range: [0, 1]
+        }
+      },
+      plotConfig
+    )
+
+    attachCurvePlotClickHandler()
   }
   
   function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
@@ -1033,6 +1447,10 @@
       detachIsoPlotClickHandler()
       Plotly.purge(isoPlotDiv)
     }
+    if (curvePlotDiv) {
+      detachCurvePlotClickHandler()
+      Plotly.purge(curvePlotDiv)
+    }
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange)
     tableScrollObserver?.disconnect()
@@ -1049,7 +1467,26 @@
     }
   }
 
+  $: if (showCurveModal) {
+    refreshComparisonCurves()
+  }
+
+  $: selectedCurveData =
+    selectedCurveDistribution != null
+      ? comparisonCurves.find((curve) => curve.distribution === selectedCurveDistribution) ?? null
+      : null
+
   afterUpdate(() => {
+    if (pendingNoaaScrollIndex != null && noaaTableScrollEl) {
+      const target = noaaTableScrollEl.querySelector<HTMLButtonElement>(
+        `.duration-btn[data-row-index="${pendingNoaaScrollIndex}"]`
+      )
+      if (target) {
+        target.scrollIntoView({ block: 'center', inline: 'nearest' })
+        pendingNoaaScrollIndex = null
+      }
+    }
+
     attachTableScrollObserver()
     updateTableScrollHeight()
   })
@@ -1157,7 +1594,7 @@
         </div>
 
         {#if table}
-          <div class="noaa-table-scroll">
+          <div class="noaa-table-scroll" bind:this={noaaTableScrollEl}>
             <div class="noaa-table panel">
               <div class="table-header">
                 <div>
@@ -1173,16 +1610,21 @@
                 </div>
               </div>
               <div class="table-body">
-                {#each table.rows as row}
-                  {@const rowDisabled = durationIsDisabled(row.label)}
-                  {@const rowActive = !rowDisabled && selectedDurationLabel === row.label}
-                  <div class={`table-row ${rowActive ? 'active' : ''} ${rowDisabled ? 'disabled' : ''}`}>
+                {#each table.rows as row, index}
+                  {@const isSelectable =
+                    durationMode === 'custom' || durationLabelIsStandard(row.label)}
+                  <div
+                    class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''} ${
+                      isSelectable ? '' : 'disabled'
+                    }`}
+                  >
                     <div>
                       <button
                         type="button"
-                        class={`table-button duration-btn ${rowActive ? 'active' : ''}`}
+                        class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
+                        data-row-index={index}
+                        disabled={!isSelectable}
                         on:click={() => pickCell(row.label, String(selectedAri))}
-                        disabled={rowDisabled}
                       >
                         {row.label}
                       </button>
@@ -1193,14 +1635,14 @@
                         <button
                           type="button"
                           class={`table-button cell ${
-                            !rowDisabled && selectedDurationLabel === row.label && String(selectedAri) === a
+                            selectedDurationLabel === row.label && String(selectedAri) === a
                               ? 'selected'
                               : ''
                           } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
+                          disabled={!isSelectable}
                           data-ari={a}
                           aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
                           on:click={() => pickCell(row.label, a)}
-                          disabled={rowDisabled}
                         >
                         {depth}
                         </button>
@@ -1218,105 +1660,110 @@
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
 
-        <div class="storm-form-layout">
-            <div class="form-col">
-                <div class="field">
-                    <label for="dist">Distribution</label>
-                    <select id="dist" bind:value={distribution}>
-                      <option value="scs_type_i">SCS Type I</option>
-                      <option value="scs_type_ia">SCS Type IA</option>
-                      <option value="scs_type_ii">SCS Type II</option>
-                      <option value="scs_type_iii">SCS Type III</option>
-                      <option value="huff_q1">Huff Q1</option>
-                      <option value="huff_q2">Huff Q2</option>
-                      <option value="huff_q3">Huff Q3</option>
-                      <option value="huff_q4">Huff Q4</option>
-                      <option value="user">User CSV (cumulative 0..1)</option>
+        <div class="storm-parameters-grid">
+            <div class="field field--distribution">
+              <label for="dist">Distribution</label>
+              <select id="dist" bind:value={distribution}>
+                <option value="scs_type_i">SCS Type I</option>
+                <option value="scs_type_ia">SCS Type IA</option>
+                <option value="scs_type_ii">SCS Type II</option>
+                <option value="scs_type_iii">SCS Type III</option>
+                <option value="huff_q1">Huff Q1</option>
+                <option value="huff_q2">Huff Q2</option>
+                <option value="huff_q3">Huff Q3</option>
+                <option value="huff_q4">Huff Q4</option>
+                <option value="user">User CSV (cumulative 0..1)</option>
+              </select>
+            </div>
+
+            <div class="field field--duration-mode">
+                <label for="duration-mode-tabs">Duration Mode</label>
+                <div class="tabs" id="duration-mode-tabs">
+                    <button class={durationMode === 'standard' ? 'active' : ''} on:click={() => durationMode = 'standard'}>Standard</button>
+                    <button class={durationMode === 'custom' ? 'active' : ''} on:click={() => durationMode = 'custom'}>Custom</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="depth">Depth (in)</label>
+                <NumericStepper
+                  id="depth"
+                  label="Depth (in)"
+                  min={0}
+                  step={0.1}
+                  bind:value={selectedDepth}
+                  on:change={handleDepthInput}
+                  recalculated={recentlyRecalculated === 'depth'}
+                />
+            </div>
+            <div class="field">
+                <label for="duration">Duration (hr)</label>
+                {#if durationMode === 'standard'}
+                     <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
+                        <option value={6}>6-hr</option>
+                        <option value={12}>12-hr</option>
+                        <option value={24}>24-hr</option>
                     </select>
-                </div>
-                 <div class="field">
-                    <label for="duration-mode">Duration Mode</label>
-                    <div class="tabs">
-                        <button class={durationMode === 'standard' ? 'active' : ''} on:click={() => durationMode = 'standard'}>Standard</button>
-                        <button class={durationMode === 'custom' ? 'active' : ''} on:click={() => durationMode = 'custom'}>Custom</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label for="depth">Depth (in)</label>
+                {:else}
                     <NumericStepper
-                      id="depth"
-                      label="Depth (in)"
-                      min={0}
-                      step={0.1}
-                      bind:value={selectedDepth}
-                      on:change={handleDepthInput}
-                      recalculated={recentlyRecalculated === 'depth'}
+                      id="duration-custom"
+                      label="Duration (hr)"
+                      min={MIN_DURATION_HOURS}
+                      step={MIN_DURATION_HOURS}
+                      buttonStep={1}
+                      bind:value={selectedDurationHr}
+                      on:change={handleDurationInput}
+                      recalculated={recentlyRecalculated === 'duration'}
                     />
-                </div>
-                 <div class="field">
-                    <label for="duration">Duration (hr)</label>
-                    {#if durationMode === 'standard'}
-                         <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
-                            <option value={6}>6-hr</option>
-                            <option value={12}>12-hr</option>
-                            <option value={24}>24-hr</option>
-                        </select>
-                    {:else}
-                        <NumericStepper
-                          id="duration-custom"
-                          label="Duration (hr)"
-                          min={MIN_DURATION_HOURS}
-                          step={MIN_DURATION_HOURS}
-                          buttonStep={1}
-                          bind:value={selectedDurationHr}
-                          on:change={handleDurationInput}
-                          recalculated={recentlyRecalculated === 'duration'}
-                        />
-                    {/if}
-                </div>
+                {/if}
             </div>
-            <div class="form-col">
-                <div class="field">
-                    <label for="ari">Recurrence (years)</label>
-                    <NumericStepper
-                      id="ari"
-                      label="Average Recurrence Interval (years)"
-                      min={0}
-                      step={1}
-                      bind:value={selectedAri}
-                      on:change={handleAriInput}
-                      recalculated={recentlyRecalculated === 'ari'}
-                    />
-                </div>
-                <div class="field">
-                    <label for="timestep">Timestep (min)</label>
-                    <NumericStepper
-                      id="timestep"
-                      label="Timestep (min)"
-                      min={0.1}
-                      step={1}
-                      bind:value={timestepMin}
-                      on:change={handleTimestepInput}
-                    />
-                </div>
-                <div class="field">
-                    <label for="start">Start (ISO)</label>
-                    <input id="start" type="datetime-local" bind:value={startISO} />
-                </div>
-                 <div class="field">
-                  <label for="curve">Custom Curve CSV</label>
-                  <textarea
-                    id="curve"
-                    rows="1"
-                    placeholder="t (0..1), cumulative (0..1)"
-                    bind:value={customCurveCsv}
-                  ></textarea>
-                </div>
+
+            <div class="field">
+                <label for="ari">Recurrence (years)</label>
+                <NumericStepper
+                  id="ari"
+                  label="Average Recurrence Interval (years)"
+                  min={0}
+                  step={1}
+                  bind:value={selectedAri}
+                  on:change={handleAriInput}
+                  recalculated={recentlyRecalculated === 'ari'}
+                />
             </div>
+            <div class="field">
+                <label for="timestep">Timestep (min)</label>
+                <NumericStepper
+                  id="timestep"
+                  label="Timestep (min)"
+                  min={0.1}
+                  step={1}
+                  bind:value={timestepMin}
+                  on:change={handleTimestepInput}
+                />
+            </div>
+
+            <div class="field field--start-time">
+                <label for="start">Start (ISO)</label>
+                <input id="start" type="datetime-local" bind:value={startISO} />
+            </div>
+
+            <div class="field field--custom-curve">
+              <label for="curve-button">Custom Curve CSV</label>
+              <button
+                id="curve-button"
+                type="button"
+                class="ghost custom-curve-button"
+                on:click={openCustomCurveModal}
+              >
+                {customCurveLines.length ? `Edit Curve (${customCurveLines.length} points)` : 'Add Custom Curve'}
+              </button>
+            </div>
+
         </div>
+
         {#if durationMode === 'custom'}
             <div class="disclaimer">
-                <strong>Note:</strong> Custom durations interpolate from standard NRCS curves, which may not precisely reflect shorter storm patterns.
+                <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II & III include 6, 12, and 24-hr tables), which may differ from true short-duration storm patterns.
             </div>
         {/if}
         <div class="small">Note: Huff distributions are approximated using Beta distributions.</div>
@@ -1409,8 +1856,58 @@
   </div>
 </div>
 
+{#if showCustomCurveModal}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={handleCustomCurveBackdropClick}
+    on:keydown={handleKeydown}
+  >
+    <div
+      class="modal custom-curve-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-curve-title"
+      tabindex="-1"
+      bind:this={customCurveModalDialog}
+      on:click|stopPropagation
+    >
+      <div class="modal-content">
+        <h2 id="custom-curve-title">Custom Curve CSV</h2>
+        <p class="small">
+          Provide normalized cumulative pairs in CSV format (time fraction, cumulative depth fraction).
+        </p>
+        <label class="sr-only" for="custom-curve-textarea">Custom curve CSV input</label>
+        <textarea
+          id="custom-curve-textarea"
+          rows="6"
+          placeholder="t (0..1), cumulative (0..1)"
+          bind:this={customCurveTextarea}
+          bind:value={customCurveDraft}
+        ></textarea>
+        <div class="field-hint">
+          The curve will be trimmed, normalized, and interpolated to match the selected storm duration.
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" on:click={closeCustomCurveModal}>Cancel</button>
+        <button type="button" class="primary" on:click={applyCustomCurveDraft}>
+          Save Curve
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if showHelp}
-  <div class="modal-backdrop" role="presentation" on:click={closeHelp} on:keydown={handleKeydown}>
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={handleBackdropClick}
+    on:keydown={handleKeydown}
+  >
     <div
       class="modal"
       role="dialog"
@@ -1425,7 +1922,8 @@
         <p>
           <strong>Purpose.</strong>
           Build synthetic hyetographs from NOAA Atlas 14 depths and temporal patterns. SCS storm types use
-          official NRCS dimensionless cumulative rainfall tables; other presets rely on Beta(α,β) shapes.
+          official NRCS dimensionless cumulative rainfall tables (Types I/IA at 24 hours and Types II/III at
+          6, 12, and 24 hours); other presets rely on Beta(α,β) shapes.
           Optionally, supply a custom cumulative curve (CSV).
         </p>
         <h3>Workflow</h3>
@@ -1454,13 +1952,96 @@
         <h3>Methods</h3>
         <p>
           Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
-          II, III) resampled to the storm duration or from predefined Beta(α,β) distributions on [0,1] for the
-          remaining presets. No circular shifting is applied. User-supplied curves are normalized and
-          resampled.
+          II, III) resampled to the storm duration—Type II/III include 6-, 12-, and 24-hour tables and custom
+          durations snap to the closest available curve before resampling—or from predefined Beta(α,β)
+          distributions on [0,1] for the remaining presets. No circular shifting is applied. User-supplied
+          curves are normalized and resampled.
         </p>
       </div>
       <div class="modal-actions">
         <button type="button" on:click={closeHelp}>Close</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showCurveModal}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={handleCurveBackdropClick}
+    on:keydown={handleKeydown}
+  >
+    <div
+      class="modal curve-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="curve-modal-title"
+      tabindex="-1"
+      bind:this={curveModalDialog}
+      on:click|stopPropagation
+    >
+      <div class="modal-content">
+        <h2 id="curve-modal-title">Distribution Comparison Curves</h2>
+        <p class="small">
+          Compare cumulative rain fraction over time across available {comparisonGroupLabel || 'selected'}
+          distributions. Choose a standard duration to update the plot, and click a curve to inspect its normalized
+          values.
+        </p>
+        <div class="curve-controls">
+          <span class="curve-group-label">{comparisonGroupLabel || 'Distributions'}</span>
+          <div class="curve-duration-toggle" role="group" aria-label="Select storm duration">
+            {#each STANDARD_DURATION_HOURS as option}
+              <button
+                type="button"
+                class={`curve-duration-button ${option === selectedCurveDuration ? 'active' : ''}`}
+                aria-pressed={option === selectedCurveDuration}
+                on:click={() => setComparisonDuration(option)}
+              >
+                {option}-hr
+              </button>
+            {/each}
+          </div>
+        </div>
+        <div class="curve-plot" bind:this={curvePlotDiv} aria-label="Cumulative rain fraction by distribution"></div>
+        {#if comparisonCurves.length}
+          {#if selectedCurveData}
+            <div class="curve-table">
+              <h3>
+                {selectedCurveData.label}
+                {#if selectedCurveDuration != null}
+                  — {selectedCurveDuration}-hr Values
+                {/if}
+              </h3>
+              <div class="table-scroll curve-table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th class="left">Time (hr)</th>
+                      <th>Rain Fraction</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each selectedCurveData.rows as row}
+                      <tr>
+                        <td class="left">{row.time.toFixed(2)}</td>
+                        <td>{row.fraction.toFixed(3)}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {:else}
+            <p class="empty">Select a curve to view its values.</p>
+          {/if}
+        {:else}
+          <p class="empty">Unable to generate comparison curves. Adjust parameters and try again.</p>
+        {/if}
+      </div>
+      <div class="modal-actions">
+        <button type="button" on:click={closeCurveModal}>Close</button>
       </div>
     </div>
   </div>
@@ -1545,10 +2126,17 @@
   }
 
   .storm-form-layout {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px 20px;
+    align-items: end;
   }
+
+  .field--distribution { grid-column: 1 / 3; }
+  .field--duration-mode { grid-column: 3 / 5; }
+  .field--start-time { grid-column: 1 / 3; }
+  .field--custom-curve { grid-column: 3 / 5; }
+
 
   .form-col {
       display: flex;
@@ -1803,10 +2391,6 @@
     background: rgba(110, 231, 255, 0.06);
   }
 
-  .table-row.disabled {
-    opacity: 0.45;
-  }
-
   .table-button {
     background: transparent;
     border: none;
@@ -1821,16 +2405,6 @@
 
   .table-button:hover {
     background: rgba(110, 231, 255, 0.12);
-  }
-
-  .table-button:disabled {
-    color: var(--muted);
-    cursor: not-allowed;
-    background: transparent;
-  }
-
-  .table-button:disabled:hover {
-    background: transparent;
   }
 
   .table-button:focus-visible {
@@ -1896,7 +2470,7 @@
       background: rgba(234, 179, 8, 0.1);
       border: 1px solid rgba(234, 179, 8, 0.3);
       border-radius: 8px;
-      margin-top: auto;
+      margin-top: 12px;
   }
 
   @media (max-width: 600px) {
@@ -1973,7 +2547,7 @@
     }
 
     .table-button.cell::before {
-      content: attr(data-ari) ' yr';
+      content: 'Average Recurrence Interval — ' attr(data-ari) ' yr';
       font-size: 11px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
@@ -2128,6 +2702,9 @@
   }
 
   @media (max-width: 720px) {
+    .storm-form-layout {
+      grid-template-columns: 1fr;
+    }
     .form-grid {
       gap: 18px;
     }
@@ -2183,6 +2760,63 @@
 
   .modal-actions button {
     min-width: 90px;
+  }
+
+  .curve-modal .modal-content {
+    max-width: min(640px, 90vw);
+  }
+
+  .curve-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 16px 0 12px;
+    flex-wrap: wrap;
+  }
+
+  .curve-group-label {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .curve-duration-toggle {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .curve-duration-button {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .curve-duration-button.active,
+  .curve-duration-button:hover {
+    background: rgba(110, 231, 255, 0.15);
+    border-color: rgba(110, 231, 255, 0.4);
+  }
+
+  .curve-plot {
+    width: 100%;
+    min-height: 320px;
+  }
+
+  .curve-table h3 {
+    margin: 0;
+  }
+
+  .curve-table-scroll {
+    max-height: 240px;
   }
 
   @media (max-width: 640px) {
