@@ -1687,8 +1687,85 @@
         <h2 class="section-title">Storm Parameters</h2>
 
         <div class="storm-form">
-          <div class="form-grid form-grid--primary">
-            <div class="field">
+          <div class="storm-form__header">
+            <div class="storm-card storm-card--distribution">
+              <div class="distribution-header">
+                <label for="dist">Distribution</label>
+                <div class="distribution-actions">
+                  <button
+                    type="button"
+                    class="ghost distribution-compare-button"
+                    on:click={openCurveModal}
+                  >
+                    Compare Distributions
+                  </button>
+                  <button
+                    id="curve-button"
+                    type="button"
+                    class="ghost custom-curve-button"
+                    on:click={openCustomCurveModal}
+                  >
+                    {customCurveLines.length ? 'Edit Custom Curve' : 'Add Custom Curve'}
+                  </button>
+                </div>
+              </div>
+              <select id="dist" bind:value={distribution}>
+                <option value="scs_type_i">SCS Type I</option>
+                <option value="scs_type_ia">SCS Type IA</option>
+                <option value="scs_type_ii">SCS Type II</option>
+                <option value="scs_type_iii">SCS Type III</option>
+                <option value="huff_q1">Huff Q1</option>
+                <option value="huff_q2">Huff Q2</option>
+                <option value="huff_q3">Huff Q3</option>
+                <option value="huff_q4">Huff Q4</option>
+                <option value="user">User CSV (cumulative 0..1)</option>
+              </select>
+              {#if customCurveLines.length}
+                <div class="custom-curve-preview" aria-live="polite">
+                  <pre>{customCurveLines.slice(0, 3).join('\n')}</pre>
+                  {#if customCurveLines.length > 3}
+                    <div class="custom-curve-preview-more">
+                      +{customCurveLines.length - 3} additional row{customCurveLines.length - 3 === 1 ? '' : 's'}
+                    </div>
+                  {/if}
+                </div>
+              {:else}
+                <div class="field-hint">No custom curve provided yet.</div>
+              {/if}
+              <div class="field-hint">Note: Huff distributions are approximated using Beta distributions.</div>
+            </div>
+            <div class="storm-card storm-card--mode">
+              <div class="mode-header">
+                <span class="mode-label">Mode</span>
+                <div class="mode-toggle" role="group" aria-label="Duration mode">
+                  <button
+                    type="button"
+                    class:active={durationMode === 'standard'}
+                    on:click={() => (durationMode = 'standard')}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    class:active={durationMode === 'custom'}
+                    on:click={() => (durationMode = 'custom')}
+                  >
+                    Custom
+                  </button>
+                </div>
+              </div>
+              {#if durationMode === 'custom'}
+                <div class="mode-note field-hint field-hint--warning">
+                  <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
+                </div>
+              {:else}
+                <p class="mode-note">Quickly select 6-, 12-, or 24-hour durations using the presets below.</p>
+              {/if}
+            </div>
+          </div>
+
+          <div class="storm-form__inputs">
+            <div class="storm-card input-card">
               <label for="depth">Depth (in)</label>
               <NumericStepper
                 id="depth"
@@ -1700,17 +1777,8 @@
                 recalculated={recentlyRecalculated === 'depth'}
               />
             </div>
-            <div class="field field--duration">
-              <div class="field-header">
-                <label for="duration">Duration (hr)</label>
-                <div class="field-header-control">
-                  <label for="duration-mode">Mode</label>
-                  <select id="duration-mode" bind:value={durationMode}>
-                    <option value="standard">Standard</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-              </div>
+            <div class="storm-card input-card input-card--duration">
+              <label for="duration">Duration (hr)</label>
               {#if durationMode === 'standard'}
                 <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
                   <option value={6}>6-hr</option>
@@ -1729,13 +1797,8 @@
                   recalculated={recentlyRecalculated === 'duration'}
                 />
               {/if}
-              {#if durationMode === 'custom'}
-                <div class="field-hint field-hint--warning">
-                  <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
-                </div>
-              {/if}
             </div>
-            <div class="field">
+            <div class="storm-card input-card">
               <label for="ari">Average Recurrence Interval (years)</label>
               <NumericStepper
                 id="ari"
@@ -1747,33 +1810,7 @@
                 recalculated={recentlyRecalculated === 'ari'}
               />
             </div>
-          </div>
-
-          <div class="form-grid form-grid--secondary">
-            <div class="field field--distribution">
-              <div class="field-header">
-                <label for="dist">Distribution</label>
-                <button
-                  type="button"
-                  class="ghost distribution-compare-button"
-                  on:click={openCurveModal}
-                >
-                  Compare Distributions
-                </button>
-              </div>
-              <select id="dist" bind:value={distribution}>
-                <option value="scs_type_i">SCS Type I</option>
-                <option value="scs_type_ia">SCS Type IA</option>
-                <option value="scs_type_ii">SCS Type II</option>
-                <option value="scs_type_iii">SCS Type III</option>
-                <option value="huff_q1">Huff Q1</option>
-                <option value="huff_q2">Huff Q2</option>
-                <option value="huff_q3">Huff Q3</option>
-                <option value="huff_q4">Huff Q4</option>
-                <option value="user">User CSV (cumulative 0..1)</option>
-              </select>
-            </div>
-            <div class="field">
+            <div class="storm-card input-card">
               <label for="timestep">Timestep (min)</label>
               <NumericStepper
                 id="timestep"
@@ -1784,35 +1821,10 @@
                 on:change={handleTimestepInput}
               />
             </div>
-            <div class="field">
+            <div class="storm-card input-card">
               <label for="start">Start (ISO)</label>
               <input id="start" type="datetime-local" bind:value={startISO} />
             </div>
-          </div>
-
-          <div class="field field--custom-curve">
-            <label for="curve-button">Custom Curve CSV</label>
-            <button
-              id="curve-button"
-              type="button"
-              class="ghost custom-curve-button"
-              on:click={openCustomCurveModal}
-            >
-              {customCurveLines.length ? 'Edit Custom Curve' : 'Add Custom Curve'}
-            </button>
-            {#if customCurveLines.length}
-              <div class="custom-curve-preview" aria-live="polite">
-                <pre>{customCurveLines.slice(0, 3).join('\n')}</pre>
-                {#if customCurveLines.length > 3}
-                  <div class="custom-curve-preview-more">
-                    +{customCurveLines.length - 3} additional row{customCurveLines.length - 3 === 1 ? '' : 's'}
-                  </div>
-                {/if}
-              </div>
-            {:else}
-              <div class="field-hint">No custom curve provided yet.</div>
-            {/if}
-            <div class="field-hint">Note: Huff distributions are approximated using Beta distributions.</div>
           </div>
         </div>
 
@@ -2290,57 +2302,129 @@
   .storm-form {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 28px;
   }
 
-  .form-grid {
+  .storm-form__header {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    align-items: stretch;
+  }
+
+  .storm-card {
+    background: rgba(15, 19, 26, 0.9);
+    border: 1px solid rgba(58, 71, 90, 0.55);
+    border-radius: 18px;
+    padding: 18px 20px;
+    box-shadow: 0 16px 32px rgba(5, 12, 18, 0.45);
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .storm-card select,
+  .storm-card input,
+  .storm-card :global(.stepper) {
+    width: 100%;
+  }
+
+  .storm-card label {
+    margin: 0;
+  }
+
+  .storm-card--distribution {
+    gap: 20px;
+  }
+
+  .distribution-header {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .distribution-header label {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .distribution-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .distribution-actions button {
+    flex: 1 1 160px;
+  }
+
+  .storm-card--mode {
+    gap: 22px;
+  }
+
+  .mode-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .mode-label {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .mode-toggle {
+    display: inline-flex;
+    gap: 6px;
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(110, 231, 255, 0.18);
+    background: rgba(8, 13, 20, 0.82);
+  }
+
+  .mode-toggle button {
+    background: transparent;
+    border: none;
+    padding: 6px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--muted);
+    transition: background 120ms ease, color 120ms ease;
+  }
+
+  .mode-toggle button:hover:not(:disabled) {
+    background: rgba(110, 231, 255, 0.08);
+    color: var(--text);
+  }
+
+  .mode-toggle button.active {
+    background: var(--accent);
+    color: #05121a;
+    font-weight: 600;
+    box-shadow: 0 0 0 1px rgba(5, 18, 26, 0.25);
+  }
+
+  .mode-note {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .storm-form__inputs {
     display: grid;
     gap: 18px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
-  .form-grid--secondary {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .field-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .field-header > label {
-    margin: 0;
-    flex: 1;
-  }
-
-  .field-header-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .field-header-control label {
-    margin: 0;
-  }
-
-  .field-header-control select {
-    width: auto;
-    min-width: 140px;
+  .input-card {
+    gap: 14px;
   }
 
   .field-hint {
@@ -2354,22 +2438,6 @@
     background: rgba(234, 179, 8, 0.1);
     border: 1px solid rgba(234, 179, 8, 0.3);
     border-radius: 8px;
-  }
-
-  .field--distribution .distribution-compare-button {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 6px 12px;
-    white-space: nowrap;
-  }
-
-  .field--custom-curve {
-    gap: 12px;
-  }
-
-  .custom-curve-button {
-    align-self: flex-start;
   }
 
   .custom-curve-preview {
@@ -2414,30 +2482,29 @@
     border: 0;
   }
 
-  @media (max-width: 720px) {
-    .form-grid {
+  @media (max-width: 1200px) {
+    .storm-form__header {
       grid-template-columns: minmax(0, 1fr);
     }
+  }
 
-    .field-header {
+  @media (max-width: 720px) {
+    .storm-form {
+      gap: 24px;
+    }
+
+    .storm-card {
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .distribution-actions {
       flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
     }
 
-    .field-header-control {
+    .distribution-actions button {
+      flex: 1 1 auto;
       width: 100%;
-      justify-content: space-between;
-    }
-
-    .field-header-control select {
-      width: 100%;
-      min-width: 0;
-    }
-
-    .field--distribution .distribution-compare-button {
-      width: 100%;
-      text-align: center;
     }
   }
 
