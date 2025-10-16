@@ -774,6 +774,9 @@
     const pointYs: number[] = []
     const pointLabels: string[] = []
     durationEntries.forEach((duration) => {
+      if (durationMode === 'standard' && !durationIsSelectable(duration.label)) {
+        return
+      }
       ariEntries.forEach((ari) => {
         const depth = duration.row.values[ari.key]
         if (Number.isFinite(depth)) {
@@ -800,6 +803,29 @@
         'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<extra></extra>',
       name: 'NOAA data points',
       showlegend: false
+    }
+
+    let stormParametersTrace: any = null
+    const stormDuration = Number(selectedDurationHr)
+    const stormAri = Number(selectedAri)
+    const stormDepth = Number(selectedDepth)
+    if (stormDuration > 0 && Number.isFinite(stormDuration) && stormAri > 0 && Number.isFinite(stormAri)) {
+      const depthLine = Number.isFinite(stormDepth) ? `<br>Depth: ${stormDepth.toFixed(3)} in` : ''
+      stormParametersTrace = {
+        type: 'scatter',
+        mode: 'markers',
+        x: [stormAri],
+        y: [stormDuration],
+        marker: {
+          color: '#ef4444',
+          size: 12,
+          line: { color: '#fee2e2', width: 2 },
+          symbol: 'diamond'
+        },
+        name: 'Current storm parameters',
+        showlegend: false,
+        hovertemplate: `Selected Storm — ARI: ${stormAri}<br>Duration: ${stormDuration.toFixed(2)} hr${depthLine}<extra></extra>`
+      }
     }
 
     let highlightTrace: any = null
@@ -869,16 +895,23 @@
       }
     }
 
-    const data = highlightTrace
-      ? [contourTrace, pointsTrace, highlightTrace]
-      : [contourTrace, pointsTrace]
+    const data: any[] = [contourTrace]
+    if (pointXs.length) {
+      data.push(pointsTrace)
+    }
+    if (stormParametersTrace) {
+      data.push(stormParametersTrace)
+    }
+    if (highlightTrace) {
+      data.push(highlightTrace)
+    }
 
     Plotly.react(isoPlotDiv, data, layout, {
       ...plotConfig,
       displayModeBar: false
     })
 
-    if (durationMode === 'custom') {
+    if (pointXs.length) {
       attachIsoPlotClickHandler()
     } else {
       detachIsoPlotClickHandler()
@@ -886,10 +919,9 @@
   }
 
   const handleIsoPlotClick = (event: any) => {
-    if (durationMode !== 'custom') return
     if (!table) return
     const point = event?.points?.[0]
-    if (!point) return
+    if (!point || point.data?.name !== 'NOAA data points') return
 
     const ariEntries = aris
       .map((key) => ({ key, value: Number(key) }))
@@ -920,6 +952,10 @@
     const depth = selectedRow.values[ariKey]
 
     if (!Number.isFinite(depth)) {
+      return
+    }
+
+    if (!durationIsSelectable(nearestDuration.entry.label)) {
       return
     }
 
@@ -1786,10 +1822,6 @@
           ></div>
           {#if !table}
             <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
-          {:else if durationMode === 'standard'}
-            <div class="iso-plot-overlay">
-              Switch to Custom Duration mode to select NOAA depth points from the iso-line preview.
-            </div>
           {/if}
         </div>
       </div>
