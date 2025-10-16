@@ -2055,41 +2055,51 @@
         <h2 id="help-title">Design Storm Generator</h2>
         <p>
           <strong>Purpose.</strong>
-          Build synthetic hyetographs from NOAA Atlas 14 depths and temporal patterns. SCS storm types use
-          official NRCS dimensionless cumulative rainfall tables (Types I/IA at 24 hours and Types II/III at
-          6, 12, and 24 hours); other presets rely on Beta(α,β) shapes.
-          Optionally, supply a custom cumulative curve (CSV).
+          Build synthetic hyetographs from NOAA Atlas 14 rainfall tables paired with NRCS and analytical
+          temporal distributions. Atlas 14 lookups combine a location search, draggable map marker, manual
+          coordinate entry, and an auto-refresh toggle so the latest Partial Duration Series depths are always
+          in view.
         </p>
-        <h3>Workflow</h3>
+        <h3>Quick Start</h3>
         <ol>
-          <li>Pick a location on the map (NOAA table refreshes automatically).</li>
           <li>
-            Click a cell in the NOAA table to set <em>Return period (Average Recurrence Interval)</em>,
-            <em>Depth</em>, and <em>Duration</em>.
+            Search for a place or drag the marker. Enable <em>Auto refresh when location changes</em> to fetch a
+            new table automatically, or click <em>Refresh NOAA Data</em> to pull depths on demand.
           </li>
           <li>
-            Choose a distribution (SCS types use dimensionless tables; Huff quartiles use Beta
-            approximations).
+            Review the Atlas 14 table and the companion iso-line chart, then click a table cell to apply its
+            duration, Average Recurrence Interval, and depth to the storm parameters.
           </li>
           <li>
-            Export your results. CSV includes timestamps, incremental depth, cumulative depth, and
-            intensity columns. DAT exports contain intensities only and are always reported in inches per
-            hour to match PCSWMM expectations.
+            Pick a distribution, toggle between <em>Standard</em> and <em>Custom</em> duration entry, and choose a
+            computation mode. <em>Compare Distributions</em> opens normalized cumulative curves across 6-, 12-,
+            and 24-hour presets, while <em>Add Custom Curve</em> imports a CSV cumulative fraction table.
+          </li>
+          <li>
+            Adjust timestep and optional start time if you need timestamped outputs. Charts and the storm table
+            refresh automatically—export CSV (timestamp, incremental, cumulative, intensity columns) or DAT
+            (intensities only, in/hr) when ready.
           </li>
         </ol>
+        <h3>Computation Modes</h3>
+        <p>
+          <em>Precise</em> traces every timestep for maximum fidelity. <em>Fast (approx.)</em> caps the cumulative
+          sampling resolution for quicker estimates on long storms; switch back to Precise if results need to be
+          exact.
+        </p>
         <h3>Interpolation</h3>
         <p>
-          When <i>Use NOAA selection</i> is <b>unchecked</b>, editing <i>Return period</i> will interpolate
-          <i>Depth</i> along the selected duration row. Editing <i>Duration</i> or <i>Total depth</i> updates
-          <i>Return period</i> to stay consistent.
+          Manually editing <i>Return period</i> interpolates the <i>Depth</i> along the selected duration row.
+          Editing <i>Duration</i> or <i>Total depth</i> nudges the <i>Return period</i> so the trio of values stays
+          consistent with the NOAA table, and any interpolated Atlas 14 cells are highlighted.
         </p>
         <h3>Methods</h3>
         <p>
-          Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
-          II, III) resampled to the storm duration—Type II/III include 6-, 12-, and 24-hour tables and custom
-          durations snap to the closest available curve before resampling—or from predefined Beta(α,β)
-          distributions on [0,1] for the remaining presets. No circular shifting is applied. User-supplied
-          curves are normalized and resampled.
+          Temporal patterns originate from NRCS dimensionless cumulative rainfall tables (Types I, IA, II, III)
+          resampled to the storm duration—Type II/III include 6-, 12-, and 24-hour tables and custom durations
+          snap to the closest available curve before resampling—or from parameterized Beta(α,β) distributions on
+          [0, 1] for the remaining presets. No circular shifting is applied. User CSV curves are trimmed,
+          normalized, and interpolated to match the storm duration.
         </p>
       </div>
       <div class="modal-actions">

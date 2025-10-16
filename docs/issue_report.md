@@ -8,8 +8,10 @@ future debugging sessions.
 Please include the details below when filing an issue so problems can be reproduced quickly:
 
 - Map location (latitude/longitude) and the duration/return period that was selected
-- Distribution type (e.g., SCS Type II, Huff Q3, custom curve)
-- Export format that triggered the problem (CSV or DAT)
+- Distribution type (e.g., SCS Type II, Huff Q3, custom curve) and whether the duration mode was
+  <em>Standard</em> or <em>Custom</em>
+- Computation mode (<em>Precise</em> or <em>Fast (approx.)</em>)
+- Export format that triggered the problem (CSV or DAT) and whether timestamps were enabled
 - Browser name and version, along with any console or network errors
 
 Providing a screenshot of the NOAA table and generated charts is especially helpful when storms do not
@@ -21,9 +23,13 @@ scale as expected.
   (`https://api.allorigins.win/raw`) is reachable. The app will show an empty table when the proxy or
   NOAA endpoint is unavailable.
 - **Custom curve rejected** – Ensure the CSV includes two columns (time and cumulative fraction) and that
-  the cumulative values increase monotonically from 0 to 1.
+  the cumulative values increase monotonically from 0 to 1. The importer trims, normalizes, and resamples the
+  curve to match the storm duration.
 - **DAT export confusion** – DAT files only contain intensities in inches per hour. Use the CSV export if
   you need timestamps, cumulative depth, or incremental depth columns.
+- **Atlas 14 iso-lines missing** – The contour preview appears only after a table is loaded. Verify that the
+  NOAA fetch succeeded (status text under the refresh button) and that JavaScript errors are not preventing
+  Plotly from rendering.
 
 ## Known Limitations
 

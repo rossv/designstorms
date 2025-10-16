@@ -7,12 +7,20 @@ plots, and export the results as CSV or PCSWMM-compatible DAT files.
 
 ## Key Features
 
-- Interactive Leaflet map with NOAA Atlas 14 depth lookup by latitude/longitude.
+- Interactive Leaflet map with NOAA Atlas 14 depth lookup, manual lat/lon entry, and
+  optional auto-refresh of rainfall tables as the location changes.
+- Atlas 14 tables are paired with an iso-line contour plot so you can quickly spot the
+  depth trends across durations and Average Recurrence Intervals.
 - Support for SCS Types I/IA/II/III, Huff quartiles, beta-based distributions, and
-  user-supplied cumulative depth curves.
-- Side-by-side cumulative and intensity charts powered by Plotly.js.
-- CSV export with tabular precipitation data and DAT export using PCSWMM's
-  intensity units (in/hr).
+  user-supplied cumulative depth curves (via CSV import and preview).
+- Distribution comparison modal with normalized cumulative curves across 6-, 12-, and
+  24-hour durations.
+- Hyetograph, incremental volume, and cumulative mass-curve plots powered by Plotly.js,
+  along with a tabular export-ready storm series that can optionally include timestamps.
+- Precise and fast (approximate) computation modes so you can trade fidelity for speed
+  on long-duration storms.
+- CSV export with timestamp, incremental depth, cumulative depth, and intensity columns
+  plus DAT export using PCSWMM's intensity units (in/hr).
 - 100% client-side—no backend services to deploy or maintain.
 
 ## Tech Stack
@@ -45,6 +53,19 @@ tables are available without additional setup.
 npm test       # Vitest unit tests
 npx svelte-check
 ```
+
+### Using the App
+
+1. Search for a location or drag the map marker. Enable **Auto refresh when location changes** to
+   pull a new NOAA table whenever the coordinates update, or click **Refresh NOAA Data** to fetch
+   on demand.
+2. Review the Atlas 14 table and accompanying iso-line chart. Click a table cell to apply that
+   duration, depth, and Average Recurrence Interval to the storm inputs.
+3. Choose a distribution, toggle between **Standard** or **Custom** duration entry, and pick
+   **Precise** or **Fast (approx.)** computation modes. Add a custom CSV curve or open the
+   comparison modal to inspect normalized cumulative distributions by duration.
+4. Adjust timestep and optional start time if you need timestamped outputs. Charts and the storm
+   table refresh automatically; export the CSV or DAT file once satisfied.
 
 ## Data Sources & Exports
 
