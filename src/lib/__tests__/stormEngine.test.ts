@@ -183,4 +183,32 @@ describe('generateStorm', () => {
     const allEqual = increments.every((value) => Math.abs(value - first) < 1e-6)
     expect(allEqual).toBe(false)
   })
+
+  it('offers a faster approximate mode that preserves monotonic cumulative totals', () => {
+    const baseParams = {
+      depthIn: 3.5,
+      durationHr: 48,
+      timestepMin: 0.5,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: ''
+    }
+
+    const precise = generateStorm(baseParams)
+    const fast = generateStorm({ ...baseParams, computationMode: 'fast' })
+
+    expect(fast.timeMin).toHaveLength(precise.timeMin.length)
+    expect(fast.cumulativeIn.at(-1)).toBeCloseTo(baseParams.depthIn, 6)
+
+    const isMonotonic = fast.cumulativeIn.every((value, index, arr) => {
+      if (index === 0) return value >= 0
+      return value + 1e-9 >= arr[index - 1]
+    })
+    expect(isMonotonic).toBe(true)
+
+    const midIndex = Math.floor(fast.cumulativeIn.length / 2)
+    const midDifference = Math.abs(
+      (fast.cumulativeIn[midIndex] ?? 0) - (precise.cumulativeIn[midIndex] ?? 0)
+    )
+    expect(midDifference).toBeLessThan(baseParams.depthIn * 0.1)
+  })
 })

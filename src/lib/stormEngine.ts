@@ -1,6 +1,8 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
+const MAX_FAST_SAMPLES = 1000
+
 export const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
   .reduce((acc, key) => {
     const match = key.match(/^scs_(type_[a-z0-9]+)_(\d+)hr$/i)
@@ -167,7 +169,15 @@ export function getBestScsDistribution(
 
 
 export function generateStorm(params: StormParams): StormResult {
-  const { depthIn, durationHr, timestepMin, distribution, customCurveCsv, durationMode } = params
+  const {
+    depthIn,
+    durationHr,
+    timestepMin,
+    distribution,
+    customCurveCsv,
+    durationMode,
+    computationMode = 'precise'
+  } = params
   const durationMin = durationHr * 60
 
   if (durationMin <= 0 || timestepMin <= 0) {
@@ -191,18 +201,22 @@ export function generateStorm(params: StormParams): StormResult {
   })
 
   const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
-  const baseCumulative = cumulativeFromDistribution(finalDistribution, n, customCurveCsv)
+  const sampleCount = Math.max(
+    1,
+    computationMode === 'fast' ? Math.min(n, MAX_FAST_SAMPLES) : n
+  )
+  const baseCumulative = cumulativeFromDistribution(finalDistribution, sampleCount, customCurveCsv)
 
   const cumulativeIn = normalizedTimes.map((nt) => {
-    if (n === 1) {
+    if (sampleCount === 1) {
       return (baseCumulative[0] ?? 0) * depthIn
     }
-    const scaled = clamp01(nt) * (n - 1)
+    const scaled = clamp01(nt) * (sampleCount - 1)
     const i0 = Math.floor(scaled)
-    const i1 = Math.min(n - 1, i0 + 1)
+    const i1 = Math.min(sampleCount - 1, i0 + 1)
     const frac = scaled - i0
-    const v0 = baseCumulative[i0] ?? baseCumulative[n - 1] ?? 0
-    const v1 = baseCumulative[i1] ?? baseCumulative[n - 1] ?? v0
+    const v0 = baseCumulative[i0] ?? baseCumulative[sampleCount - 1] ?? 0
+    const v1 = baseCumulative[i1] ?? baseCumulative[sampleCount - 1] ?? v0
     return (v0 * (1 - frac) + v1 * frac) * depthIn
   })
 

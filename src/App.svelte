@@ -71,6 +71,7 @@
   let selectedDepth = 1.0
   let selectedDurationHr = 24
   let durationMode: 'standard' | 'custom' = 'standard'
+  let computationMode: 'precise' | 'fast' = 'precise'
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
 
   const SCS_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
@@ -483,9 +484,15 @@
   }
 
   let previousDurationMode: 'standard' | 'custom' = durationMode
+  let previousComputationMode: 'precise' | 'fast' = computationMode
 
   $: if (durationMode !== previousDurationMode) {
     previousDurationMode = durationMode
+    makeStorm()
+  }
+
+  $: if (computationMode !== previousComputationMode) {
+    previousComputationMode = computationMode
     makeStorm()
   }
 
@@ -536,7 +543,8 @@
       distribution,
       startISO,
       customCurveCsv: customCurveCsv.trim() || undefined,
-      durationMode
+      durationMode,
+      computationMode
     }
     lastStorm = generateStorm(params)
     totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
@@ -1723,21 +1731,43 @@
             <div class="storm-card storm-card--mode">
               <div class="mode-header">
                 <span class="mode-label">Mode</span>
-                <div class="mode-toggle" role="group" aria-label="Duration mode">
-                  <button
-                    type="button"
-                    class:active={durationMode === 'standard'}
-                    on:click={() => (durationMode = 'standard')}
+                <div class="mode-toggle-group">
+                  <div class="mode-toggle" role="group" aria-label="Duration mode">
+                    <button
+                      type="button"
+                      class:active={durationMode === 'standard'}
+                      on:click={() => (durationMode = 'standard')}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      type="button"
+                      class:active={durationMode === 'custom'}
+                      on:click={() => (durationMode = 'custom')}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  <div
+                    class="mode-toggle mode-toggle--computation"
+                    role="group"
+                    aria-label="Computation mode"
                   >
-                    Standard
-                  </button>
-                  <button
-                    type="button"
-                    class:active={durationMode === 'custom'}
-                    on:click={() => (durationMode = 'custom')}
-                  >
-                    Custom
-                  </button>
+                    <button
+                      type="button"
+                      class:active={computationMode === 'precise'}
+                      on:click={() => (computationMode = 'precise')}
+                    >
+                      Precise
+                    </button>
+                    <button
+                      type="button"
+                      class:active={computationMode === 'fast'}
+                      on:click={() => (computationMode = 'fast')}
+                    >
+                      Fast
+                    </button>
+                  </div>
                 </div>
               </div>
               {#if durationMode === 'custom'}
@@ -1746,6 +1776,15 @@
                 </div>
               {:else}
                 <p class="mode-note">Quickly select 6-, 12-, or 24-hour durations using the presets below.</p>
+              {/if}
+              {#if computationMode === 'fast'}
+                <div class="mode-note field-hint field-hint--warning mode-note--computation">
+                  <strong>Fast mode:</strong> Limits the generated timesteps for quicker results. Expect a slightly smoother curve compared to precise calculations.
+                </div>
+              {:else}
+                <p class="mode-note mode-note--computation">
+                  Precise mode uses every timestep for the highest fidelity rainfall distribution.
+                </p>
               {/if}
             </div>
           </div>
@@ -2358,6 +2397,13 @@
     flex-wrap: wrap;
   }
 
+  .mode-toggle-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
   .mode-label {
     font-size: 12px;
     color: var(--muted);
@@ -2372,6 +2418,10 @@
     border-radius: 999px;
     border: 1px solid rgba(110, 231, 255, 0.18);
     background: rgba(8, 13, 20, 0.82);
+  }
+
+  .mode-toggle--computation {
+    border-color: rgba(148, 163, 184, 0.24);
   }
 
   .mode-toggle button {
@@ -2401,6 +2451,10 @@
     line-height: 1.5;
     color: var(--muted);
     margin: 0;
+  }
+
+  .mode-note--computation {
+    margin-top: 8px;
   }
 
   .storm-form__inputs {
