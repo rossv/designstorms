@@ -58,6 +58,8 @@
   let lastFetchKey = ''
 
   let table: NoaaTable | null = null
+  let noaaTableScrollEl: HTMLDivElement | null = null
+  let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
   let aris: string[] = []
   let selectedDurationLabel: string | null = null
@@ -395,6 +397,10 @@
       const defaultDurationLabel = parsed.rows.find(
         (r) => Math.abs(toHours(r.label) - DEFAULT_DURATION_HOURS) < 1e-6
       )?.label
+      const defaultDurationIndex = defaultDurationLabel
+        ? parsed.rows.findIndex((r) => r.label === defaultDurationLabel)
+        : -1
+      pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
       if (!hadTable && defaultDurationLabel) {
         selectedDurationLabel = defaultDurationLabel
       } else if (
@@ -1435,6 +1441,16 @@
       : null
 
   afterUpdate(() => {
+    if (pendingNoaaScrollIndex != null && noaaTableScrollEl) {
+      const target = noaaTableScrollEl.querySelector<HTMLButtonElement>(
+        `.duration-btn[data-row-index="${pendingNoaaScrollIndex}"]`
+      )
+      if (target) {
+        target.scrollIntoView({ block: 'center', inline: 'nearest' })
+        pendingNoaaScrollIndex = null
+      }
+    }
+
     attachTableScrollObserver()
     updateTableScrollHeight()
   })
@@ -1542,7 +1558,7 @@
         </div>
 
         {#if table}
-          <div class="noaa-table-scroll">
+          <div class="noaa-table-scroll" bind:this={noaaTableScrollEl}>
             <div class="noaa-table panel">
               <div class="table-header">
                 <div>
@@ -1558,7 +1574,7 @@
                 </div>
               </div>
               <div class="table-body">
-                {#each table.rows as row}
+                {#each table.rows as row, index}
                   {@const isSelectable =
                     durationMode === 'custom' || durationLabelIsStandard(row.label)}
                   <div
@@ -1570,6 +1586,7 @@
                       <button
                         type="button"
                         class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
+                        data-row-index={index}
                         disabled={!isSelectable}
                         on:click={() => pickCell(row.label, String(selectedAri))}
                       >
