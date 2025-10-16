@@ -1637,16 +1637,7 @@
               />
             </div>
             <div class="field field--duration">
-              <div class="field-header">
-                <label for="duration">Duration (hr)</label>
-                <div class="field-header-control">
-                  <label for="duration-mode">Mode</label>
-                  <select id="duration-mode" bind:value={durationMode}>
-                    <option value="standard">Standard</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-              </div>
+              <label for="duration">Duration (hr)</label>
               {#if durationMode === 'standard'}
                 <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
                   <option value={6}>6-hr</option>
@@ -1665,11 +1656,14 @@
                   recalculated={recentlyRecalculated === 'duration'}
                 />
               {/if}
-              {#if durationMode === 'custom'}
-                <div class="field-hint field-hint--warning">
-                  <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
-                </div>
-              {/if}
+            </div>
+            <div class="field field--mode">
+              <label for="duration-mode-select">Mode</label>
+              <select id="duration-mode-select" bind:value={durationMode}>
+                <option value="standard">Standard</option>
+                <option value="custom">Custom</option>
+              </select>
+              <div class="field-hint">Choose Standard for common 6-, 12-, and 24-hr values or Custom to enter a specific duration.</div>
             </div>
             <div class="field">
               <label for="ari">Average Recurrence Interval (years)</label>
@@ -1684,6 +1678,11 @@
               />
             </div>
           </div>
+          {#if durationMode === 'custom'}
+            <div class="form-note form-note--warning">
+              <strong>Heads up:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
+            </div>
+          {/if}
 
           <div class="form-grid form-grid--secondary">
             <div class="field field--distribution">
@@ -2230,13 +2229,20 @@
   .storm-form {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
   }
 
   .form-grid {
     display: grid;
-    gap: 18px;
+    gap: 16px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    align-items: stretch;
+  }
+
+  .form-grid--primary {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-auto-flow: dense;
+    align-items: end;
   }
 
   .form-grid--secondary {
@@ -2246,8 +2252,26 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
+  }
+
+  .field--duration select {
+    min-height: 44px;
+  }
+
+  .field--mode {
+    max-width: 260px;
+  }
+
+  .field--mode select {
+    min-height: 44px;
+  }
+
+  .field--mode .field-hint {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--muted);
   }
 
   .field-header {
@@ -2263,25 +2287,6 @@
     flex: 1;
   }
 
-  .field-header-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .field-header-control label {
-    margin: 0;
-  }
-
-  .field-header-control select {
-    width: auto;
-    min-width: 140px;
-  }
 
   .field-hint {
     font-size: 12px;
@@ -2294,6 +2299,25 @@
     background: rgba(234, 179, 8, 0.1);
     border: 1px solid rgba(234, 179, 8, 0.3);
     border-radius: 8px;
+  }
+
+  .form-note {
+    font-size: 13px;
+    line-height: 1.5;
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 1px solid transparent;
+    display: flex;
+    gap: 8px;
+  }
+
+  .form-note strong {
+    font-weight: 600;
+  }
+
+  .form-note--warning {
+    background: rgba(234, 179, 8, 0.08);
+    border-color: rgba(234, 179, 8, 0.25);
   }
 
   .field--distribution .distribution-compare-button {
@@ -2359,20 +2383,14 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
+    .form-grid--primary {
+      align-items: stretch;
+    }
+
     .field-header {
       flex-direction: column;
       align-items: stretch;
       gap: 8px;
-    }
-
-    .field-header-control {
-      width: 100%;
-      justify-content: space-between;
-    }
-
-    .field-header-control select {
-      width: 100%;
-      min-width: 0;
     }
 
     .field--distribution .distribution-compare-button {
