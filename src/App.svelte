@@ -173,6 +173,8 @@
   let noaaError = ''
 
   let lastStorm: ReturnType<typeof generateStorm> | null = null
+  let isGeneratingStorm = false
+  let stormGenerationToken = 0
   
   let lastChangedBy: 'user' | 'system' = 'user';
   let recentlyRecalculated: 'ari' | 'depth' | 'duration' | null = null;
@@ -486,7 +488,7 @@
 
   $: if (durationMode !== previousDurationMode) {
     previousDurationMode = durationMode
-    makeStorm()
+    void makeStorm()
   }
 
   function pickCell(durLabel: string, ari: string) {
@@ -501,7 +503,7 @@
       selectedDepth = Number(depth)
     }
     interpolatedCells = []
-    makeStorm()
+    void makeStorm()
   }
 
   function applyNoaaSelection() {
@@ -514,136 +516,147 @@
     if (Number.isFinite(exactDepth)) {
       selectedDepth = Number(exactDepth)
       interpolatedCells = []
-      makeStorm()
+      void makeStorm()
       return
     }
     const interpolated = interpolateDepthFromAri(row, selectedAri, table.aris)
     if (interpolated) {
       selectedDepth = interpolated.depth
       interpolatedCells = interpolated.highlight ?? []
-      makeStorm()
+      void makeStorm()
       return
     }
     interpolatedCells = []
-    makeStorm()
+    void makeStorm()
   }
 
-  function makeStorm() {
-    const params: StormParams = {
-      depthIn: selectedDepth,
-      durationHr: selectedDurationHr,
-      timestepMin,
-      distribution,
-      startISO,
-      customCurveCsv: customCurveCsv.trim() || undefined,
-      durationMode
-    }
-    lastStorm = generateStorm(params)
-    totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
-    peakIntensity = Math.max(...lastStorm.intensityInHr)
-
-    const totalMinutes = lastStorm.timeMin[lastStorm.timeMin.length - 1] ?? 0
-    const useHours = totalMinutes >= 120
-    const timeFactor = useHours ? 1 / 60 : 1
-    const axisTitle = useHours ? 'Time (hours)' : 'Time (minutes)'
-    const columnLabel = useHours ? 'Time (hr)' : 'Time (min)'
-    const hoverTimeLabel = useHours ? 'Time (hr)' : 'Time (min)'
-    const stepMinutes =
-      lastStorm.timeMin.length > 1
-        ? lastStorm.timeMin[1] - lastStorm.timeMin[0]
-        : timestepMin
-    const barWidth = stepMinutes * timeFactor
-    timeAxis = lastStorm.timeMin.map((t) => t * timeFactor)
-    timeColumnLabel = columnLabel
-
-    const startDate = startISO ? new Date(startISO) : null
-    hasTimestamp = Boolean(startDate && !Number.isNaN(startDate.getTime()))
-    tableRows = lastStorm.timeMin.map((t, i) => {
-      const timestamp = hasTimestamp
-        ? formatTimestamp(new Date((startDate as Date).getTime() + t * 60000))
-        : undefined
-      return {
-        time: t * timeFactor,
-        intensity: lastStorm.intensityInHr[i],
-        incremental: lastStorm.incrementalIn[i],
-        cumulative: lastStorm.cumulativeIn[i],
-        timestamp
+  async function makeStorm() {
+    const token = ++stormGenerationToken
+    isGeneratingStorm = true
+    await tick()
+    try {
+      const params: StormParams = {
+        depthIn: selectedDepth,
+        durationHr: selectedDurationHr,
+        timestepMin,
+        distribution,
+        startISO,
+        customCurveCsv: customCurveCsv.trim() || undefined,
+        durationMode
       }
-    })
+      lastStorm = generateStorm(params)
+      totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
+      peakIntensity = Math.max(...lastStorm.intensityInHr)
 
-    if (plotDiv1) {
-      Plotly.react(
-        plotDiv1,
-        [
+      const totalMinutes = lastStorm.timeMin[lastStorm.timeMin.length - 1] ?? 0
+      const useHours = totalMinutes >= 120
+      const timeFactor = useHours ? 1 / 60 : 1
+      const axisTitle = useHours ? 'Time (hours)' : 'Time (minutes)'
+      const columnLabel = useHours ? 'Time (hr)' : 'Time (min)'
+      const hoverTimeLabel = useHours ? 'Time (hr)' : 'Time (min)'
+      const stepMinutes =
+        lastStorm.timeMin.length > 1
+          ? lastStorm.timeMin[1] - lastStorm.timeMin[0]
+          : timestepMin
+      const barWidth = stepMinutes * timeFactor
+      timeAxis = lastStorm.timeMin.map((t) => t * timeFactor)
+      timeColumnLabel = columnLabel
+
+      const startDate = startISO ? new Date(startISO) : null
+      hasTimestamp = Boolean(startDate && !Number.isNaN(startDate.getTime()))
+      tableRows = lastStorm.timeMin.map((t, i) => {
+        const timestamp = hasTimestamp
+          ? formatTimestamp(new Date((startDate as Date).getTime() + t * 60000))
+          : undefined
+        return {
+          time: t * timeFactor,
+          intensity: lastStorm.intensityInHr[i],
+          incremental: lastStorm.incrementalIn[i],
+          cumulative: lastStorm.cumulativeIn[i],
+          timestamp
+        }
+      })
+
+      if (plotDiv1) {
+        Plotly.react(
+          plotDiv1,
+          [
+            {
+              x: timeAxis,
+              y: lastStorm.intensityInHr,
+              type: 'bar',
+              name: 'Intensity (in/hr)',
+              marker: { color: '#6ee7ff' },
+              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
+              width: barWidth
+            }
+          ],
           {
-            x: timeAxis,
-            y: lastStorm.intensityInHr,
-            type: 'bar',
-            name: 'Intensity (in/hr)',
-            marker: { color: '#6ee7ff' },
-            hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
-            width: barWidth
-          }
-        ],
-        {
-          ...plotLayoutBase,
-          title: 'Hyetograph (Intensity)',
-          xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
-          yaxis: { ...plotLayoutBase.yaxis, title: 'Intensity (in/hr)' }
-        },
-        plotConfig
-      )
-    }
+            ...plotLayoutBase,
+            title: 'Hyetograph (Intensity)',
+            xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
+            yaxis: { ...plotLayoutBase.yaxis, title: 'Intensity (in/hr)' }
+          },
+          plotConfig
+        )
+      }
 
-    if (plotDiv2) {
-      Plotly.react(
-        plotDiv2,
-        [
+      if (plotDiv2) {
+        Plotly.react(
+          plotDiv2,
+          [
+            {
+              x: timeAxis,
+              y: lastStorm.incrementalIn,
+              type: 'bar',
+              name: 'Incremental Volume (in)',
+              marker: { color: '#a855f7' },
+              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Incremental: %{y:.3f} in<extra></extra>`,
+              width: barWidth
+            }
+          ],
           {
-            x: timeAxis,
-            y: lastStorm.incrementalIn,
-            type: 'bar',
-            name: 'Incremental Volume (in)',
-            marker: { color: '#a855f7' },
-            hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Incremental: %{y:.3f} in<extra></extra>`,
-            width: barWidth
-          }
-        ],
-        {
-          ...plotLayoutBase,
-          title: 'Incremental Volume',
-          xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
-          yaxis: { ...plotLayoutBase.yaxis, title: 'Volume (in)' }
-        },
-        plotConfig
-      )
-    }
+            ...plotLayoutBase,
+            title: 'Incremental Volume',
+            xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
+            yaxis: { ...plotLayoutBase.yaxis, title: 'Volume (in)' }
+          },
+          plotConfig
+        )
+      }
 
-    if (plotDiv3) {
-      Plotly.react(
-        plotDiv3,
-        [
+      if (plotDiv3) {
+        Plotly.react(
+          plotDiv3,
+          [
+            {
+              x: timeAxis,
+              y: lastStorm.cumulativeIn,
+              type: 'scatter',
+              mode: 'lines',
+              name: 'Cumulative (in)',
+              line: { color: '#f97316', width: 3 },
+              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Cumulative: %{y:.3f} in<extra></extra>`
+            }
+          ],
           {
-            x: timeAxis,
-            y: lastStorm.cumulativeIn,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Cumulative (in)',
-            line: { color: '#f97316', width: 3 },
-            hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Cumulative: %{y:.3f} in<extra></extra>`
-          }
-        ],
-        {
-          ...plotLayoutBase,
-          title: 'Cumulative Mass Curve',
-          xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
-          yaxis: { ...plotLayoutBase.yaxis, title: 'Cumulative Depth (in)' }
-        },
-        plotConfig
-      )
-    }
+            ...plotLayoutBase,
+            title: 'Cumulative Mass Curve',
+            xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
+            yaxis: { ...plotLayoutBase.yaxis, title: 'Cumulative Depth (in)' }
+          },
+          plotConfig
+        )
+      }
 
-    drawIsoPlot()
+      drawIsoPlot()
+    } catch (error) {
+      console.error('Failed to generate storm', error)
+    } finally {
+      if (token === stormGenerationToken) {
+        isGeneratingStorm = false
+      }
+    }
   }
 
   function drawIsoPlot() {
@@ -1014,7 +1027,7 @@
     }
     if (!table) {
       interpolatedCells = []
-      makeStorm()
+      void makeStorm()
       return
     }
 
@@ -1023,7 +1036,7 @@
     })
     if (!result) {
       interpolatedCells = []
-      makeStorm()
+      void makeStorm()
       return
     }
 
@@ -1036,7 +1049,7 @@
       selectedAri = newAri
     }
     interpolatedCells = result.highlight ?? []
-    makeStorm()
+    void makeStorm()
   }
 
   $: if (durationMode === 'standard') {
@@ -1082,14 +1095,14 @@
       const newDepth = Number(result.depth.toFixed(3))
       if (selectedDepth !== newDepth) {
         selectedDepth = newDepth
-        makeStorm()
+        void makeStorm()
       } else {
-        makeStorm()
+        void makeStorm()
       }
       interpolatedCells = result.highlight ?? []
     } else {
       interpolatedCells = []
-      makeStorm()
+      void makeStorm()
     }
   }
 
@@ -1119,7 +1132,7 @@
     if (!Number.isFinite(timestepMin) || timestepMin <= 0) {
       return
     }
-    makeStorm()
+    void makeStorm()
   }
 
   function doCsv() {
@@ -1439,7 +1452,7 @@
     })
 
     void loadNoaa()
-    makeStorm()
+    void makeStorm()
 
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, { passive: true })
@@ -1517,7 +1530,7 @@
   </header>
 
   <div class="layout">
-    <section class="column">
+    <section class="column column--data">
       <div class="panel">
         <h2 class="section-title">Location &amp; NOAA Depths</h2>
         <div class="location-search">
@@ -1655,7 +1668,7 @@
                           aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
                           on:click={() => pickCell(row.label, a)}
                         >
-                        {depth}
+                          {depth}
                         </button>
                       {/each}
                     </div>
@@ -1669,6 +1682,22 @@
 
       </div>
 
+      <div class="panel">
+        <h2 class="section-title">NOAA Depth Iso-Lines</h2>
+        <div class="iso-plot-container">
+          <div
+            class="iso-plot"
+            bind:this={isoPlotDiv}
+            aria-label="Contour plot of NOAA depths by duration and recurrence interval"
+          ></div>
+          {#if !table}
+            <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
+          {/if}
+        </div>
+      </div>
+    </section>
+
+    <section class="column column--controls">
       <div class="panel">
         <h2 class="section-title">Storm Parameters</h2>
 
@@ -1816,11 +1845,25 @@
 
 
         <div class="actions">
-          <button class="primary" on:click={makeStorm}>Generate Storm</button>
-          <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
-          <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
+          <button
+            class="primary"
+            on:click={() => void makeStorm()}
+            disabled={isGeneratingStorm}
+            aria-busy={isGeneratingStorm}
+          >
+            {isGeneratingStorm ? 'Generating…' : 'Generate Storm'}
+          </button>
+          <button on:click={doCsv} disabled={!lastStorm || isGeneratingStorm}>Export CSV</button>
+          <button on:click={doDat} disabled={!lastStorm || isGeneratingStorm}>Export DAT</button>
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
+
+        {#if isGeneratingStorm}
+          <div class="storm-loading" role="status" aria-live="polite">
+            <span class="storm-loading__spinner" aria-hidden="true"></span>
+            <span>Building hyetograph…</span>
+          </div>
+        {/if}
 
         <div class="stats grid cols-3">
           <div class="stat-box">
@@ -1837,23 +1880,9 @@
           </div>
         </div>
       </div>
-
-      <div class="panel">
-        <h2 class="section-title">NOAA Depth Iso-Lines</h2>
-        <div class="iso-plot-container">
-          <div
-            class="iso-plot"
-            bind:this={isoPlotDiv}
-            aria-label="Contour plot of NOAA depths by duration and recurrence interval"
-          ></div>
-          {#if !table}
-            <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
-          {/if}
-        </div>
-      </div>
     </section>
 
-    <section class="column">
+    <section class="column column--visuals">
       <div class="panel plot">
         <div bind:this={plotDiv1} class="plot-area"></div>
       </div>
@@ -2172,6 +2201,10 @@
     flex: 1;
   }
 
+  .column--visuals {
+    grid-column: 1 / -1;
+  }
+
   @media (min-width: 600px) {
     .layout {
       gap: clamp(1.5rem, 1vw + 1.25rem, 2.25rem);
@@ -2208,8 +2241,22 @@
       gap: clamp(1.75rem, 1.5vw + 1.5rem, 2.5rem);
     }
 
+    .column--visuals {
+      grid-column: 1 / -1;
+    }
+
     .header {
       flex-wrap: nowrap;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .layout {
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1.25fr);
+    }
+
+    .column--visuals {
+      grid-column: auto;
     }
   }
 
@@ -2767,6 +2814,36 @@
     margin: 14px 0;
     align-items: center;
     flex-wrap: wrap;
+  }
+
+  .storm-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(110, 231, 255, 0.35);
+    background: rgba(110, 231, 255, 0.08);
+    color: var(--accent);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    margin: 4px 0 18px;
+    box-shadow: 0 8px 20px rgba(5, 18, 26, 0.35);
+  }
+
+  .storm-loading__spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 2px solid rgba(110, 231, 255, 0.2);
+    border-top-color: var(--accent);
+    animation: storm-loading-spin 0.8s linear infinite;
+  }
+
+  @keyframes storm-loading-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .iso-plot-container {
