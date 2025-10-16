@@ -604,7 +604,15 @@
     const pointXs: number[] = []
     const pointYs: number[] = []
     const pointLabels: string[] = []
+    const isStandardDurationMode = durationMode === 'standard'
+    const standardDurationHours = [6, 12, 24]
+    const isAllowedStandardDuration = (hours: number) =>
+      standardDurationHours.some((allowed) => Math.abs(hours - allowed) < 1e-6)
+
     durationEntries.forEach((duration) => {
+      if (isStandardDurationMode && !isAllowedStandardDuration(duration.hr)) {
+        return
+      }
       ariEntries.forEach((ari) => {
         const depth = duration.row.values[ari.key]
         if (Number.isFinite(depth)) {
@@ -661,6 +669,32 @@
       }
     }
 
+    let currentStormTrace: any = null
+    if (
+      Number.isFinite(selectedAri) &&
+      Number.isFinite(selectedDurationHr) &&
+      Number.isFinite(selectedDepth)
+    ) {
+      currentStormTrace = {
+        type: 'scatter',
+        mode: 'markers',
+        x: [selectedAri],
+        y: [selectedDurationHr],
+        marker: {
+          color: '#ef4444',
+          size: 14,
+          line: { color: '#fee2e2', width: 2 },
+          symbol: 'x'
+        },
+        name: 'Current storm',
+        showlegend: false,
+        hovertemplate:
+          `Current storm<br>ARI: ${selectedAri.toFixed(3)} years` +
+          `<br>Duration: ${selectedDurationHr.toFixed(2)} hr` +
+          `<br>Depth: ${selectedDepth.toFixed(3)} in<extra></extra>`
+      }
+    }
+
     const layout: Partial<Plotly.Layout> = {
       ...plotLayoutBase,
       title: 'NOAA Depth Iso-Lines',
@@ -700,9 +734,9 @@
       }
     }
 
-    const data = highlightTrace
-      ? [contourTrace, pointsTrace, highlightTrace]
-      : [contourTrace, pointsTrace]
+    const data = [contourTrace, pointsTrace, highlightTrace, currentStormTrace].filter(
+      (trace): trace is Partial<Plotly.PlotData> => Boolean(trace)
+    )
 
     Plotly.react(isoPlotDiv, data, layout, {
       ...plotConfig,
