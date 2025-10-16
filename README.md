@@ -67,9 +67,13 @@ populate. Users can still enter depths manually or retry once the proxy is back 
 ### Temporal Patterns
 
 SCS storm types rely on NRCS dimensionless cumulative rainfall tables that are resampled to the
-selected storm duration. Huff quartiles and additional presets use parameterized Beta(α,β)
-distributions on [0, 1]. Custom temporal patterns can be loaded from CSV files containing time and
-cumulative fraction columns; the curve is normalized and resampled before intensities are derived.
+selected storm duration. Type I and IA storms ship with their canonical 24-hour curves, while Type II
+and Type III storms include the published 6-, 12-, and 24-hour tables for better coverage of short
+durations. When a custom duration is requested, the engine snaps to the nearest available NRCS curve
+(for example, a 4-hour Type II storm uses the 6-hour table) before resampling to the requested length.
+Huff quartiles and additional presets use parameterized Beta(α,β) distributions on [0, 1]. Custom
+temporal patterns can be loaded from CSV files containing time and cumulative fraction columns; the
+curve is normalized and resampled before intensities are derived.
 
 ### Export Formats
 
