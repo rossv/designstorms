@@ -1,7 +1,7 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
-const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
+export const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
   .reduce((acc, key) => {
     const match = key.match(/^scs_(type_[a-z0-9]+)_(\d+)hr$/i)
     if (!match) return acc

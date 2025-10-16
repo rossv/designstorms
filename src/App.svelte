@@ -6,7 +6,12 @@
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
-  import { generateStorm, type StormParams, type DistributionName } from './lib/stormEngine'
+  import {
+    generateStorm,
+    SCS_AVAILABLE_DURATIONS,
+    type StormParams,
+    type DistributionName
+  } from './lib/stormEngine'
   import {
     toHours,
     getSortedDurationRows,
@@ -60,6 +65,8 @@
   let selectedDepth = 1.0
   let selectedDurationHr = 24
   let durationMode: 'standard' | 'custom' = 'standard';
+  let allowedStandardDurations: number[] | null = null
+  const DURATION_MATCH_EPSILON = 1e-6
 
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
@@ -187,6 +194,39 @@
       void loadNoaa()
     }, delay)
   }
+
+  function getAllowedDurationsForDistribution(name: DistributionName): number[] | null {
+    const match = name.match(/^scs_(type_[a-z0-9]+)(?:_(\d+)hr)?$/i)
+    if (!match) {
+      return null
+    }
+    const [, type] = match
+    const durations = SCS_AVAILABLE_DURATIONS[type]
+    if (!durations || durations.length === 0) {
+      return null
+    }
+    return durations
+  }
+
+  function durationIsDisabled(label: string): boolean {
+    if (durationMode !== 'standard') {
+      return false
+    }
+    if (!allowedStandardDurations || allowedStandardDurations.length === 0) {
+      return false
+    }
+    const hours = toHours(label)
+    if (!Number.isFinite(hours)) {
+      return false
+    }
+    return !allowedStandardDurations.some(
+      (allowed) => Math.abs(allowed - hours) < DURATION_MATCH_EPSILON
+    )
+  }
+
+  $:
+    allowedStandardDurations =
+      durationMode === 'standard' ? getAllowedDurationsForDistribution(distribution) : null
 
   type NominatimResult = {
     lat: string
@@ -317,6 +357,9 @@
 
   function pickCell(durLabel: string, ari: string) {
     if (!table) return
+    if (durationIsDisabled(durLabel)) {
+      return
+    }
     selectedDurationLabel = durLabel
     selectedDurationHr = toHours(durLabel)
     selectedAri = Number(ari)
@@ -1131,12 +1174,15 @@
               </div>
               <div class="table-body">
                 {#each table.rows as row}
-                  <div class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''}`}>
+                  {@const rowDisabled = durationIsDisabled(row.label)}
+                  {@const rowActive = !rowDisabled && selectedDurationLabel === row.label}
+                  <div class={`table-row ${rowActive ? 'active' : ''} ${rowDisabled ? 'disabled' : ''}`}>
                     <div>
                       <button
                         type="button"
-                        class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
+                        class={`table-button duration-btn ${rowActive ? 'active' : ''}`}
                         on:click={() => pickCell(row.label, String(selectedAri))}
+                        disabled={rowDisabled}
                       >
                         {row.label}
                       </button>
@@ -1147,13 +1193,14 @@
                         <button
                           type="button"
                           class={`table-button cell ${
-                            selectedDurationLabel === row.label && String(selectedAri) === a
+                            !rowDisabled && selectedDurationLabel === row.label && String(selectedAri) === a
                               ? 'selected'
                               : ''
                           } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
                           data-ari={a}
                           aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
                           on:click={() => pickCell(row.label, a)}
+                          disabled={rowDisabled}
                         >
                         {depth}
                         </button>
@@ -1756,6 +1803,10 @@
     background: rgba(110, 231, 255, 0.06);
   }
 
+  .table-row.disabled {
+    opacity: 0.45;
+  }
+
   .table-button {
     background: transparent;
     border: none;
@@ -1770,6 +1821,16 @@
 
   .table-button:hover {
     background: rgba(110, 231, 255, 0.12);
+  }
+
+  .table-button:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+    background: transparent;
+  }
+
+  .table-button:disabled:hover {
+    background: transparent;
   }
 
   .table-button:focus-visible {
