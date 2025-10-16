@@ -1547,7 +1547,19 @@
         `.duration-btn[data-row-index="${pendingNoaaScrollIndex}"]`
       )
       if (target) {
-        target.scrollIntoView({ block: 'center', inline: 'nearest' })
+        const container = noaaTableScrollEl
+        const targetRect = target.getBoundingClientRect()
+        const containerRect = container.getBoundingClientRect()
+
+        const offsetWithinContainer = targetRect.top - containerRect.top + container.scrollTop
+        const targetCenter = offsetWithinContainer + targetRect.height / 2
+        const desiredScrollTop = Math.max(0, targetCenter - container.clientHeight / 2)
+
+        if (typeof container.scrollTo === 'function') {
+          container.scrollTo({ top: desiredScrollTop })
+        } else {
+          container.scrollTop = desiredScrollTop
+        }
         pendingNoaaScrollIndex = null
       }
     }
