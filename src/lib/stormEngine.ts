@@ -1,6 +1,8 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
+export const MAX_FAST_SAMPLES = 1000
+
 export const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
   .reduce((acc, key) => {
     const match = key.match(/^scs_(type_[a-z0-9]+)_(\d+)hr$/i)
@@ -167,7 +169,15 @@ export function getBestScsDistribution(
 
 
 export function generateStorm(params: StormParams): StormResult {
-  const { depthIn, durationHr, timestepMin, distribution, customCurveCsv, durationMode } = params
+  const {
+    depthIn,
+    durationHr,
+    timestepMin,
+    distribution,
+    customCurveCsv,
+    durationMode,
+    computationMode = 'precise'
+  } = params
   const durationMin = durationHr * 60
 
   if (durationMin <= 0 || timestepMin <= 0) {
@@ -179,9 +189,9 @@ export function generateStorm(params: StormParams): StormResult {
     }
   }
 
-  let finalDistribution = distribution;
+  let finalDistribution = distribution
   if (distribution.startsWith('scs_')) {
-      finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom');
+    finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
   }
 
   const n = Math.ceil(durationMin / timestepMin) + 1
@@ -191,18 +201,21 @@ export function generateStorm(params: StormParams): StormResult {
   })
 
   const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
-  const baseCumulative = cumulativeFromDistribution(finalDistribution, n, customCurveCsv)
+  const sampleCount = computationMode === 'fast' ? Math.min(n, MAX_FAST_SAMPLES) : n
+  const baseSamples = cumulativeFromDistribution(finalDistribution, sampleCount, customCurveCsv)
+  const baseCumulative = baseSamples.length > 0 ? baseSamples : [0]
+  const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
 
   const cumulativeIn = normalizedTimes.map((nt) => {
-    if (n === 1) {
+    if (n === 1 || baseCumulative.length === 1) {
       return (baseCumulative[0] ?? 0) * depthIn
     }
-    const scaled = clamp01(nt) * (n - 1)
-    const i0 = Math.floor(scaled)
-    const i1 = Math.min(n - 1, i0 + 1)
-    const frac = scaled - i0
-    const v0 = baseCumulative[i0] ?? baseCumulative[n - 1] ?? 0
-    const v1 = baseCumulative[i1] ?? baseCumulative[n - 1] ?? v0
+    const scaledIndex = clamp01(nt) * sampleLastIndex
+    const lowerIndex = Math.min(baseCumulative.length - 1, Math.floor(scaledIndex))
+    const upperIndex = Math.min(baseCumulative.length - 1, lowerIndex + 1)
+    const frac = upperIndex === lowerIndex ? 0 : scaledIndex - lowerIndex
+    const v0 = baseCumulative[lowerIndex] ?? baseCumulative[baseCumulative.length - 1] ?? 0
+    const v1 = baseCumulative[upperIndex] ?? baseCumulative[baseCumulative.length - 1] ?? v0
     return (v0 * (1 - frac) + v1 * frac) * depthIn
   })
 
