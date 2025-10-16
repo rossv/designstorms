@@ -2647,7 +2647,7 @@
     }
 
     .table-button.cell::before {
-      content: 'Average Recurrence Interval — ' attr(data-ari) ' yr';
+      content: attr(data-ari) ' yr';
       font-size: 11px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
