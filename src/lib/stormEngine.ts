@@ -106,7 +106,8 @@ function betaCDF(
   if (x <= 0) return 0
   if (x >= 1) return 1
 
-  const logBt = logGammaA + logGammaB - logGammaSum + a * Math.log(x) + b * Math.log(1 - x)
+  const logBt =
+    logGammaSum - logGammaA - logGammaB + a * Math.log(x) + b * Math.log(1 - x)
   const switchPoint = (a + 1) / (a + b + 2)
   const maxIter = mode === 'fast' ? BETACF_FAST_ITER : BETACF_MAX_ITER
 
@@ -126,15 +127,35 @@ function betaCDF(
 }
 
 // Lanczos approximation for log-gamma
-function lgamma(z:number): number {
-  const p = [
-    676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
-    12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7
-  ]
+const LANCZOS_COEFFS = [
+  676.5203681218851,
+  -1259.1392167224028,
+  771.3234287776531,
+  -176.6150291621406,
+  12.507343278686905,
+  -0.13857109526572012,
+  9.9843695780195716e-6,
+  1.5056327351493116e-7
+]
+const HALF_LOG_TWO_PI = 0.5 * Math.log(2 * Math.PI)
+
+function lgamma(z: number): number {
+  if (!Number.isFinite(z)) {
+    return Number.NaN
+  }
+
+  if (z < 0.5) {
+    // Use reflection formula to improve accuracy for small arguments
+    return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * z)) - lgamma(1 - z)
+  }
+
   let x = 0.99999999999980993
-  for (let i=0;i<p.length;i++) x += p[i]/(z+i+1)
-  const t = z + p.length - 0.5
-  return 0.5*Math.log(2*Math.PI) + (z+0.5)*Math.log(t) - t + Math.log(x) - Math.log(z)
+  const adjusted = z - 1
+  for (let i = 0; i < LANCZOS_COEFFS.length; i += 1) {
+    x += LANCZOS_COEFFS[i] / (adjusted + i + 1)
+  }
+  const t = adjusted + LANCZOS_COEFFS.length - 0.5
+  return HALF_LOG_TWO_PI + (adjusted + 0.5) * Math.log(t) - t + Math.log(x)
 }
 
 function cumulativeFromDistribution(
