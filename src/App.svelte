@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
-  import * as L from 'leaflet'
+  import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
+  import type { ColorBar, Config, Data, Layout } from 'plotly.js'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import { generateStorm, getBestScsDistribution, MAX_FAST_SAMPLES, type StormParams, type DistributionName } from './lib/stormEngine'
   import {
@@ -179,8 +180,8 @@
   let recalculationTimer: ReturnType<typeof setTimeout> | null = null;
 
 
-  const plotConfig = { responsive: true, displaylogo: false, displayModeBar: false }
-  const plotLayoutBase = {
+  const plotConfig: Partial<Config> = { responsive: true, displaylogo: false, displayModeBar: false }
+  const plotLayoutBase: Partial<Layout> = {
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
     font: { color: '#e7e7e7' },
@@ -585,9 +586,9 @@
           ],
           {
             ...plotLayoutBase,
-            title: 'Hyetograph (Intensity)',
-            xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
-            yaxis: { ...plotLayoutBase.yaxis, title: 'Intensity (in/hr)' }
+            title: { text: 'Hyetograph (Intensity)' },
+            xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
+            yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Intensity (in/hr)' } }
           },
           plotConfig
         )
@@ -609,9 +610,9 @@
           ],
           {
             ...plotLayoutBase,
-            title: 'Incremental Volume',
-            xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
-            yaxis: { ...plotLayoutBase.yaxis, title: 'Volume (in)' }
+            title: { text: 'Incremental Volume' },
+            xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
+            yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Volume (in)' } }
           },
           plotConfig
         )
@@ -633,9 +634,9 @@
           ],
           {
             ...plotLayoutBase,
-            title: 'Cumulative Mass Curve',
-            xaxis: { ...plotLayoutBase.xaxis, title: axisTitle },
-            yaxis: { ...plotLayoutBase.yaxis, title: 'Cumulative Depth (in)' }
+            title: { text: 'Cumulative Mass Curve' },
+            xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
+            yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Cumulative Depth (in)' } }
           },
           plotConfig
         )
@@ -721,13 +722,15 @@
     const filteredAriEntries = reduceTickEntries(ariEntries, maxXTicks)
     const filteredDurationEntries = reduceTickEntries(durationEntries, maxYTicks)
 
-    const colorbar: Partial<Plotly.ColorBar> = {
-      title: 'Depth (in)',
+    const colorbar: Partial<ColorBar> = {
+      title: {
+        text: 'Depth (in)',
+        font: { color: '#e7e7e7', size: isCompact ? 12 : undefined }
+      },
       thickness: isCompact ? 10 : 14,
       tickcolor: '#e7e7e7',
       tickfont: { color: '#e7e7e7', size: isCompact ? 10 : 12 },
-      outlinecolor: 'rgba(255, 255, 255, 0.1)',
-      titlefont: { color: '#e7e7e7', size: isCompact ? 12 : undefined }
+      outlinecolor: 'rgba(255, 255, 255, 0.1)'
     }
 
     if (isCompact) {
@@ -846,33 +849,37 @@
       }
     }
 
-    const layout: Partial<Plotly.Layout> = {
+    const layout: Partial<Layout> = {
       ...plotLayoutBase,
-      title: 'NOAA Depth Iso-Lines',
+      title: { text: 'NOAA Depth Iso-Lines' },
       margin: isCompact
         ? { l: 64, r: 26, t: 48, b: 96 }
         : { l: 72, r: 70, t: 40, b: 88 },
       xaxis: {
         ...plotLayoutBase.xaxis,
-        title: 'Average Recurrence Interval (years)',
+        title: {
+          text: 'Average Recurrence Interval (years)',
+          font: { size: isCompact ? 12 : undefined }
+        },
         type: 'log',
         tickmode: 'array',
         tickvals: filteredAriEntries.map((entry) => entry.value),
         ticktext: filteredAriEntries.map((entry) => entry.key),
         tickangle: isCompact ? -45 : 0,
         tickfont: { size: isCompact ? 10 : 12 },
-        titlefont: { size: isCompact ? 12 : undefined },
         automargin: true
       },
       yaxis: {
         ...plotLayoutBase.yaxis,
-        title: 'Duration (hr)',
+        title: {
+          text: 'Duration (hr)',
+          font: { size: isCompact ? 12 : undefined }
+        },
         type: 'log',
         tickmode: 'array',
         tickvals: filteredDurationEntries.map((entry) => entry.hr),
         ticktext: filteredDurationEntries.map((entry) => entry.label),
         tickfont: { size: isCompact ? 10 : 12 },
-        titlefont: { size: isCompact ? 12 : undefined },
         automargin: true
       },
       hovermode: 'closest',
@@ -1391,7 +1398,11 @@
 
   const handleCurvePlotClick = (event: any) => {
     const point = event?.points?.[0]
-    const dist = point?.data?.meta
+    const customData = point?.data?.customdata
+    const index = point?.pointIndex
+    const dist = Array.isArray(customData) && typeof index === 'number'
+      ? customData[index]
+      : undefined
     if (typeof dist === 'string') {
       setSelectedCurveDistribution(dist as DistributionName)
     }
@@ -1427,17 +1438,20 @@
       return
     }
 
-    const traces = comparisonCurves.map((curve) => ({
-      x: curve.timeHr,
-      y: curve.fraction,
-      type: 'scatter',
-      mode: 'lines',
-      name: curve.label,
-      line: { width: curve.distribution === selectedCurveDistribution ? 4 : 2 },
-      opacity: curve.distribution === selectedCurveDistribution ? 1 : 0.55,
-      hovertemplate: `Time: %{x:.2f} hr<br>Rain fraction: %{y:.3f}<extra></extra>`,
-      meta: curve.distribution
-    }))
+    const traces = comparisonCurves.map(
+      (curve) =>
+        ({
+          x: curve.timeHr,
+          y: curve.fraction,
+          type: 'scatter',
+          mode: 'lines',
+          name: curve.label,
+          line: { width: curve.distribution === selectedCurveDistribution ? 4 : 2 },
+          opacity: curve.distribution === selectedCurveDistribution ? 1 : 0.55,
+          hovertemplate: `Time: %{x:.2f} hr<br>Rain fraction: %{y:.3f}<extra></extra>`,
+          customdata: curve.fraction.map(() => curve.distribution)
+        }) satisfies Data
+    )
 
     const maxDuration = selectedCurveDuration ?? Math.max(...comparisonCurves.map((curve) => curve.timeHr[curve.timeHr.length - 1] ?? 0))
 
@@ -1446,15 +1460,15 @@
       traces,
       {
         ...plotLayoutBase,
-        title: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr`,
+        title: { text: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr` },
         xaxis: {
           ...plotLayoutBase.xaxis,
-          title: 'Time (hr)',
+          title: { text: 'Time (hr)' },
           range: [0, Math.max(6, maxDuration)]
         },
         yaxis: {
           ...plotLayoutBase.yaxis,
-          title: 'Rain Fraction',
+          title: { text: 'Rain Fraction' },
           range: [0, 1]
         }
       },

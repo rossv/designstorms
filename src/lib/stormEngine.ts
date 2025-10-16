@@ -1,6 +1,8 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
+export type { StormParams, StormResult, DistributionName } from './types'
+
 export const MAX_FAST_SAMPLES = 1000
 
 const distributionCache = new Map<string, number[]>()
