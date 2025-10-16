@@ -1613,7 +1613,7 @@
           </div>
           {#if durationMode === 'custom'}
             <div class="disclaimer">
-              <strong>Note:</strong> Custom durations interpolate from standard 24-hour NRCS curves, which may not precisely reflect shorter storm patterns.
+              <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
             </div>
           {/if}
         </div>
@@ -1667,8 +1667,7 @@
               {/if}
               {#if durationMode === 'custom'}
                 <div class="field-hint field-hint--warning">
-                  <strong>Note:</strong> Custom durations interpolate from standard 24-hour NRCS curves, which may not precisely
-                  reflect shorter storm patterns.
+                  <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
                 </div>
               {/if}
             </div>
@@ -1913,7 +1912,8 @@
         <p>
           <strong>Purpose.</strong>
           Build synthetic hyetographs from NOAA Atlas 14 depths and temporal patterns. SCS storm types use
-          official NRCS dimensionless cumulative rainfall tables; other presets rely on Beta(α,β) shapes.
+          official NRCS dimensionless cumulative rainfall tables (Types I/IA at 24 hours and Types II/III at
+          6, 12, and 24 hours); other presets rely on Beta(α,β) shapes.
           Optionally, supply a custom cumulative curve (CSV).
         </p>
         <h3>Workflow</h3>
@@ -1942,9 +1942,10 @@
         <h3>Methods</h3>
         <p>
           Temporal patterns originate either from NRCS dimensionless cumulative rainfall tables (Types I, IA,
-          II, III) resampled to the storm duration or from predefined Beta(α,β) distributions on [0,1] for the
-          remaining presets. No circular shifting is applied. User-supplied curves are normalized and
-          resampled.
+          II, III) resampled to the storm duration—Type II/III include 6-, 12-, and 24-hour tables and custom
+          durations snap to the closest available curve before resampling—or from predefined Beta(α,β)
+          distributions on [0,1] for the remaining presets. No circular shifting is applied. User-supplied
+          curves are normalized and resampled.
         </p>
       </div>
       <div class="modal-actions">
