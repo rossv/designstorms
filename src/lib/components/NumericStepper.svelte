@@ -147,18 +147,19 @@
     return candidate
   }
 
-  function increment() {
+  function adjustValue(delta: number, fallback: number | null) {
     if (disabled) return
-    const base = Number.isFinite(value) ? value : min ?? 0
-    updateValue(base + getButtonStepValue(), { snap: false })
+    const base = Number.isFinite(value) ? value : fallback ?? 0
+    updateValue(base + delta, { snap: false })
     focusInput()
   }
 
+  function increment() {
+    adjustValue(getButtonStepValue(), min)
+  }
+
   function decrement() {
-    if (disabled) return
-    const base = Number.isFinite(value) ? value : max ?? 0
-    updateValue(base - getButtonStepValue(), { snap: false })
-    focusInput()
+    adjustValue(-getButtonStepValue(), max)
   }
 
   function focusInput() {
