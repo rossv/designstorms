@@ -494,6 +494,9 @@
   $: if (computationMode !== previousComputationMode) {
     previousComputationMode = computationMode
     makeStorm()
+    if (showCurveModal) {
+      refreshComparisonCurves()
+    }
   }
 
   function pickCell(durLabel: string, ari: string) {
@@ -1252,7 +1255,7 @@
 
     const duration = selectedCurveDuration ?? STANDARD_DURATION_HOURS[0]
     const trimmedCsv = customCurveCsv.trim()
-    const key = `${group.key}|${duration}|${timestepMin}|${trimmedCsv}`
+    const key = `${group.key}|${duration}|${timestepMin}|${trimmedCsv}|${computationMode}`
 
     if (key === lastCurveParamsKey && comparisonCurves.length) {
       if (
@@ -1282,7 +1285,8 @@
         distribution: member,
         startISO,
         customCurveCsv: trimmedCsv || undefined,
-        durationMode: 'standard'
+        durationMode: 'standard',
+        computationMode
       }
 
       const result = generateStorm(params)
