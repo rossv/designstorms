@@ -780,6 +780,16 @@
     const pointYs: number[] = []
     const pointLabels: string[] = []
     durationEntries.forEach((duration) => {
+      const includeDuration =
+        durationMode !== 'standard' ||
+        STANDARD_DURATION_HOURS.some(
+          (allowed) => Math.abs(duration.hr - allowed) < 1e-3
+        )
+
+      if (!includeDuration) {
+        return
+      }
+
       ariEntries.forEach((ari) => {
         const depth = duration.row.values[ari.key]
         if (Number.isFinite(depth)) {
@@ -875,24 +885,52 @@
       }
     }
 
-    const data = highlightTrace
-      ? [contourTrace, pointsTrace, highlightTrace]
-      : [contourTrace, pointsTrace]
+    let stormTrace: any = null
+    if (
+      Number.isFinite(selectedAri) &&
+      selectedAri > 0 &&
+      Number.isFinite(selectedDurationHr) &&
+      selectedDurationHr > 0
+    ) {
+      const hasDepth = Number.isFinite(selectedDepth)
+      const depthText = hasDepth ? `<br>Depth: ${selectedDepth.toFixed(3)} in` : ''
+      stormTrace = {
+        type: 'scatter',
+        mode: 'markers',
+        x: [selectedAri],
+        y: [selectedDurationHr],
+        marker: {
+          color: '#ef4444',
+          size: 16,
+          line: { color: '#b91c1c', width: 3 },
+          symbol: 'x'
+        },
+        name: 'Current storm parameters',
+        showlegend: false,
+        hovertemplate: `Current Storm` +
+          `<br>ARI: ${selectedAri}` +
+          `<br>Duration: ${selectedDurationHr.toFixed(2)} hr` +
+          depthText +
+          '<extra></extra>'
+      }
+    }
+
+    const data = [
+      contourTrace,
+      pointsTrace,
+      ...(highlightTrace ? [highlightTrace] : []),
+      ...(stormTrace ? [stormTrace] : [])
+    ]
 
     Plotly.react(isoPlotDiv, data, layout, {
       ...plotConfig,
       displayModeBar: false
     })
 
-    if (durationMode === 'custom') {
-      attachIsoPlotClickHandler()
-    } else {
-      detachIsoPlotClickHandler()
-    }
+    attachIsoPlotClickHandler()
   }
 
   const handleIsoPlotClick = (event: any) => {
-    if (durationMode !== 'custom') return
     if (!table) return
     const point = event?.points?.[0]
     if (!point) return
@@ -920,6 +958,15 @@
       },
       { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
     )
+
+    if (
+      durationMode === 'standard' &&
+      !STANDARD_DURATION_HOURS.some(
+        (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
+      )
+    ) {
+      return
+    }
 
     const selectedRow = nearestDuration.entry.row
     const ariKey = nearestAri.entry.key
@@ -1803,10 +1850,6 @@
           ></div>
           {#if !table}
             <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
-          {:else if durationMode === 'standard'}
-            <div class="iso-plot-overlay">
-              Switch to Custom Duration mode to select NOAA depth points from the iso-line preview.
-            </div>
           {/if}
         </div>
       </div>
@@ -2685,21 +2728,6 @@
   .iso-plot {
     width: 100%;
     height: 100%;
-  }
-
-  .iso-plot-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
-    text-align: center;
-    color: var(--muted);
-    font-size: 14px;
-    background: linear-gradient(135deg, rgba(2, 6, 23, 0.7), rgba(8, 47, 73, 0.55));
-    backdrop-filter: blur(2px);
-    pointer-events: auto;
   }
 
   .iso-plot-empty {
