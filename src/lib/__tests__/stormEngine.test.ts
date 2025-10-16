@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { generateStorm } from '../stormEngine'
+import { generateStorm, MAX_FAST_SAMPLES } from '../stormEngine'
 
 const minutes = (hrs: number) => hrs * 60
 
@@ -182,5 +182,49 @@ describe('generateStorm', () => {
     const first = increments[0] ?? 0
     const allEqual = increments.every((value) => Math.abs(value - first) < 1e-6)
     expect(allEqual).toBe(false)
+  })
+
+  it('uses the same samples in fast mode when timesteps are below the cap', () => {
+    const baseParams = {
+      depthIn: 2,
+      durationHr: 4,
+      timestepMin: 30,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: ''
+    }
+
+    const precise = generateStorm({ ...baseParams, computationMode: 'precise' })
+    const fast = generateStorm({ ...baseParams, computationMode: 'fast' })
+
+    expect(precise.timeMin.length).toBeLessThan(MAX_FAST_SAMPLES)
+    expect(fast.cumulativeIn).toEqual(precise.cumulativeIn)
+    expect(fast.incrementalIn).toEqual(precise.incrementalIn)
+    expect(fast.intensityInHr).toEqual(precise.intensityInHr)
+  })
+
+  it('keeps cumulative totals monotonic and close to precise output in fast mode', () => {
+    const params = {
+      depthIn: 5,
+      durationHr: 72,
+      timestepMin: 0.25,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: ''
+    }
+
+    const precise = generateStorm({ ...params, computationMode: 'precise' })
+    const fast = generateStorm({ ...params, computationMode: 'fast' })
+
+    expect(fast.timeMin.length).toBe(precise.timeMin.length)
+    expect(fast.cumulativeIn.at(-1)).toBeCloseTo(precise.cumulativeIn.at(-1) ?? 0, 6)
+
+    const maxDiff = fast.cumulativeIn.reduce((max, value, index) => {
+      const baseline = precise.cumulativeIn[index] ?? 0
+      return Math.max(max, Math.abs(value - baseline))
+    }, 0)
+    expect(maxDiff).toBeLessThan(0.1)
+
+    for (let i = 1; i < fast.cumulativeIn.length; i += 1) {
+      expect(fast.cumulativeIn[i]).toBeGreaterThanOrEqual(fast.cumulativeIn[i - 1] - 1e-6)
+    }
   })
 })

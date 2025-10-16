@@ -20,4 +20,5 @@ export interface StormParams {
   startISO?: string
   customCurveCsv?: string
   durationMode?: 'standard' | 'custom'
+  computationMode?: 'precise' | 'fast'
 }
