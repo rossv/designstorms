@@ -97,6 +97,13 @@
     members: DistributionName[]
   }
 
+  const INITIAL_SCROLL_LABEL_PATTERNS = [
+    /\b10\s*[-–—]?\s*year/i,
+    /\b10\s*[-–—]?\s*yr/i,
+    /\b10\s*[-–—]?\s*day/i,
+    /\b10\s*[-–—]?\s*d\b/i
+  ]
+
   const DISTRIBUTION_LABELS: Partial<Record<DistributionName, string>> = {
     scs_type_i: 'SCS Type I',
     scs_type_ia: 'SCS Type IA',
@@ -400,7 +407,23 @@
       const defaultDurationIndex = defaultDurationLabel
         ? parsed.rows.findIndex((r) => r.label === defaultDurationLabel)
         : -1
-      pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
+      if (!hadTable) {
+        const initialScrollIndex = findInitialNoaaScrollIndex(parsed.rows)
+        if (initialScrollIndex != null) {
+          pendingNoaaScrollIndex = initialScrollIndex
+        } else {
+          pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
+        }
+      } else {
+        const selectedIndex = selectedDurationLabel
+          ? parsed.rows.findIndex((row) => row.label === selectedDurationLabel)
+          : -1
+        if (selectedIndex >= 0) {
+          pendingNoaaScrollIndex = selectedIndex
+        } else {
+          pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
+        }
+      }
       if (!hadTable && defaultDurationLabel) {
         selectedDurationLabel = defaultDurationLabel
       } else if (
@@ -473,6 +496,31 @@
       return false
     }
     return matchesStandardDurationHours(hours)
+  }
+
+  function findInitialNoaaScrollIndex(rows: NoaaRow[]): number | null {
+    for (const pattern of INITIAL_SCROLL_LABEL_PATTERNS) {
+      const matchIndex = rows.findIndex((row) => pattern.test(row.label))
+      if (matchIndex >= 0) {
+        return matchIndex
+      }
+    }
+
+    const targetHours = 10 * 24
+    let bestIndex = -1
+    let bestDiff = Number.POSITIVE_INFINITY
+
+    rows.forEach((row, index) => {
+      const hours = toHours(row.label)
+      if (!Number.isFinite(hours)) return
+      const diff = Math.abs(hours - targetHours)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestIndex = index
+      }
+    })
+
+    return bestIndex >= 0 ? bestIndex : null
   }
 
   function durationIsSelectable(label: string) {
