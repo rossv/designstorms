@@ -6,13 +6,7 @@
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
-  import {
-    generateStorm,
-    getBestScsDistribution,
-    MAX_FAST_SAMPLES,
-    type StormParams,
-    type DistributionName
-  } from './lib/stormEngine'
+  import { generateStorm, getBestScsDistribution, MAX_FAST_SAMPLES, type StormParams, type DistributionName } from './lib/stormEngine'
   import {
     toHours,
     getSortedDurationRows,
@@ -24,6 +18,22 @@
   import { saveCsv, savePcswmmDat } from './lib/export'
   import NumericStepper from './lib/components/NumericStepper.svelte'
   import designStormIcon from './design_storm.ico'
+  import {
+    computationMode,
+    customCurveCsv,
+    distribution,
+    durationMode,
+    lat,
+    lon,
+    selectedAri,
+    selectedDepth,
+    selectedDurationHr,
+    startISO,
+    stormResult,
+    table as tableStore,
+    timestepMin,
+    type StormResult
+  } from './lib/stores'
 
   let mapDiv: HTMLDivElement
   let plotDiv1: HTMLDivElement
@@ -46,9 +56,6 @@
 
   L.Icon.Default.mergeOptions(defaultMarkerIcons)
 
-  let lat = 40.4406
-  let lon = -79.9959
-
   let searchQuery = ''
   let isSearchingLocation = false
   let searchFeedback = ''
@@ -58,7 +65,6 @@
   let fetchTimer: ReturnType<typeof setTimeout> | null = null
   let lastFetchKey = ''
 
-  let table: NoaaTable | null = null
   let noaaTableScrollEl: HTMLDivElement | null = null
   let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
@@ -68,12 +74,7 @@
   const MIN_DURATION_HOURS = 1 / 60
   const DEFAULT_ARI_YEARS = 2
 
-  let selectedAri = 10
-  let selectedDepth = 1.0
-  let selectedDurationHr = 24
   let selectedDurationPreset = String(DEFAULT_DURATION_HOURS)
-  let durationMode: 'standard' | 'custom' = 'standard'
-  let computationMode: 'precise' | 'fast' = 'precise'
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
 
   const SCS_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
@@ -155,16 +156,12 @@
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
 
-  let timestepMin = 5
-  let distribution: DistributionName = 'scs_type_ii'
-  let startISO = '2003-01-01T00:00'
-  let customCurveCsv = ''
   let customCurveDraft = ''
   let showCustomCurveModal = false
   let customCurveLines: string[] = []
 
-  $: customCurveLines = customCurveCsv.trim()
-    ? customCurveCsv
+  $: customCurveLines = $customCurveCsv.trim()
+    ? $customCurveCsv
         .trim()
         .split(/\r?\n/)
     : []
@@ -175,9 +172,7 @@
   let isLoadingNoaa = false
   let noaaError = ''
 
-  let lastStorm: ReturnType<typeof generateStorm> | null = null
-  let isGeneratingStorm = false
-  let stormGenerationToken = 0
+  let lastStorm: StormResult | null = null
   
   let lastChangedBy: 'user' | 'system' = 'user';
   let recentlyRecalculated: 'ari' | 'depth' | 'duration' | null = null;
@@ -299,7 +294,7 @@
 
   function scheduleNoaaFetch(delay = 700) {
     if (!autoFetch) return
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return
+    if (!Number.isFinite($lat) || !Number.isFinite($lon)) return
     if (fetchTimer) clearTimeout(fetchTimer)
     fetchTimer = setTimeout(() => {
       void loadNoaa()
@@ -356,8 +351,8 @@
         return
       }
 
-      lat = nextLat
-      lon = nextLon
+      $lat = nextLat
+      $lon = nextLon
       lastFetchKey = ''
       if (map) {
         const zoom = map.getZoom()
@@ -376,27 +371,27 @@
   }
 
   async function loadNoaa() {
-    const hadTable = Boolean(table)
+    const hadTable = Boolean($tableStore)
     if (fetchTimer) {
       clearTimeout(fetchTimer)
       fetchTimer = null
     }
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (!Number.isFinite($lat) || !Number.isFinite($lon)) {
       noaaError = 'Enter a valid latitude and longitude.'
       return
     }
-    const key = `${lat.toFixed(3)}:${lon.toFixed(3)}`
-    if (key === lastFetchKey && table) {
+    const key = `${$lat.toFixed(3)}:${$lon.toFixed(3)}`
+    if (key === lastFetchKey && $tableStore) {
       noaaError = ''
       return
     }
     isLoadingNoaa = true
     noaaError = ''
     try {
-      const txt = await fetchNoaaTable(lat, lon)
+      const txt = await fetchNoaaTable($lat, $lon)
       const parsed = parseNoaaTable(txt)
       if (!parsed) throw new Error('NOAA table parse failed')
-      table = parsed
+      $tableStore = parsed
       durations = parsed.rows.map((r) => r.label)
       aris = parsed.aris
       const defaultDurationLabel = parsed.rows.find(
@@ -415,10 +410,10 @@
         selectedDurationLabel = defaultDurationLabel ?? parsed.rows[0]?.label ?? null
       }
       if (!hadTable && aris.includes(String(DEFAULT_ARI_YEARS))) {
-        selectedAri = DEFAULT_ARI_YEARS
+        $selectedAri = DEFAULT_ARI_YEARS
       }
-      if (!aris.includes(String(selectedAri)) && aris.length) {
-        selectedAri = Number(aris[0])
+      if (!aris.includes(String($selectedAri)) && aris.length) {
+        $selectedAri = Number(aris[0])
       }
       if (selectedDurationLabel) {
         applyNoaaSelection()
@@ -426,7 +421,7 @@
       lastFetchKey = key
     } catch (e: any) {
       noaaError = e?.message ?? 'Unable to fetch NOAA data.'
-      table = null
+      $tableStore = null
       durations = []
       aris = []
       selectedDurationLabel = null
@@ -481,113 +476,95 @@
   }
 
   function durationIsSelectable(label: string) {
-    if (durationMode === 'custom') {
+    if ($durationMode === 'custom') {
       return true
     }
     return durationLabelIsStandard(label)
   }
 
-  let previousDurationMode: 'standard' | 'custom' = durationMode
-  let previousComputationMode: 'precise' | 'fast' = computationMode
-
-  $: if (durationMode !== previousDurationMode) {
-    previousDurationMode = durationMode
-    void makeStorm()
-  }
-
-  $: if (computationMode !== previousComputationMode) {
-    previousComputationMode = computationMode
-    void makeStorm()
-  }
-
   function pickCell(durLabel: string, ari: string) {
+    const table = $tableStore
     if (!table) return
     if (!durationIsSelectable(durLabel)) return
     selectedDurationLabel = durLabel
-    selectedDurationHr = toHours(durLabel)
-    selectedAri = Number(ari)
+    $selectedDurationHr = toHours(durLabel)
+    $selectedAri = Number(ari)
     const row = table.rows.find((r) => r.label === durLabel)
     const depth = row?.values[ari]
     if (Number.isFinite(depth)) {
-      selectedDepth = Number(depth)
+      $selectedDepth = Number(depth)
     }
     interpolatedCells = []
-    void makeStorm()
   }
 
   function applyNoaaSelection() {
+    const table = $tableStore
     if (!table || !selectedDurationLabel) return
     const row = table.rows.find((r) => r.label === selectedDurationLabel)
     if (!row) return
-    selectedDurationHr = toHours(selectedDurationLabel)
-    const ariKey = String(selectedAri)
+    $selectedDurationHr = toHours(selectedDurationLabel)
+    const ariKey = String($selectedAri)
     const exactDepth = row.values[ariKey]
     if (Number.isFinite(exactDepth)) {
-      selectedDepth = Number(exactDepth)
+      $selectedDepth = Number(exactDepth)
       interpolatedCells = []
-      void makeStorm()
       return
     }
-    const interpolated = interpolateDepthFromAri(row, selectedAri, table.aris)
+    const interpolated = interpolateDepthFromAri(row, $selectedAri, table.aris)
     if (interpolated) {
-      selectedDepth = interpolated.depth
+      $selectedDepth = interpolated.depth
       interpolatedCells = interpolated.highlight ?? []
-      void makeStorm()
       return
     }
     interpolatedCells = []
-    void makeStorm()
   }
 
-  async function makeStorm() {
-    const token = ++stormGenerationToken;
-    isGeneratingStorm = true;
-    await tick();
-    try {
-      const durationHr = ensureNumericDuration();
-      if (!Number.isFinite(durationHr)) {
-        isGeneratingStorm = false;
-        return;
-      }
-      const params: StormParams = {
-        depthIn: selectedDepth,
-        durationHr,
-        timestepMin,
-        distribution,
-        startISO,
-        customCurveCsv: customCurveCsv.trim() || undefined,
-        durationMode,
-        computationMode
-      }
-      lastStorm = generateStorm(params)
-      totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
-      peakIntensity = Math.max(...lastStorm.intensityInHr)
+  $: {
+    const storm = $stormResult
+    lastStorm = storm
 
-      const totalMinutes = lastStorm.timeMin[lastStorm.timeMin.length - 1] ?? 0
+    if (!storm) {
+      peakIntensity = 0
+      totalDepth = 0
+      timeAxis = []
+      timeColumnLabel = 'Time (hr)'
+      tableRows = []
+      hasTimestamp = false
+
+      if (plotDiv1) Plotly.purge(plotDiv1)
+      if (plotDiv2) Plotly.purge(plotDiv2)
+      if (plotDiv3) Plotly.purge(plotDiv3)
+    } else {
+      totalDepth = storm.cumulativeIn[storm.cumulativeIn.length - 1] ?? 0
+      peakIntensity = storm.intensityInHr.length
+        ? Math.max(...storm.intensityInHr)
+        : 0
+
+      const totalMinutes = storm.timeMin[storm.timeMin.length - 1] ?? 0
       const useHours = totalMinutes >= 120
       const timeFactor = useHours ? 1 / 60 : 1
       const axisTitle = useHours ? 'Time (hours)' : 'Time (minutes)'
       const columnLabel = useHours ? 'Time (hr)' : 'Time (min)'
       const hoverTimeLabel = useHours ? 'Time (hr)' : 'Time (min)'
       const stepMinutes =
-        lastStorm.timeMin.length > 1
-          ? lastStorm.timeMin[1] - lastStorm.timeMin[0]
-          : timestepMin
+        storm.timeMin.length > 1
+          ? storm.timeMin[1] - storm.timeMin[0]
+          : $timestepMin
       const barWidth = stepMinutes * timeFactor
-      timeAxis = lastStorm.timeMin.map((t) => t * timeFactor)
+      timeAxis = storm.timeMin.map((t) => t * timeFactor)
       timeColumnLabel = columnLabel
 
-      const startDate = startISO ? new Date(startISO) : null
+      const startDate = $startISO ? new Date($startISO) : null
       hasTimestamp = Boolean(startDate && !Number.isNaN(startDate.getTime()))
-      tableRows = lastStorm.timeMin.map((t, i) => {
+      tableRows = storm.timeMin.map((t, i) => {
         const timestamp = hasTimestamp
           ? formatTimestamp(new Date((startDate as Date).getTime() + t * 60000))
           : undefined
         return {
           time: t * timeFactor,
-          intensity: lastStorm.intensityInHr[i],
-          incremental: lastStorm.incrementalIn[i],
-          cumulative: lastStorm.cumulativeIn[i],
+          intensity: storm.intensityInHr[i],
+          incremental: storm.incrementalIn[i],
+          cumulative: storm.cumulativeIn[i],
           timestamp
         }
       })
@@ -598,7 +575,7 @@
           [
             {
               x: timeAxis,
-              y: lastStorm.intensityInHr,
+              y: storm.intensityInHr,
               type: 'bar',
               name: 'Intensity (in/hr)',
               marker: { color: '#6ee7ff' },
@@ -622,7 +599,7 @@
           [
             {
               x: timeAxis,
-              y: lastStorm.incrementalIn,
+              y: storm.incrementalIn,
               type: 'bar',
               name: 'Incremental Volume (in)',
               marker: { color: '#a855f7' },
@@ -646,7 +623,7 @@
           [
             {
               x: timeAxis,
-              y: lastStorm.cumulativeIn,
+              y: storm.cumulativeIn,
               type: 'scatter',
               mode: 'lines',
               name: 'Cumulative (in)',
@@ -663,19 +640,14 @@
           plotConfig
         )
       }
-
-      drawIsoPlot()
-    } catch (error) {
-      console.error('Failed to generate storm', error)
-    } finally {
-      if (token === stormGenerationToken) {
-        isGeneratingStorm = false
-      }
     }
-  }
 
+    drawIsoPlot()
+  }
   function drawIsoPlot() {
     if (!isoPlotDiv) return
+
+    const table = $tableStore
 
     if (!table || !aris.length) {
       Plotly.purge(isoPlotDiv)
@@ -809,7 +781,7 @@
     const pointLabels: string[] = []
     durationEntries.forEach((duration) => {
       const includeDuration =
-        durationMode !== 'standard' ||
+        $durationMode !== 'standard' ||
         STANDARD_DURATION_HOURS.some(
           (allowed) => Math.abs(duration.hr - allowed) < 1e-3
         )
@@ -990,7 +962,7 @@
     )
 
     if (
-      durationMode === 'standard' &&
+      $durationMode === 'standard' &&
       !STANDARD_DURATION_HOURS.some(
         (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
       )
@@ -1039,51 +1011,49 @@
   }
 
   function ensureNumericDuration() {
-    const parsed = Number(selectedDurationHr);
-    if (Number.isFinite(parsed) && selectedDurationHr !== parsed) {
-      selectedDurationHr = parsed;
+    const parsed = Number($selectedDurationHr)
+    if (Number.isFinite(parsed) && $selectedDurationHr !== parsed) {
+      $selectedDurationHr = parsed
     }
-    return parsed;
+    return parsed
   }
 
   function recalcFromDepthOrDuration() {
-    const durationHr = ensureNumericDuration();
-    if (!Number.isFinite(selectedDepth) || !Number.isFinite(durationHr)) {
-      return;
+    const durationHr = ensureNumericDuration()
+    if (!Number.isFinite($selectedDepth) || !Number.isFinite(durationHr)) {
+      return
     }
+    const table = $tableStore
     if (!table) {
-      interpolatedCells = [];
-      void makeStorm();
-      return;
+      interpolatedCells = []
+      return
     }
 
-    const result = interpolateAriForDuration(table, durationHr, selectedDepth, {
+    const result = interpolateAriForDuration(table, durationHr, $selectedDepth, {
       preferredLabel: selectedDurationLabel ?? null
     })
     if (!result) {
-      interpolatedCells = [];
-      void makeStorm();
-      return;
+      interpolatedCells = []
+      return
     }
 
     if (selectedDurationLabel !== result.label) {
-      selectedDurationLabel = result.label;
+      selectedDurationLabel = result.label
     }
 
-    const newAri = Number(result.ari.toFixed(3));
-    if (selectedAri !== newAri) {
-      selectedAri = newAri;
+    const newAri = Number(result.ari.toFixed(3))
+    if ($selectedAri !== newAri) {
+      $selectedAri = newAri
     }
-    interpolatedCells = result.highlight ?? [];
-    void makeStorm();
+    interpolatedCells = result.highlight ?? []
   }
 
-  $: if (durationMode === 'standard') {
+  $: if ($durationMode === 'standard') {
     let adjusted = false
-    if (!matchesStandardDurationHours(selectedDurationHr)) {
-      const nearest = nearestStandardDuration(selectedDurationHr)
-      if (nearest !== selectedDurationHr) {
-        selectedDurationHr = nearest
+    if (!matchesStandardDurationHours($selectedDurationHr)) {
+      const nearest = nearestStandardDuration($selectedDurationHr)
+      if (nearest !== $selectedDurationHr) {
+        $selectedDurationHr = nearest
         adjusted = true
       }
     }
@@ -1096,7 +1066,7 @@
     }
   }
 
-  $: if (durationMode === 'standard') {
+  $: if ($durationMode === 'standard') {
     const durationHr = ensureNumericDuration()
     const fallbackDuration = Number.isFinite(durationHr)
       ? nearestStandardDuration(durationHr)
@@ -1108,13 +1078,14 @@
   }
 
   function recalcFromAri() {
-    const durationHr = ensureNumericDuration();
-    if (!Number.isFinite(selectedAri) || !Number.isFinite(durationHr)) {
-      return;
+    const durationHr = ensureNumericDuration()
+    if (!Number.isFinite($selectedAri) || !Number.isFinite(durationHr)) {
+      return
     }
+    const table = $tableStore
     if (!table) {
-      interpolatedCells = [];
-      return;
+      interpolatedCells = []
+      return
     }
     const { row, label } = getRowForCalculation(
       table,
@@ -1122,25 +1093,21 @@
       selectedDurationLabel ?? null
     )
     if (!row || !label) {
-      interpolatedCells = [];
-      return;
+      interpolatedCells = []
+      return
     }
     if (selectedDurationLabel !== label) {
-      selectedDurationLabel = label;
+      selectedDurationLabel = label
     }
-    const result = interpolateDepthFromAri(row, selectedAri, table.aris);
+    const result = interpolateDepthFromAri(row, $selectedAri, table.aris)
     if (result) {
-      const newDepth = Number(result.depth.toFixed(3));
-      if (selectedDepth !== newDepth) {
-        selectedDepth = newDepth;
-        void makeStorm();
-      } else {
-        void makeStorm();
+      const newDepth = Number(result.depth.toFixed(3))
+      if ($selectedDepth !== newDepth) {
+        $selectedDepth = newDepth
       }
-      interpolatedCells = result.highlight ?? [];
+      interpolatedCells = result.highlight ?? []
     } else {
-      interpolatedCells = [];
-      void makeStorm();
+      interpolatedCells = []
     }
   }
 
@@ -1158,23 +1125,23 @@
         detail && typeof detail === 'object' && 'value' in detail
           ? Number(detail.value)
           : Number.NaN;
-      if (Number.isFinite(nextValue) && selectedDurationHr !== nextValue) {
-        selectedDurationHr = nextValue;
+      if (Number.isFinite(nextValue) && $selectedDurationHr !== nextValue) {
+        $selectedDurationHr = nextValue;
       }
     } else if (event?.currentTarget instanceof HTMLSelectElement) {
       const parsed = Number(event.currentTarget.value);
-      if (Number.isFinite(parsed) && selectedDurationHr !== parsed) {
-        selectedDurationHr = parsed;
+      if (Number.isFinite(parsed) && $selectedDurationHr !== parsed) {
+        $selectedDurationHr = parsed;
       }
     }
 
     const durationHr = ensureNumericDuration();
 
-    if (durationMode === 'standard' && Number.isFinite(durationHr)) {
+    if ($durationMode === 'standard' && Number.isFinite(durationHr)) {
       if (!matchesStandardDurationHours(durationHr)) {
         const nearest = nearestStandardDuration(durationHr);
         if (nearest !== durationHr) {
-          selectedDurationHr = nearest;
+          $selectedDurationHr = nearest;
         }
       }
     }
@@ -1187,7 +1154,7 @@
       const raw = event.currentTarget.value;
       const parsed = Number(raw);
       if (Number.isFinite(parsed)) {
-        selectedDurationHr = parsed;
+        $selectedDurationHr = parsed;
       }
       if (selectedDurationPreset !== raw) {
         selectedDurationPreset = raw;
@@ -1203,10 +1170,9 @@
   }
 
   function handleTimestepInput() {
-    if (!Number.isFinite(timestepMin) || timestepMin <= 0) {
+    if (!Number.isFinite($timestepMin) || $timestepMin <= 0) {
       return
     }
-    void makeStorm()
   }
 
   function doCsv() {
@@ -1215,15 +1181,15 @@
   }
   function doDat() {
     if (!lastStorm) return
-    const startDate = startISO ? new Date(startISO) : null
+    const startDate = $startISO ? new Date($startISO) : null
     const start = startDate && !Number.isNaN(startDate.getTime())
-      ? startISO
+      ? $startISO
       : '2003-01-01T00:00'
-    savePcswmmDat(lastStorm, timestepMin, 'design_storm.dat', 'System', start)
+    savePcswmmDat(lastStorm, $timestepMin, 'design_storm.dat', 'System', start)
   }
 
   async function openCustomCurveModal() {
-    customCurveDraft = customCurveCsv
+    customCurveDraft = $customCurveCsv
     showCustomCurveModal = true
     await tick()
     customCurveModalDialog?.focus()
@@ -1235,7 +1201,7 @@
   }
 
   function applyCustomCurveDraft() {
-    customCurveCsv = customCurveDraft
+    $customCurveCsv = customCurveDraft
     closeCustomCurveModal()
   }
 
@@ -1319,11 +1285,11 @@
   function refreshComparisonCurves() {
     if (!showCurveModal) return
 
-    const group = getComparisonGroup(distribution)
+    const group = getComparisonGroup($distribution)
     comparisonGroupLabel = group.label
 
     if (!selectedCurveDuration || !matchesStandardDurationHours(selectedCurveDuration)) {
-      const currentDurationHr = Number(selectedDurationHr);
+      const currentDurationHr = Number($selectedDurationHr);
       const preferred = matchesStandardDurationHours(currentDurationHr)
         ? (nearestStandardDuration(currentDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
         : STANDARD_DURATION_HOURS[0]
@@ -1331,15 +1297,15 @@
     }
 
     const duration = selectedCurveDuration ?? STANDARD_DURATION_HOURS[0]
-    const trimmedCsv = customCurveCsv.trim()
-    const key = `${group.key}|${duration}|${timestepMin}|${trimmedCsv}`
+    const trimmedCsv = $customCurveCsv.trim()
+    const key = `${group.key}|${duration}|${$timestepMin}|${trimmedCsv}`
 
     if (key === lastCurveParamsKey && comparisonCurves.length) {
       if (
         !selectedCurveDistribution ||
         !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
       ) {
-        const fallback = comparisonCurves.find((curve) => curve.distribution === distribution)
+        const fallback = comparisonCurves.find((curve) => curve.distribution === $distribution)
           ?? comparisonCurves[0]
         selectedCurveDistribution = fallback ? fallback.distribution : null
       }
@@ -1358,9 +1324,9 @@
       const params: StormParams = {
         depthIn: 1,
         durationHr: duration,
-        timestepMin,
+        timestepMin: $timestepMin,
         distribution: member,
-        startISO,
+        startISO: $startISO,
         customCurveCsv: trimmedCsv || undefined,
         durationMode: 'standard'
       }
@@ -1405,7 +1371,7 @@
       !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
     ) {
       const preferred =
-        comparisonCurves.find((curve) => curve.distribution === distribution) ?? comparisonCurves[0]
+        comparisonCurves.find((curve) => curve.distribution === $distribution) ?? comparisonCurves[0]
       selectedCurveDistribution = preferred ? preferred.distribution : null
     }
 
@@ -1507,7 +1473,7 @@
 
   onMount(() => {
     map = L.map(mapDiv, { attributionControl: false, zoomControl: true }).setView(
-      [lat, lon],
+      [$lat, $lon],
       9
     )
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1515,19 +1481,18 @@
       attribution: '© OpenStreetMap contributors'
     }).addTo(map)
 
-    marker = L.marker([lat, lon], { draggable: true }).addTo(map)
+    marker = L.marker([$lat, $lon], { draggable: true }).addTo(map)
     marker.on('dragend', () => {
       const p = marker.getLatLng()
-      lat = p.lat
-      lon = p.lng
+      $lat = p.lat
+      $lon = p.lng
     })
     map.on('click', (ev: L.LeafletMouseEvent) => {
-      lat = ev.latlng.lat
-      lon = ev.latlng.lng
+      $lat = ev.latlng.lat
+      $lon = ev.latlng.lng
     })
 
     void loadNoaa()
-    void makeStorm()
 
     window.addEventListener('resize', handleViewportChange)
     window.addEventListener('scroll', handleViewportChange, { passive: true })
@@ -1556,11 +1521,11 @@
   })
 
   $: if (marker) {
-    marker.setLatLng([lat, lon])
+    marker.setLatLng([$lat, $lon])
   }
 
   $: if (autoFetch) {
-    const key = `${lat.toFixed(3)}:${lon.toFixed(3)}`
+    const key = `${$lat.toFixed(3)}:${$lon.toFixed(3)}`
     if (key !== lastFetchKey) {
       scheduleNoaaFetch()
     }
@@ -1646,7 +1611,7 @@
               max={90}
               step={0.0001}
               buttonStep={0.1}
-              bind:value={lat}
+              bind:value={$lat}
               showProgress
               on:change={() => {
                 lastFetchKey = ''
@@ -1662,7 +1627,7 @@
               max={180}
               step={0.0001}
               buttonStep={0.1}
-              bind:value={lon}
+              bind:value={$lon}
               showProgress
               on:change={() => {
                 lastFetchKey = ''
@@ -1692,7 +1657,7 @@
           {/if}
         </div>
 
-        {#if table}
+        {#if $tableStore}
           <div class="noaa-table-scroll" bind:this={noaaTableScrollEl}>
             <div class="noaa-table panel">
               <div class="table-header">
@@ -1709,9 +1674,9 @@
                 </div>
               </div>
               <div class="table-body">
-                {#each table.rows as row, index}
+                {#each $tableStore.rows as row, index}
                   {@const isSelectable =
-                    durationMode === 'custom' || durationLabelIsStandard(row.label)}
+                    $durationMode === 'custom' || durationLabelIsStandard(row.label)}
                   <div
                     class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''} ${
                       isSelectable ? '' : 'disabled'
@@ -1723,7 +1688,7 @@
                         class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
                         data-row-index={index}
                         disabled={!isSelectable}
-                        on:click={() => pickCell(row.label, String(selectedAri))}
+                        on:click={() => pickCell(row.label, String($selectedAri))}
                       >
                         {row.label}
                       </button>
@@ -1734,7 +1699,7 @@
                         <button
                           type="button"
                           class={`table-button cell ${
-                            selectedDurationLabel === row.label && String(selectedAri) === a
+                            selectedDurationLabel === row.label && String($selectedAri) === a
                               ? 'selected'
                               : ''
                           } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
@@ -1765,7 +1730,7 @@
             bind:this={isoPlotDiv}
             aria-label="Contour plot of NOAA depths by duration and recurrence interval"
           ></div>
-          {#if !table}
+          {#if !$tableStore}
             <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
           {/if}
         </div>
@@ -1799,7 +1764,7 @@
                   </button>
                 </div>
               </div>
-              <select id="dist" bind:value={distribution}>
+              <select id="dist" bind:value={$distribution}>
                 <option value="scs_type_i">SCS Type I</option>
                 <option value="scs_type_ia">SCS Type IA</option>
                 <option value="scs_type_ii">SCS Type II</option>
@@ -1831,15 +1796,15 @@
                   <div class="mode-toggle" role="group" aria-label="Duration mode">
                     <button
                       type="button"
-                      class:active={durationMode === 'standard'}
-                      on:click={() => (durationMode = 'standard')}
+                      class:active={$durationMode === 'standard'}
+                      on:click={() => ($durationMode = 'standard')}
                     >
                       Standard
                     </button>
                     <button
                       type="button"
-                      class:active={durationMode === 'custom'}
-                      on:click={() => (durationMode = 'custom')}
+                      class:active={$durationMode === 'custom'}
+                      on:click={() => ($durationMode = 'custom')}
                     >
                       Custom
                     </button>
@@ -1847,22 +1812,22 @@
                   <div class="mode-toggle" role="group" aria-label="Computation mode">
                     <button
                       type="button"
-                      class:active={computationMode === 'precise'}
-                      on:click={() => (computationMode = 'precise')}
+                      class:active={$computationMode === 'precise'}
+                      on:click={() => ($computationMode = 'precise')}
                     >
                       Precise
                     </button>
                     <button
                       type="button"
-                      class:active={computationMode === 'fast'}
-                      on:click={() => (computationMode = 'fast')}
+                      class:active={$computationMode === 'fast'}
+                      on:click={() => ($computationMode = 'fast')}
                     >
                       Fast (approx.)
                     </button>
                   </div>
                 </div>
               </div>
-              {#if durationMode === 'custom'}
+              {#if $durationMode === 'custom'}
                 <div class="mode-note field-hint field-hint--warning">
                   <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
                 </div>
@@ -1870,7 +1835,7 @@
                 <p class="mode-note">Quickly select 6-, 12-, or 24-hour durations using the presets below.</p>
               {/if}
               <p class="mode-note mode-note--computation">
-                {#if computationMode === 'fast'}
+                {#if $computationMode === 'fast'}
                   Fast mode caps the cumulative sampling at {MAX_FAST_SAMPLES.toLocaleString()} points for quicker estimates. Switch back to Precise for full resolution.
                 {:else}
                   Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
@@ -1887,14 +1852,14 @@
                 label="Depth (in)"
                 min={0}
                 step={0.1}
-                bind:value={selectedDepth}
+                bind:value={$selectedDepth}
                 on:change={handleDepthInput}
                 recalculated={recentlyRecalculated === 'depth'}
               />
             </div>
             <div class="storm-card input-card input-card--duration">
               <label for="duration">Duration (hr)</label>
-              {#if durationMode === 'standard'}
+              {#if $durationMode === 'standard'}
                 <select
                   id="duration"
                   bind:value={selectedDurationPreset}
@@ -1911,7 +1876,7 @@
                   min={MIN_DURATION_HOURS}
                   step={MIN_DURATION_HOURS}
                   buttonStep={1}
-                  bind:value={selectedDurationHr}
+                  bind:value={$selectedDurationHr}
                   on:change={handleDurationInput}
                   recalculated={recentlyRecalculated === 'duration'}
                 />
@@ -1924,7 +1889,7 @@
                 label="Average Recurrence Interval (years)"
                 min={0}
                 step={1}
-                bind:value={selectedAri}
+                bind:value={$selectedAri}
                 on:change={handleAriInput}
                 recalculated={recentlyRecalculated === 'ari'}
               />
@@ -1936,38 +1901,26 @@
                 label="Timestep (min)"
                 min={0.1}
                 step={1}
-                bind:value={timestepMin}
+                bind:value={$timestepMin}
                 on:change={handleTimestepInput}
               />
             </div>
             <div class="storm-card input-card">
               <label for="start">Start (ISO)</label>
-              <input id="start" type="datetime-local" bind:value={startISO} />
+              <input id="start" type="datetime-local" bind:value={$startISO} />
             </div>
           </div>
         </div>
 
 
         <div class="actions">
-          <button
-            class="primary"
-            on:click={() => void makeStorm()}
-            disabled={isGeneratingStorm}
-            aria-busy={isGeneratingStorm}
-          >
-            {isGeneratingStorm ? 'Generating…' : 'Generate Storm'}
+          <button class="primary" type="button" disabled aria-disabled="true">
+            Storm updates automatically
           </button>
-          <button on:click={doCsv} disabled={!lastStorm || isGeneratingStorm}>Export CSV</button>
-          <button on:click={doDat} disabled={!lastStorm || isGeneratingStorm}>Export DAT</button>
+          <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
+          <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
-
-        {#if isGeneratingStorm}
-          <div class="storm-loading" role="status" aria-live="polite">
-            <span class="storm-loading__spinner" aria-hidden="true"></span>
-            <span>Building hyetograph…</span>
-          </div>
-        {/if}
 
         <div class="stats grid cols-3">
           <div class="stat-box">
@@ -2032,7 +1985,7 @@
             </table>
           </div>
         {:else}
-          <p class="empty">Generate a storm to see the time series table.</p>
+          <p class="empty">Adjust the parameters to see the time series table.</p>
         {/if}
       </div>
     </section>
