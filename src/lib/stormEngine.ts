@@ -96,7 +96,22 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
           const frac = clamp01((t - x0) / Math.max(1e-9, x1 - x0))
           out.push(y0 * (1 - frac) + y1 * frac)
         }
-        return out
+
+        const maxv = out.reduce(
+          (max, value) => (Number.isFinite(value) ? Math.max(max, value) : max),
+          0
+        )
+
+        if (maxv > 0) {
+          const normalized: number[] = []
+          let last = 0
+          for (const value of out) {
+            const next = clamp01(value / maxv)
+            last = Math.max(last, next)
+            normalized.push(last)
+          }
+          return normalized
+        }
       }
     }
     return linspace(n)

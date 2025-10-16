@@ -53,6 +53,32 @@ describe('generateStorm', () => {
     ])
   })
 
+  it('normalizes custom curves that do not end at 1', () => {
+    const storm = generateStorm({
+      depthIn: 1,
+      durationHr: 1,
+      timestepMin: 30,
+      distribution: 'user',
+      customCurveCsv: '0,0\n0.5,0.4\n1,0.8'
+    })
+
+    expect(storm.cumulativeIn).toEqual([
+      0,
+      0.5,
+      1
+    ])
+    expect(storm.incrementalIn).toEqual([
+      0,
+      0.5,
+      0.5
+    ])
+    expect(storm.intensityInHr).toEqual([
+      0,
+      1,
+      1
+    ])
+  })
+
   it('clamps the final timestep and preserves totals when duration is not divisible', () => {
     const depthIn = 2
     const timestepMin = 7
