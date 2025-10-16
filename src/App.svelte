@@ -539,13 +539,18 @@
   }
 
   async function makeStorm() {
-    const token = ++stormGenerationToken
-    isGeneratingStorm = true
-    await tick()
+    const token = ++stormGenerationToken;
+    isGeneratingStorm = true;
+    await tick();
     try {
+      const durationHr = ensureNumericDuration();
+      if (!Number.isFinite(durationHr)) {
+        isGeneratingStorm = false;
+        return;
+      }
       const params: StormParams = {
         depthIn: selectedDepth,
-        durationHr: selectedDurationHr,
+        durationHr,
         timestepMin,
         distribution,
         startISO,
@@ -907,12 +912,14 @@
       }
     }
 
+    const durationHrNumeric = Number(selectedDurationHr);
+
     let stormTrace: any = null
     if (
       Number.isFinite(selectedAri) &&
       selectedAri > 0 &&
-      Number.isFinite(selectedDurationHr) &&
-      selectedDurationHr > 0
+      Number.isFinite(durationHrNumeric) &&
+      durationHrNumeric > 0
     ) {
       const hasDepth = Number.isFinite(selectedDepth)
       const depthText = hasDepth ? `<br>Depth: ${selectedDepth.toFixed(3)} in` : ''
@@ -920,7 +927,7 @@
         type: 'scatter',
         mode: 'markers',
         x: [selectedAri],
-        y: [selectedDurationHr],
+        y: [durationHrNumeric],
         marker: {
           color: '#ef4444',
           size: 16,
@@ -931,7 +938,7 @@
         showlegend: false,
         hovertemplate: `Current Storm` +
           `<br>ARI: ${selectedAri}` +
-          `<br>Duration: ${selectedDurationHr.toFixed(2)} hr` +
+          `<br>Duration: ${durationHrNumeric.toFixed(2)} hr` +
           depthText +
           '<extra></extra>'
       }
@@ -1030,35 +1037,44 @@
     )
   }
 
+  function ensureNumericDuration() {
+    const parsed = Number(selectedDurationHr);
+    if (Number.isFinite(parsed) && selectedDurationHr !== parsed) {
+      selectedDurationHr = parsed;
+    }
+    return parsed;
+  }
+
   function recalcFromDepthOrDuration() {
-    if (!Number.isFinite(selectedDepth) || !Number.isFinite(selectedDurationHr)) {
-      return
+    const durationHr = ensureNumericDuration();
+    if (!Number.isFinite(selectedDepth) || !Number.isFinite(durationHr)) {
+      return;
     }
     if (!table) {
-      interpolatedCells = []
-      void makeStorm()
-      return
+      interpolatedCells = [];
+      void makeStorm();
+      return;
     }
 
-    const result = interpolateAriForDuration(table, selectedDurationHr, selectedDepth, {
+    const result = interpolateAriForDuration(table, durationHr, selectedDepth, {
       preferredLabel: selectedDurationLabel ?? null
     })
     if (!result) {
-      interpolatedCells = []
-      void makeStorm()
-      return
+      interpolatedCells = [];
+      void makeStorm();
+      return;
     }
 
     if (selectedDurationLabel !== result.label) {
-      selectedDurationLabel = result.label
+      selectedDurationLabel = result.label;
     }
 
-    const newAri = Number(result.ari.toFixed(3))
+    const newAri = Number(result.ari.toFixed(3));
     if (selectedAri !== newAri) {
-      selectedAri = newAri
+      selectedAri = newAri;
     }
-    interpolatedCells = result.highlight ?? []
-    void makeStorm()
+    interpolatedCells = result.highlight ?? [];
+    void makeStorm();
   }
 
   $: if (durationMode === 'standard') {
@@ -1080,38 +1096,39 @@
   }
 
   function recalcFromAri() {
-    if (!Number.isFinite(selectedAri) || !Number.isFinite(selectedDurationHr)) {
-      return
+    const durationHr = ensureNumericDuration();
+    if (!Number.isFinite(selectedAri) || !Number.isFinite(durationHr)) {
+      return;
     }
     if (!table) {
-      interpolatedCells = []
-      return
+      interpolatedCells = [];
+      return;
     }
     const { row, label } = getRowForCalculation(
       table,
-      selectedDurationHr,
+      durationHr,
       selectedDurationLabel ?? null
     )
     if (!row || !label) {
-      interpolatedCells = []
-      return
+      interpolatedCells = [];
+      return;
     }
     if (selectedDurationLabel !== label) {
-      selectedDurationLabel = label
+      selectedDurationLabel = label;
     }
-    const result = interpolateDepthFromAri(row, selectedAri, table.aris)
+    const result = interpolateDepthFromAri(row, selectedAri, table.aris);
     if (result) {
-      const newDepth = Number(result.depth.toFixed(3))
+      const newDepth = Number(result.depth.toFixed(3));
       if (selectedDepth !== newDepth) {
-        selectedDepth = newDepth
-        void makeStorm()
+        selectedDepth = newDepth;
+        void makeStorm();
       } else {
-        void makeStorm()
+        void makeStorm();
       }
-      interpolatedCells = result.highlight ?? []
+      interpolatedCells = result.highlight ?? [];
     } else {
-      interpolatedCells = []
-      void makeStorm()
+      interpolatedCells = [];
+      void makeStorm();
     }
   }
 
@@ -1120,16 +1137,37 @@
     recalcFromDepthOrDuration()
   }
 
-  function handleDurationInput() {
+  function handleDurationInput(event?: Event) {
     lastChangedBy = 'user';
-    if (durationMode === 'standard') {
-        if (selectedDurationHr !== 6 && selectedDurationHr !== 12 && selectedDurationHr !== 24) {
-            if (selectedDurationHr < 9) selectedDurationHr = 6;
-            else if (selectedDurationHr < 18) selectedDurationHr = 12;
-            else selectedDurationHr = 24;
-        }
+
+    if (event instanceof CustomEvent) {
+      const detail = event.detail as { value?: number } | null;
+      const nextValue =
+        detail && typeof detail === 'object' && 'value' in detail
+          ? Number(detail.value)
+          : Number.NaN;
+      if (Number.isFinite(nextValue) && selectedDurationHr !== nextValue) {
+        selectedDurationHr = nextValue;
+      }
+    } else if (event?.currentTarget instanceof HTMLSelectElement) {
+      const parsed = Number(event.currentTarget.value);
+      if (Number.isFinite(parsed) && selectedDurationHr !== parsed) {
+        selectedDurationHr = parsed;
+      }
     }
-    recalcFromDepthOrDuration()
+
+    const durationHr = ensureNumericDuration();
+
+    if (durationMode === 'standard' && Number.isFinite(durationHr)) {
+      if (!matchesStandardDurationHours(durationHr)) {
+        const nearest = nearestStandardDuration(durationHr);
+        if (nearest !== durationHr) {
+          selectedDurationHr = nearest;
+        }
+      }
+    }
+
+    recalcFromDepthOrDuration();
   }
 
   function handleAriInput() {
@@ -1258,8 +1296,9 @@
     comparisonGroupLabel = group.label
 
     if (!selectedCurveDuration || !matchesStandardDurationHours(selectedCurveDuration)) {
-      const preferred = matchesStandardDurationHours(selectedDurationHr)
-        ? (nearestStandardDuration(selectedDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
+      const currentDurationHr = Number(selectedDurationHr);
+      const preferred = matchesStandardDurationHours(currentDurationHr)
+        ? (nearestStandardDuration(currentDurationHr) as (typeof STANDARD_DURATION_HOURS)[number])
         : STANDARD_DURATION_HOURS[0]
       selectedCurveDuration = preferred
     }
