@@ -1650,7 +1650,7 @@
             <span>Fetching rainfall frequencies from NOAA Atlas 14…</span>
           {:else if noaaError}
             <span class="error">{noaaError}</span>
-          {:else if table}
+          {:else if $tableStore}
             <span>Depths pulled for Atlas 14 (Partial Duration Series).</span>
           {:else}
             <span>NOAA data not loaded yet.</span>
