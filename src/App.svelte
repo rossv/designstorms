@@ -9,6 +9,7 @@
   import {
     generateStorm,
     getBestScsDistribution,
+    MAX_FAST_SAMPLES,
     type StormParams,
     type DistributionName
   } from './lib/stormEngine'
@@ -71,6 +72,7 @@
   let selectedDepth = 1.0
   let selectedDurationHr = 24
   let durationMode: 'standard' | 'custom' = 'standard'
+  let computationMode: 'precise' | 'fast' = 'precise'
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
 
   const SCS_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
@@ -485,9 +487,15 @@
   }
 
   let previousDurationMode: 'standard' | 'custom' = durationMode
+  let previousComputationMode: 'precise' | 'fast' = computationMode
 
   $: if (durationMode !== previousDurationMode) {
     previousDurationMode = durationMode
+    void makeStorm()
+  }
+
+  $: if (computationMode !== previousComputationMode) {
+    previousComputationMode = computationMode
     void makeStorm()
   }
 
@@ -542,7 +550,8 @@
         distribution,
         startISO,
         customCurveCsv: customCurveCsv.trim() || undefined,
-        durationMode
+        durationMode,
+        computationMode
       }
       lastStorm = generateStorm(params)
       totalDepth = lastStorm.cumulativeIn[lastStorm.cumulativeIn.length - 1] ?? 0
@@ -1752,21 +1761,39 @@
             <div class="storm-card storm-card--mode">
               <div class="mode-header">
                 <span class="mode-label">Mode</span>
-                <div class="mode-toggle" role="group" aria-label="Duration mode">
-                  <button
-                    type="button"
-                    class:active={durationMode === 'standard'}
-                    on:click={() => (durationMode = 'standard')}
-                  >
-                    Standard
-                  </button>
-                  <button
-                    type="button"
-                    class:active={durationMode === 'custom'}
-                    on:click={() => (durationMode = 'custom')}
-                  >
-                    Custom
-                  </button>
+                <div class="mode-toggle-groups">
+                  <div class="mode-toggle" role="group" aria-label="Duration mode">
+                    <button
+                      type="button"
+                      class:active={durationMode === 'standard'}
+                      on:click={() => (durationMode = 'standard')}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      type="button"
+                      class:active={durationMode === 'custom'}
+                      on:click={() => (durationMode = 'custom')}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  <div class="mode-toggle" role="group" aria-label="Computation mode">
+                    <button
+                      type="button"
+                      class:active={computationMode === 'precise'}
+                      on:click={() => (computationMode = 'precise')}
+                    >
+                      Precise
+                    </button>
+                    <button
+                      type="button"
+                      class:active={computationMode === 'fast'}
+                      on:click={() => (computationMode = 'fast')}
+                    >
+                      Fast (approx.)
+                    </button>
+                  </div>
                 </div>
               </div>
               {#if durationMode === 'custom'}
@@ -1776,6 +1803,13 @@
               {:else}
                 <p class="mode-note">Quickly select 6-, 12-, or 24-hour durations using the presets below.</p>
               {/if}
+              <p class="mode-note mode-note--computation">
+                {#if computationMode === 'fast'}
+                  Fast mode caps the cumulative sampling at {MAX_FAST_SAMPLES.toLocaleString()} points for quicker estimates. Switch back to Precise for full resolution.
+                {:else}
+                  Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
+                {/if}
+              </p>
             </div>
           </div>
 
@@ -2412,6 +2446,12 @@
     text-transform: uppercase;
   }
 
+  .mode-toggle-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .mode-toggle {
     display: inline-flex;
     gap: 6px;
@@ -2448,6 +2488,10 @@
     line-height: 1.5;
     color: var(--muted);
     margin: 0;
+  }
+
+  .mode-note--computation {
+    margin-top: 10px;
   }
 
   .storm-form__inputs {

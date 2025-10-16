@@ -1,6 +1,18 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
 import type { StormParams, StormResult, DistributionName } from './types'
 
+export const MAX_FAST_SAMPLES = 1000
+
+const distributionCache = new Map<string, number[]>()
+
+const BETACF_MAX_ITER = 200
+const BETACF_FAST_ITER = 100
+const BETACF_EPS = 3e-7
+const BETACF_FPMIN = Number.MIN_VALUE / BETACF_EPS
+const MAX_LOG_EXP = 709
+const MIN_LOG_EXP = -745
+const EXP_MAX_VALUE = Math.exp(MAX_LOG_EXP)
+
 export const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
   .reduce((acc, key) => {
     const match = key.match(/^scs_(type_[a-z0-9]+)_(\d+)hr$/i)
@@ -27,18 +39,90 @@ function clamp01(x: number) {
   return Math.max(0, Math.min(1, x))
 }
 
-function betaCDF(x: number, a: number, b: number): number {
-  // Simpson integration of Beta PDF to approximate CDF
-  const N = 200
-  const h = x / N
-  let s = 0
-  const betaPdf = (t:number) => Math.pow(t, a-1)*Math.pow(1-t, b-1)
-  for (let i=0;i<=N;i++){
-    const coef = (i===0 || i===N) ? 1 : (i%2===0 ? 2 : 4)
-    s += coef * betaPdf(i*h)
+function expClamp(logValue: number): number {
+  if (!Number.isFinite(logValue)) return 0
+  if (logValue <= MIN_LOG_EXP) return 0
+  if (logValue >= MAX_LOG_EXP) return EXP_MAX_VALUE
+  return Math.exp(logValue)
+}
+
+function cacheKey(
+  name: DistributionName,
+  n: number,
+  mode: 'precise' | 'fast',
+  customCsv?: string
+): string {
+  const normalizedCsv = customCsv ? customCsv.trim() : ''
+  return `${name}|${mode}|${n}|${normalizedCsv}`
+}
+
+function betacf(a: number, b: number, x: number, maxIter: number): number {
+  let qab = a + b
+  let qap = a + 1
+  let qam = a - 1
+  let c = 1
+  let d = 1 - (qab * x) / qap
+  if (Math.abs(d) < BETACF_FPMIN) d = BETACF_FPMIN
+  d = 1 / d
+  let h = d
+
+  for (let m = 1; m <= maxIter; m += 1) {
+    const m2 = 2 * m
+    let aa = (m * (b - m) * x) / ((qam + m2) * (a + m2))
+    d = 1 + aa * d
+    if (Math.abs(d) < BETACF_FPMIN) d = BETACF_FPMIN
+    c = 1 + aa / c
+    if (Math.abs(c) < BETACF_FPMIN) c = BETACF_FPMIN
+    d = 1 / d
+    let delta = d * c
+    h *= delta
+
+    aa = -((a + m) * (qab + m) * x) / ((a + m2) * (qap + m2))
+    d = 1 + aa * d
+    if (Math.abs(d) < BETACF_FPMIN) d = BETACF_FPMIN
+    c = 1 + aa / c
+    if (Math.abs(c) < BETACF_FPMIN) c = BETACF_FPMIN
+    d = 1 / d
+    delta = d * c
+    h *= delta
+
+    if (Math.abs(delta - 1) < BETACF_EPS) {
+      break
+    }
   }
-  const betaFunc = (a:number,b:number) => Math.exp(lgamma(a)+lgamma(b)-lgamma(a+b))
-  return (h/3) * s / betaFunc(a,b)
+
+  return h
+}
+
+function betaCDF(
+  x: number,
+  a: number,
+  b: number,
+  logGammaA: number,
+  logGammaB: number,
+  logGammaSum: number,
+  mode: 'precise' | 'fast'
+): number {
+  if (x <= 0) return 0
+  if (x >= 1) return 1
+
+  const logBt = logGammaA + logGammaB - logGammaSum + a * Math.log(x) + b * Math.log(1 - x)
+  const switchPoint = (a + 1) / (a + b + 2)
+  const maxIter = mode === 'fast' ? BETACF_FAST_ITER : BETACF_MAX_ITER
+
+  if (x < switchPoint) {
+    const cf = betacf(a, b, x, maxIter)
+    const cfSafe = Math.max(cf, BETACF_FPMIN)
+    const logProduct = logBt - Math.log(a) + Math.log(cfSafe)
+    const result = expClamp(logProduct) * (cf / cfSafe)
+    return clamp01(result)
+  }
+
+  const cf = betacf(b, a, 1 - x, maxIter)
+  const cfSafe = Math.max(cf, BETACF_FPMIN)
+  const logProduct = logBt - Math.log(b) + Math.log(cfSafe)
+  const result = 1 - expClamp(logProduct) * (cf / cfSafe)
+  return clamp01(result)
 }
 
 // Lanczos approximation for log-gamma
@@ -53,33 +137,50 @@ function lgamma(z:number): number {
   return 0.5*Math.log(2*Math.PI) + (z+0.5)*Math.log(t) - t + Math.log(x) - Math.log(z)
 }
 
-function cumulativeFromDistribution(name: DistributionName, n: number, customCsv?: string): number[] {
+function cumulativeFromDistribution(
+  name: DistributionName,
+  n: number,
+  customCsv?: string,
+  mode: 'precise' | 'fast' = 'precise'
+): number[] {
+  const key = cacheKey(name, n, mode, customCsv)
+  const cached = distributionCache.get(key)
+  if (cached) {
+    return cached
+  }
+
+  let result: number[]
+
   if (name.startsWith('scs_')) {
     const base = (SCS_TABLES as any)[name] as number[]
     if (!base) {
-      console.warn(`SCS table for ${name} not found. Falling back to linear.`);
-      return linspace(n);
+      console.warn(`SCS table for ${name} not found. Falling back to linear.`)
+      result = linspace(n)
+    } else {
+      const m = base.length
+      const out: number[] = []
+      const denom = Math.max(1, n - 1)
+      for (let i = 0; i < n; i++) {
+        const t = i / denom
+        const idx = t * (m - 1)
+        const i0 = Math.floor(idx)
+        const i1 = Math.min(m - 1, i0 + 1)
+        const frac = idx - i0
+        out.push(base[i0] * (1 - frac) + base[i1] * frac)
+      }
+      result = out
     }
-    const m = base.length
-    const out: number[] = []
-    const denom = Math.max(1, n - 1)
-    for (let i = 0; i < n; i++) {
-      const t = i / denom
-      const idx = t*(m-1)
-      const i0 = Math.floor(idx)
-      const i1 = Math.min(m-1, i0+1)
-      const frac = idx - i0
-      out.push(base[i0]*(1-frac) + base[i1]*frac)
-    }
-    return out
+    distributionCache.set(key, result)
+    return result
   }
+
   if (name === 'user') {
     if (customCsv) {
-      const rows = customCsv.split(/\r?\n/).map(r => r.trim()).filter(Boolean)
+      const rows = customCsv.split(/\r?\n/).map((r) => r.trim()).filter(Boolean)
       const pts: [number, number][] = []
       for (const r of rows) {
         const parts = r.split(/[;,\s]+/).map((x) => Number(x))
-        if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+        if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
           pts.push([clamp01(parts[0]), clamp01(parts[1])])
         }
       }
@@ -90,7 +191,7 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
         for (let i = 0; i < n; i++) {
           const t = i / denom
           let j = 1
-          while (j < pts.length && pts[j][0] < t) j++
+          while (j < pts.length && pts[j][0] < t) j += 1
           const [x0, y0] = pts[Math.max(0, j - 1)]
           const [x1, y1] = pts[Math.min(pts.length - 1, j)]
           const frac = clamp01((t - x0) / Math.max(1e-9, x1 - x0))
@@ -110,23 +211,37 @@ function cumulativeFromDistribution(name: DistributionName, n: number, customCsv
             last = Math.max(last, next)
             normalized.push(last)
           }
+          distributionCache.set(key, normalized)
           return normalized
         }
       }
     }
-    return linspace(n)
+    result = linspace(n)
+    distributionCache.set(key, result)
+    return result
   }
+
   const preset = (BETA_PRESETS as any)[name] as [number, number] | undefined
   if (!preset) {
-    return linspace(n)
+    result = linspace(n)
+    distributionCache.set(key, result)
+    return result
   }
+
   const [a, b] = preset
-  const out = linspace(n).map((t) => betaCDF(t, a, b))
+  const logGammaA = lgamma(a)
+  const logGammaB = lgamma(b)
+  const logGammaSum = lgamma(a + b)
+  const out = linspace(n).map((t) => betaCDF(t, a, b, logGammaA, logGammaB, logGammaSum, mode))
   const maxv = out[out.length - 1] || 0
   if (maxv <= 0) {
-    return linspace(n)
+    result = linspace(n)
+    distributionCache.set(key, result)
+    return result
   }
-  return out.map((v) => v / maxv)
+  result = out.map((v) => v / maxv)
+  distributionCache.set(key, result)
+  return result
 }
 
 export function getBestScsDistribution(
@@ -167,7 +282,15 @@ export function getBestScsDistribution(
 
 
 export function generateStorm(params: StormParams): StormResult {
-  const { depthIn, durationHr, timestepMin, distribution, customCurveCsv, durationMode } = params
+  const {
+    depthIn,
+    durationHr,
+    timestepMin,
+    distribution,
+    customCurveCsv,
+    durationMode,
+    computationMode = 'precise'
+  } = params
   const durationMin = durationHr * 60
 
   if (durationMin <= 0 || timestepMin <= 0) {
@@ -179,9 +302,9 @@ export function generateStorm(params: StormParams): StormResult {
     }
   }
 
-  let finalDistribution = distribution;
+  let finalDistribution = distribution
   if (distribution.startsWith('scs_')) {
-      finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom');
+    finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
   }
 
   const n = Math.ceil(durationMin / timestepMin) + 1
@@ -191,18 +314,26 @@ export function generateStorm(params: StormParams): StormResult {
   })
 
   const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
-  const baseCumulative = cumulativeFromDistribution(finalDistribution, n, customCurveCsv)
+  const sampleCount = computationMode === 'fast' ? Math.min(n, MAX_FAST_SAMPLES) : n
+  const baseSamples = cumulativeFromDistribution(
+    finalDistribution,
+    sampleCount,
+    customCurveCsv,
+    computationMode
+  )
+  const baseCumulative = baseSamples.length > 0 ? baseSamples : [0]
+  const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
 
   const cumulativeIn = normalizedTimes.map((nt) => {
-    if (n === 1) {
+    if (n === 1 || baseCumulative.length === 1) {
       return (baseCumulative[0] ?? 0) * depthIn
     }
-    const scaled = clamp01(nt) * (n - 1)
-    const i0 = Math.floor(scaled)
-    const i1 = Math.min(n - 1, i0 + 1)
-    const frac = scaled - i0
-    const v0 = baseCumulative[i0] ?? baseCumulative[n - 1] ?? 0
-    const v1 = baseCumulative[i1] ?? baseCumulative[n - 1] ?? v0
+    const scaledIndex = clamp01(nt) * sampleLastIndex
+    const lowerIndex = Math.min(baseCumulative.length - 1, Math.floor(scaledIndex))
+    const upperIndex = Math.min(baseCumulative.length - 1, lowerIndex + 1)
+    const frac = upperIndex === lowerIndex ? 0 : scaledIndex - lowerIndex
+    const v0 = baseCumulative[lowerIndex] ?? baseCumulative[baseCumulative.length - 1] ?? 0
+    const v1 = baseCumulative[upperIndex] ?? baseCumulative[baseCumulative.length - 1] ?? v0
     return (v0 * (1 - frac) + v1 * frac) * depthIn
   })
 
