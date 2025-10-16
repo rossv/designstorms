@@ -1667,20 +1667,6 @@
           <div class="small">Tip: Click a table cell to apply the depth, duration, and Average Recurrence Interval to the storm parameters.</div>
         {/if}
 
-        <div class="duration-mode-controls">
-          <div class="duration-mode-select">
-            <label for="duration-mode">Duration Mode</label>
-            <select id="duration-mode" bind:value={durationMode}>
-              <option value="standard">Standard (6, 12, 24-hr)</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-          {#if durationMode === 'custom'}
-            <div class="disclaimer">
-              <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
-            </div>
-          {/if}
-        </div>
       </div>
 
       <div class="panel">
