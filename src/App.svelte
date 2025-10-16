@@ -71,6 +71,7 @@
   let selectedAri = 10
   let selectedDepth = 1.0
   let selectedDurationHr = 24
+  let selectedDurationPreset = String(DEFAULT_DURATION_HOURS)
   let durationMode: 'standard' | 'custom' = 'standard'
   let computationMode: 'precise' | 'fast' = 'precise'
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
@@ -1095,6 +1096,17 @@
     }
   }
 
+  $: if (durationMode === 'standard') {
+    const durationHr = ensureNumericDuration()
+    const fallbackDuration = Number.isFinite(durationHr)
+      ? nearestStandardDuration(durationHr)
+      : DEFAULT_DURATION_HOURS
+    const normalizedPreset = String(fallbackDuration)
+    if (selectedDurationPreset !== normalizedPreset) {
+      selectedDurationPreset = normalizedPreset
+    }
+  }
+
   function recalcFromAri() {
     const durationHr = ensureNumericDuration();
     if (!Number.isFinite(selectedAri) || !Number.isFinite(durationHr)) {
@@ -1168,6 +1180,21 @@
     }
 
     recalcFromDepthOrDuration();
+  }
+
+  function handleStandardDurationChange(event: Event) {
+    if (event?.currentTarget instanceof HTMLSelectElement) {
+      const raw = event.currentTarget.value;
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        selectedDurationHr = parsed;
+      }
+      if (selectedDurationPreset !== raw) {
+        selectedDurationPreset = raw;
+      }
+    }
+
+    handleDurationInput();
   }
 
   function handleAriInput() {
@@ -1868,7 +1895,11 @@
             <div class="storm-card input-card input-card--duration">
               <label for="duration">Duration (hr)</label>
               {#if durationMode === 'standard'}
-                <select id="duration" bind:value={selectedDurationHr} on:change={handleDurationInput}>
+                <select
+                  id="duration"
+                  bind:value={selectedDurationPreset}
+                  on:change={handleStandardDurationChange}
+                >
                   <option value={6}>6-hr</option>
                   <option value={12}>12-hr</option>
                   <option value={24}>24-hr</option>
