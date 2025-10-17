@@ -2773,6 +2773,12 @@
     text-transform: uppercase;
     color: var(--muted);
     text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .ari-label {
@@ -2818,8 +2824,12 @@
     flex-direction: column;
     justify-content: center;
     gap: 2px;
-    background: rgba(15, 23, 42, 0.55);
+    background: rgba(15, 23, 42, 0.75);
     font-size: 12px;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .ari-value {
