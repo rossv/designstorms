@@ -519,7 +519,7 @@
       }
     }
 
-    const targetHours = 10 * 24
+    const targetHours = toHours('10 year')
     let bestIndex = -1
     let bestDiff = Number.POSITIVE_INFINITY
 
