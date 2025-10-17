@@ -2727,6 +2727,32 @@
     }
   }
 
+  @media (max-width: 540px) {
+    .storm-form__header {
+      gap: 20px;
+    }
+
+    .mode-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .mode-toggle-groups {
+      width: 100%;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .mode-toggle {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .mode-toggle button {
+      flex: 1 1 50%;
+    }
+  }
+
   .checkbox {
     display: flex;
     align-items: center;
