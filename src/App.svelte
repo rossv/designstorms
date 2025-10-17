@@ -528,8 +528,10 @@
     return bestIndex >= 0 ? bestIndex : null
   }
 
+  $: isCustomDurationMode = $durationMode === 'custom'
+
   function durationIsSelectable(label: string) {
-    if ($durationMode === 'custom') {
+    if (isCustomDurationMode) {
       return true
     }
     return durationLabelIsStandard(label)
@@ -1064,10 +1066,12 @@
     }
   }
 
+  $: interpolatedCellKeys = new Set(
+    interpolatedCells.map((cell) => `${cell.duration}::${cell.ari}`)
+  )
+
   function cellIsInterpolated(durationLabel: string, ari: string) {
-    return interpolatedCells.some(
-      (cell) => cell.duration === durationLabel && cell.ari === ari
-    )
+    return interpolatedCellKeys.has(`${durationLabel}::${ari}`)
   }
 
   function ensureNumericDuration() {
@@ -1747,7 +1751,7 @@
                   <span class="ari-label">Average Recurrence Interval (years)</span>
                 </div>
                 {#each durationEntriesForTable as entry}
-                  {@const isSelectable = durationIsSelectable(entry.label)}
+                  {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
                   <div class="table-header__duration" class:column-active={selectedDurationLabel === entry.label}>
                     <button
                       type="button"
@@ -1776,7 +1780,7 @@
                       <div class="ari-caption">years</div>
                     </div>
                     {#each durationEntriesForTable as entry}
-                      {@const isSelectable = durationIsSelectable(entry.label)}
+                      {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
                       {@const rawDepth = entry.row.values[ariKey]}
                       {@const depthValue = Number.isFinite(rawDepth) ? Number(rawDepth) : null}
                       {@const depthText = depthValue != null ? depthValue.toFixed(3) : ''}
