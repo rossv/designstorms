@@ -1745,7 +1745,7 @@
             <div class="noaa-table panel">
               <div
                 class="table-header"
-                style={`grid-template-columns: minmax(150px, auto) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
+                style={`grid-template-columns: minmax(0, var(--ari-column-width, 150px)) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
               >
                 <div class="table-header__ari">
                   <span class="ari-label">Average Recurrence Interval (years)</span>
@@ -1771,7 +1771,7 @@
                   <div
                     class="table-row"
                     class:ari-active={String($selectedAri) === ariKey}
-                    style={`grid-template-columns: minmax(150px, auto) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
+                    style={`grid-template-columns: minmax(0, var(--ari-column-width, 150px)) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
                   >
                     <div class="ari-cell">
                       <div class="ari-value">
@@ -2759,14 +2759,18 @@
     padding: 12px;
     display: flex;
     align-items: center;
+    justify-content: center;
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
+    text-align: center;
   }
 
   .ari-label {
     display: block;
+    white-space: normal;
+    line-height: 1.3;
   }
 
   .table-header__duration {
