@@ -3,7 +3,10 @@ import type { StormResult } from './types'
 export function saveCsv(storm: StormResult, filename = 'design_storm.csv') {
   const header = 'time_min,incremental_in,cumulative_in,intensity_in_hr\n'
   const rows = storm.timeMin
-    .map((t, i) => `${t},${storm.incrementalIn[i]},${storm.cumulativeIn[i]},${storm.intensityInHr[i]}`)
+    .map(
+      (t, i) =>
+        `${t.toFixed(5)},${storm.incrementalIn[i].toFixed(5)},${storm.cumulativeIn[i].toFixed(5)},${storm.intensityInHr[i].toFixed(5)}`,
+    )
     .join('\n')
   downloadText(header + rows, filename)
 }
@@ -59,7 +62,7 @@ export function formatPcswmmDat(
       m = ts.getMinutes()
     }
 
-    txt += `${gauge}\t${y}\t${mo}\t${d}\t${h}\t${m}\t${storm.intensityInHr[i].toPrecision(7)}\n`
+    txt += `${gauge}\t${y}\t${mo}\t${d}\t${h}\t${m}\t${storm.intensityInHr[i].toFixed(5)}\n`
   }
   return txt
 }
