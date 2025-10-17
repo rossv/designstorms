@@ -70,6 +70,7 @@
   let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
   let aris: string[] = []
+  let durationEntriesForTable: { label: string; row: NoaaRow; index: number }[] = []
   let selectedDurationLabel: string | null = null
   const DEFAULT_DURATION_HOURS = 24
   const MIN_DURATION_HOURS = 1 / 60
@@ -172,6 +173,9 @@
     ? $customCurveCsv
         .trim()
         .split(/\r?\n/)
+    : []
+  $: durationEntriesForTable = $tableStore
+    ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
     : []
   let showHelp = false
   let showCurveModal = false
@@ -722,15 +726,15 @@
       return
     }
 
-    const contourZ = durationEntries.map(({ row }) =>
-      ariEntries.map((entry) => {
-        const depth = row.values[entry.key]
+    const contourZ = ariEntries.map((ariEntry) =>
+      durationEntries.map(({ row }) => {
+        const depth = row.values[ariEntry.key]
         return Number.isFinite(depth) ? Number(depth) : null
       })
     )
 
-    const customData = durationEntries.map((entry) =>
-      ariEntries.map(() => entry.label)
+    const customData = ariEntries.map((ariEntry) =>
+      durationEntries.map((entry) => [entry.label, ariEntry.key])
     )
 
     const finiteDepths = contourZ
@@ -767,8 +771,8 @@
     const maxXTicks = Math.max(3, Math.floor((width || 1) / 70))
     const maxYTicks = Math.max(4, Math.floor((height || 1) / 38))
 
-    const filteredAriEntries = reduceTickEntries(ariEntries, maxXTicks)
-    const filteredDurationEntries = reduceTickEntries(durationEntries, maxYTicks)
+    const filteredDurationEntries = reduceTickEntries(durationEntries, maxXTicks)
+    const filteredAriEntries = reduceTickEntries(ariEntries, maxYTicks)
 
     const colorbar: Partial<ColorBar> = {
       title: {
@@ -800,8 +804,8 @@
 
     const contourTrace = {
       type: 'contour',
-      x: ariEntries.map((entry) => entry.value),
-      y: durationEntries.map((entry) => entry.hr),
+      x: durationEntries.map((entry) => entry.hr),
+      y: ariEntries.map((entry) => entry.value),
       z: contourZ,
       customdata: customData,
       contours: {
@@ -823,13 +827,13 @@
       ],
       colorbar,
       hovertemplate:
-        'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<br>Depth: %{z:.2f} in<extra></extra>',
+        'Duration: %{customdata[0]} (%{x:.2f} hr)<br>ARI: %{customdata[1]}-year<br>Depth: %{z:.2f} in<extra></extra>',
       showscale: true
     }
 
     const pointXs: number[] = []
     const pointYs: number[] = []
-    const pointLabels: string[] = []
+    const pointLabels: string[][] = []
     durationEntries.forEach((duration) => {
       const includeDuration =
         $durationMode !== 'standard' ||
@@ -844,9 +848,9 @@
       ariEntries.forEach((ari) => {
         const depth = duration.row.values[ari.key]
         if (Number.isFinite(depth)) {
-          pointXs.push(ari.value)
-          pointYs.push(duration.hr)
-          pointLabels.push(duration.label)
+          pointXs.push(duration.hr)
+          pointYs.push(ari.value)
+          pointLabels.push([duration.label, ari.key])
         }
       })
     })
@@ -864,7 +868,7 @@
         symbol: 'circle'
       },
       hovertemplate:
-        'ARI: %{x}<br>Duration: %{customdata} (%{y:.2f} hr)<extra></extra>',
+        'Duration: %{customdata[0]} (%{x:.2f} hr)<br>ARI: %{customdata[1]}-year<extra></extra>',
       name: 'NOAA data points',
       showlegend: false
     }
@@ -880,8 +884,8 @@
         highlightTrace = {
           type: 'scatter',
           mode: 'markers',
-          x: [highlightAri.value],
-          y: [highlightDuration.hr],
+          x: [highlightDuration.hr],
+          y: [highlightAri.value],
           marker: {
             color: '#f8fafc',
             size: 12,
@@ -890,9 +894,9 @@
           },
           name: 'Selected NOAA cell',
           showlegend: false,
-          hovertemplate: `ARI: ${highlightAri.value}<br>Duration: ${highlightDuration.label} (${highlightDuration.hr.toFixed(
+          hovertemplate: `Duration: ${highlightDuration.label} (${highlightDuration.hr.toFixed(
             2
-          )} hr)<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
+          )} hr)<br>ARI: ${highlightAri.value}-year<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
         }
       }
     }
@@ -906,20 +910,6 @@
       xaxis: {
         ...plotLayoutBase.xaxis,
         title: {
-          text: 'Average Recurrence Interval (years)',
-          font: { size: isCompact ? 12 : undefined }
-        },
-        type: 'log',
-        tickmode: 'array',
-        tickvals: filteredAriEntries.map((entry) => entry.value),
-        ticktext: filteredAriEntries.map((entry) => entry.key),
-        tickangle: isCompact ? -45 : 0,
-        tickfont: { size: isCompact ? 10 : 12 },
-        automargin: true
-      },
-      yaxis: {
-        ...plotLayoutBase.yaxis,
-        title: {
           text: 'Duration (hr)',
           font: { size: isCompact ? 12 : undefined }
         },
@@ -927,6 +917,20 @@
         tickmode: 'array',
         tickvals: filteredDurationEntries.map((entry) => entry.hr),
         ticktext: filteredDurationEntries.map((entry) => entry.label),
+        tickangle: isCompact ? -45 : 0,
+        tickfont: { size: isCompact ? 10 : 12 },
+        automargin: true
+      },
+      yaxis: {
+        ...plotLayoutBase.yaxis,
+        title: {
+          text: 'Average Recurrence Interval (years)',
+          font: { size: isCompact ? 12 : undefined }
+        },
+        type: 'log',
+        tickmode: 'array',
+        tickvals: filteredAriEntries.map((entry) => entry.value),
+        ticktext: filteredAriEntries.map((entry) => entry.key),
         tickfont: { size: isCompact ? 10 : 12 },
         automargin: true
       },
@@ -954,8 +958,8 @@
       stormTrace = {
         type: 'scatter',
         mode: 'markers',
-        x: [$selectedAri],
-        y: [durationHrNumeric],
+        x: [durationHrNumeric],
+        y: [$selectedAri],
         marker: {
           color: '#ef4444',
           size: 16,
@@ -965,8 +969,8 @@
         name: 'Current storm parameters',
         showlegend: false,
         hovertemplate: `Current Storm` +
-          `<br>ARI: ${$selectedAri}` +
           `<br>Duration: ${durationHrNumeric.toFixed(2)} hr` +
+          `<br>ARI: ${$selectedAri}` +
           depthText +
           '<extra></extra>'
       }
@@ -1003,7 +1007,7 @@
 
     const nearestAri = ariEntries.reduce(
       (best, entry) => {
-        const diff = Math.abs(entry.value - point.x)
+        const diff = Math.abs(entry.value - point.y)
         return diff < best.diff ? { diff, entry } : best
       },
       { diff: Number.POSITIVE_INFINITY, entry: ariEntries[0] }
@@ -1011,7 +1015,7 @@
 
     const nearestDuration = durationEntries.reduce(
       (best, entry) => {
-        const diff = Math.abs(entry.hr - point.y)
+        const diff = Math.abs(entry.hr - point.x)
         return diff < best.diff ? { diff, entry } : best
       },
       { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
@@ -1606,24 +1610,24 @@
   afterUpdate(() => {
     if (pendingNoaaScrollIndex != null && noaaTableScrollEl) {
       const target = noaaTableScrollEl.querySelector<HTMLButtonElement>(
-        `.duration-btn[data-row-index="${pendingNoaaScrollIndex}"]`
+        `.duration-btn[data-column-index="${pendingNoaaScrollIndex}"]`
       )
       if (target) {
         const container = noaaTableScrollEl
         const targetRect = target.getBoundingClientRect()
         const containerRect = container.getBoundingClientRect()
 
-        const offsetWithinContainer = targetRect.top - containerRect.top + container.scrollTop
-        const targetCenter = offsetWithinContainer + targetRect.height / 2
-        const desiredScrollTop = Math.max(0, targetCenter - container.clientHeight / 2)
+        const offsetWithinContainer = targetRect.left - containerRect.left + container.scrollLeft
+        const targetCenter = offsetWithinContainer + targetRect.width / 2
+        const desiredScrollLeft = Math.max(0, targetCenter - container.clientWidth / 2)
 
         if (typeof container.scrollTo === 'function') {
-          container.scrollTo({ top: desiredScrollTop })
+          container.scrollTo({ left: desiredScrollLeft, behavior: 'smooth' })
         } else {
-          container.scrollTop = desiredScrollTop
+          container.scrollLeft = desiredScrollLeft
         }
-        pendingNoaaScrollIndex = null
       }
+      pendingNoaaScrollIndex = null
     }
 
     attachTableScrollObserver()
@@ -1735,58 +1739,61 @@
         {#if $tableStore}
           <div class="noaa-table-scroll" bind:this={noaaTableScrollEl}>
             <div class="noaa-table panel">
-              <div class="table-header">
-                <div>
-                  <strong>Duration</strong>
-                </div>
-                <div class="ari-header">
+              <div
+                class="table-header"
+                style={`grid-template-columns: minmax(150px, auto) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
+              >
+                <div class="table-header__ari">
                   <span class="ari-label">Average Recurrence Interval (years)</span>
-                  <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
-                    {#each aris as a}
-                      <div><strong>{a}</strong></div>
-                    {/each}
-                  </div>
                 </div>
+                {#each durationEntriesForTable as entry}
+                  {@const isSelectable = durationIsSelectable(entry.label)}
+                  <div class="table-header__duration" class:column-active={selectedDurationLabel === entry.label}>
+                    <button
+                      type="button"
+                      class="table-button duration-btn"
+                      class:active={selectedDurationLabel === entry.label}
+                      data-column-index={entry.index}
+                      disabled={!isSelectable}
+                      on:click={() => pickCell(entry.label, String($selectedAri))}
+                    >
+                      {entry.label}
+                    </button>
+                  </div>
+                {/each}
               </div>
               <div class="table-body">
-                {#each $tableStore.rows as row, index}
-                  {@const isSelectable =
-                    $durationMode === 'custom' || durationLabelIsStandard(row.label)}
+                {#each aris as ariKey}
                   <div
-                    class={`table-row ${selectedDurationLabel === row.label ? 'active' : ''} ${
-                      isSelectable ? '' : 'disabled'
-                    }`}
+                    class="table-row"
+                    class:ari-active={String($selectedAri) === ariKey}
+                    style={`grid-template-columns: minmax(150px, auto) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
                   >
-                    <div>
+                    <div class="ari-cell">
+                      <div class="ari-value">
+                        <strong>{ariKey}</strong>
+                      </div>
+                      <div class="ari-caption">years</div>
+                    </div>
+                    {#each durationEntriesForTable as entry}
+                      {@const isSelectable = durationIsSelectable(entry.label)}
+                      {@const rawDepth = entry.row.values[ariKey]}
+                      {@const depthValue = Number.isFinite(rawDepth) ? Number(rawDepth) : null}
+                      {@const depthText = depthValue != null ? depthValue.toFixed(3) : ''}
                       <button
                         type="button"
-                        class={`table-button duration-btn ${selectedDurationLabel === row.label ? 'active' : ''}`}
-                        data-row-index={index}
+                        class="table-button cell"
+                        class:selected={selectedDurationLabel === entry.label && String($selectedAri) === ariKey}
+                        class:column-active={selectedDurationLabel === entry.label}
+                        class:interpolated={cellIsInterpolated(entry.label, ariKey)}
                         disabled={!isSelectable}
-                        on:click={() => pickCell(row.label, String($selectedAri))}
+                        data-ari={ariKey}
+                        aria-label={`${entry.label} duration, ${ariKey}-year Average Recurrence Interval depth ${depthText ? `${depthText} in` : 'not available'}`}
+                        on:click={() => pickCell(entry.label, ariKey)}
                       >
-                        {row.label}
+                        {depthText}
                       </button>
-                    </div>
-                    <div class="grid aris" style={`grid-template-columns: repeat(${aris.length}, minmax(60px, 1fr));`}>
-                      {#each aris as a}
-                        {@const depth = Number.isFinite(row.values[a]) ? row.values[a].toFixed(3) : ''}
-                        <button
-                          type="button"
-                          class={`table-button cell ${
-                            selectedDurationLabel === row.label && String($selectedAri) === a
-                              ? 'selected'
-                              : ''
-                          } ${cellIsInterpolated(row.label, a) ? 'interpolated' : ''}`}
-                          disabled={!isSelectable}
-                          data-ari={a}
-                          aria-label={`${a}-year Average Recurrence Interval depth ${depth ? `${depth} in` : 'not available'} for ${row.label}`}
-                          on:click={() => pickCell(row.label, a)}
-                        >
-                          {depth}
-                        </button>
-                      {/each}
-                    </div>
+                    {/each}
                   </div>
                 {/each}
               </div>
@@ -2719,7 +2726,7 @@
   .noaa-table-scroll {
     margin-top: 16px;
     border-radius: 16px;
-    overflow-x: auto;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -2728,12 +2735,15 @@
     overflow: visible;
     width: max-content;
     min-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
 
   .table-header,
   .table-row {
     display: grid;
-    grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+    align-items: stretch;
   }
 
   .table-header {
@@ -2741,23 +2751,28 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .ari-header {
+  .table-header__ari {
+    padding: 12px;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .ari-label {
+    align-items: center;
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
   }
 
-  .table-header > div,
-  .table-row > div {
-    padding: 10px;
-    font-size: 12px;
+  .ari-label {
+    display: block;
+  }
+
+  .table-header__duration {
+    border-left: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    align-items: stretch;
+  }
+
+  .table-header__duration.column-active {
+    background: rgba(110, 231, 255, 0.12);
   }
 
   .table-body {
@@ -2766,23 +2781,41 @@
   }
 
   .table-row {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .table-row:last-child {
+    border-bottom: none;
   }
 
   .table-row:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(110, 231, 255, 0.08);
   }
 
-  .table-row.active {
-    background: rgba(110, 231, 255, 0.06);
+  .table-row.ari-active {
+    background: rgba(110, 231, 255, 0.12);
   }
 
-  .table-row.disabled {
-    opacity: 0.45;
+  .ari-cell {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    background: rgba(15, 23, 42, 0.55);
+    font-size: 12px;
   }
 
-  .table-row.disabled:hover {
-    background: transparent;
+  .ari-value {
+    font-size: 13px;
+    letter-spacing: 0.04em;
+  }
+
+  .ari-caption {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .table-button {
@@ -2790,15 +2823,11 @@
     border: none;
     color: inherit;
     font: inherit;
-    padding: 8px 10px;
-    text-align: left;
+    padding: 10px 12px;
     width: 100%;
     cursor: pointer;
     border-radius: 0;
-  }
-
-  .table-button:hover {
-    background: rgba(110, 231, 255, 0.12);
+    text-align: center;
   }
 
   .table-button:focus-visible {
@@ -2806,15 +2835,9 @@
     outline-offset: -2px;
   }
 
-  .table-button:disabled,
-  .table-button.disabled {
-    color: rgba(231, 231, 231, 0.4);
+  .table-button:disabled {
     cursor: not-allowed;
-  }
-
-  .table-button:disabled:hover,
-  .table-button.disabled:hover {
-    background: transparent;
+    opacity: 0.5;
   }
 
   .duration-btn {
@@ -2822,26 +2845,25 @@
   }
 
   .duration-btn.active {
-    background: rgba(110, 231, 255, 0.08);
-  }
-
-  .aris {
-    gap: 0;
-    border-left: 1px solid rgba(255, 255, 255, 0.04);
-    min-width: max-content;
+    background: rgba(110, 231, 255, 0.18);
+    color: #04131c;
   }
 
   .table-button.cell {
-    text-align: center;
     border-left: 1px solid rgba(255, 255, 255, 0.04);
   }
 
-  .table-button.cell:first-child {
-    border-left: none;
+  .table-button.cell.column-active {
+    background: rgba(110, 231, 255, 0.12);
   }
 
-  .table-button.cell:hover {
-    background: rgba(110, 231, 255, 0.12);
+  .table-button.cell:hover:not(:disabled) {
+    background: rgba(110, 231, 255, 0.18);
+    color: #04131c;
+  }
+
+  .table-button.cell.column-active:hover:not(:disabled) {
+    background: rgba(110, 231, 255, 0.24);
   }
 
   .table-button.cell.selected {
@@ -2855,109 +2877,32 @@
   }
 
   .table-button.cell.interpolated {
-    background: rgba(249, 115, 22, 0.4);
+    background: rgba(249, 115, 22, 0.6);
     color: #04131c;
     font-weight: 600;
   }
 
   .table-button.cell.interpolated:hover {
-    background: rgba(249, 115, 22, 0.55);
+    background: rgba(249, 115, 22, 0.75);
+  }
+
+  @media (max-width: 720px) {
+    .table-button {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .ari-cell {
+      padding: 10px;
+    }
+
+    .table-header__ari {
+      font-size: 10px;
+    }
   }
 
   textarea {
     resize: vertical;
-  }
-
-  @media (max-width: 600px) {
-    .noaa-table-scroll {
-      overflow-x: visible;
-    }
-
-    .noaa-table {
-      width: 100%;
-      min-width: 0;
-    }
-
-    .table-header {
-      display: none;
-    }
-
-    .table-body {
-      max-height: none;
-      overflow: visible;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 12px;
-    }
-
-    .table-row {
-      grid-template-columns: 1fr;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.02);
-      overflow: hidden;
-    }
-
-    .table-row > div {
-      padding: 0;
-    }
-
-    .table-row > div:first-child {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .table-row.active {
-      background: rgba(110, 231, 255, 0.06);
-    }
-
-    .duration-btn {
-      text-align: center;
-      padding: 14px;
-    }
-
-    .duration-btn.active {
-      background: rgba(110, 231, 255, 0.12);
-    }
-
-    .aris {
-      border-left: none;
-      padding: 12px;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .table-button.cell {
-      border-left: none;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      text-align: left;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-    }
-
-    .table-button.cell::before {
-      content: attr(data-ari) ' yr';
-      font-size: 11px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .table-button.cell.selected,
-    .table-button.cell.interpolated {
-      color: #04131c;
-    }
-
-    .table-button.cell.selected::before,
-    .table-button.cell.interpolated::before {
-      color: rgba(4, 19, 28, 0.7);
-    }
   }
 
   .actions {
