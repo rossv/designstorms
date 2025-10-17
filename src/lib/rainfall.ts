@@ -36,6 +36,9 @@ export function toHours(label: string): number {
   if (normalized.includes('min')) {
     return value / 60
   }
+  if (normalized.includes('year') || normalized.includes('yr')) {
+    return value * 24 * 365
+  }
   if (normalized.includes('hr') || normalized.includes('hour')) {
     return value
   }

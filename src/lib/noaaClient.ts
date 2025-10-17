@@ -30,7 +30,8 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
   return txt;
 }
 
-const DURATION_RE = /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days)\s*:?$/i;
+const DURATION_RE =
+  /^(\d+(?:\.\d+)?)\s*[- ]\s*(min|minute|minutes|hr|hour|hours|day|days|yr|yrs|year|years)\s*:?$/i;
 
 export function parseNoaaTable(txt: string): NoaaTable | null {
   const lines = txt
