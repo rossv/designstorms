@@ -227,4 +227,27 @@ describe('generateStorm', () => {
       expect(fast.cumulativeIn[i]).toBeGreaterThanOrEqual(fast.cumulativeIn[i - 1] - 1e-6)
     }
   })
+
+  it('keeps fast beta distributions within a small tolerance of precise output', () => {
+    const params = {
+      depthIn: 3,
+      durationHr: 12,
+      timestepMin: 5,
+      distribution: 'huff_q2' as const,
+      customCurveCsv: ''
+    }
+
+    const precise = generateStorm({ ...params, computationMode: 'precise' })
+    const fast = generateStorm({ ...params, computationMode: 'fast' })
+
+    expect(fast.timeMin.length).toBe(precise.timeMin.length)
+    expect(fast.cumulativeIn.at(-1)).toBeCloseTo(precise.cumulativeIn.at(-1) ?? 0, 6)
+
+    const maxDiff = fast.cumulativeIn.reduce((max, value, index) => {
+      const baseline = precise.cumulativeIn[index] ?? 0
+      return Math.max(max, Math.abs(value - baseline))
+    }, 0)
+
+    expect(maxDiff).toBeLessThan(0.2)
+  })
 })

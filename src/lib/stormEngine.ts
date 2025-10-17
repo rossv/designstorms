@@ -14,6 +14,7 @@ const BETACF_FPMIN = Number.MIN_VALUE / BETACF_EPS
 const MAX_LOG_EXP = 709
 const MIN_LOG_EXP = -745
 const EXP_MAX_VALUE = Math.exp(MAX_LOG_EXP)
+const LOG_PDF_CLAMP = 1e-12
 
 export const SCS_AVAILABLE_DURATIONS: Record<string, number[]> = Object.keys(SCS_TABLES)
   .reduce((acc, key) => {
@@ -94,6 +95,77 @@ function betacf(a: number, b: number, x: number, maxIter: number): number {
   }
 
   return h
+}
+
+function betaCumulativeFast(n: number, a: number, b: number): number[] {
+  if (n <= 0) {
+    return []
+  }
+
+  if (n === 1) {
+    return [0]
+  }
+
+  const bins = n - 1
+  const logValues: number[] = []
+
+  for (let i = 0; i < bins; i += 1) {
+    const x = (i + 0.5) / bins
+    const clampedX = Math.min(1 - LOG_PDF_CLAMP, Math.max(LOG_PDF_CLAMP, x))
+    const clampedOneMinusX = Math.min(1 - LOG_PDF_CLAMP, Math.max(LOG_PDF_CLAMP, 1 - x))
+    const logValue =
+      (a - 1) * Math.log(clampedX) + (b - 1) * Math.log(clampedOneMinusX)
+    logValues.push(Number.isFinite(logValue) ? logValue : Number.NEGATIVE_INFINITY)
+  }
+
+  let maxLog = Number.NEGATIVE_INFINITY
+  for (const value of logValues) {
+    if (Number.isFinite(value) && value > maxLog) {
+      maxLog = value
+    }
+  }
+
+  if (!Number.isFinite(maxLog)) {
+    const uniform = 1 / bins
+    const cumulative: number[] = [0]
+    let total = 0
+    for (let i = 0; i < bins; i += 1) {
+      total += uniform
+      cumulative.push(total)
+    }
+    cumulative[cumulative.length - 1] = 1
+    return cumulative
+  }
+
+  const pdf: number[] = new Array(bins)
+  let sum = 0
+  for (let i = 0; i < bins; i += 1) {
+    const value = Math.exp(logValues[i] - maxLog)
+    pdf[i] = value
+    sum += value
+  }
+
+  if (!Number.isFinite(sum) || sum <= 0) {
+    const uniform = 1 / bins
+    const cumulative: number[] = [0]
+    let total = 0
+    for (let i = 0; i < bins; i += 1) {
+      total += uniform
+      cumulative.push(total)
+    }
+    cumulative[cumulative.length - 1] = 1
+    return cumulative
+  }
+
+  const cumulative: number[] = [0]
+  let total = 0
+  for (let i = 0; i < bins; i += 1) {
+    total += pdf[i] / sum
+    cumulative.push(total)
+  }
+
+  cumulative[cumulative.length - 1] = 1
+  return cumulative
 }
 
 function betaCDF(
@@ -252,17 +324,21 @@ function cumulativeFromDistribution(
   }
 
   const [a, b] = preset
-  const logGammaA = lgamma(a)
-  const logGammaB = lgamma(b)
-  const logGammaSum = lgamma(a + b)
-  const out = linspace(n).map((t) => betaCDF(t, a, b, logGammaA, logGammaB, logGammaSum, mode))
-  const maxv = out[out.length - 1] || 0
-  if (maxv <= 0) {
-    result = linspace(n)
-    distributionCache.set(key, result)
-    return result
+  if (mode === 'fast') {
+    result = betaCumulativeFast(n, a, b)
+  } else {
+    const logGammaA = lgamma(a)
+    const logGammaB = lgamma(b)
+    const logGammaSum = lgamma(a + b)
+    const out = linspace(n).map((t) => betaCDF(t, a, b, logGammaA, logGammaB, logGammaSum, mode))
+    const maxv = out[out.length - 1] || 0
+    if (maxv <= 0) {
+      result = linspace(n)
+      distributionCache.set(key, result)
+      return result
+    }
+    result = out.map((v) => v / maxv)
   }
-  result = out.map((v) => v / maxv)
   distributionCache.set(key, result)
   return result
 }
