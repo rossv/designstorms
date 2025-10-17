@@ -162,6 +162,14 @@
     }
   }
 
+  function formatYearLabel(value: number | string) {
+    const numeric = typeof value === 'string' ? Number.parseFloat(value) : value
+    if (!Number.isFinite(numeric)) {
+      return 'years'
+    }
+    return numeric <= 1 ? 'year' : 'years'
+  }
+
   let interpolatedCells: InterpolationCell[] = []
   type NoaaRow = NoaaTable['rows'][number]
 
@@ -1777,7 +1785,7 @@
                       <div class="ari-value">
                         <strong>{ariKey}</strong>
                       </div>
-                      <div class="ari-caption">years</div>
+                      <div class="ari-caption">{formatYearLabel(ariKey)}</div>
                     </div>
                     {#each durationEntriesForTable as entry}
                       {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
@@ -2019,7 +2027,7 @@
           </div>
           <div class="stat-box">
             <div class="stat-title">Selected Average Recurrence Interval</div>
-            <div class="stat-value">{$selectedAri} years</div>
+            <div class="stat-value">{$selectedAri} {formatYearLabel($selectedAri)}</div>
           </div>
         </div>
       </div>
