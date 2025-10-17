@@ -76,8 +76,19 @@
   const MIN_DURATION_HOURS = 1 / 60
   const DEFAULT_ARI_YEARS = 2
 
-  let selectedDurationPreset = String(DEFAULT_DURATION_HOURS)
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
+
+  type StandardDurationValue = `${(typeof STANDARD_DURATION_HOURS)[number]}`
+
+  const STANDARD_DURATION_PRESETS = STANDARD_DURATION_HOURS.map((hours) => ({
+    hours,
+    value: String(hours) as StandardDurationValue,
+    label: `${hours}-hr`
+  }))
+
+  let selectedDurationPreset: StandardDurationValue = String(
+    DEFAULT_DURATION_HOURS
+  ) as StandardDurationValue
 
   const SCS_COMPARISON_DISTRIBUTIONS: DistributionName[] = [
     'scs_type_i',
@@ -1143,7 +1154,7 @@
     const fallbackDuration = Number.isFinite(durationHr)
       ? nearestStandardDuration(durationHr)
       : DEFAULT_DURATION_HOURS
-    const normalizedPreset = String(fallbackDuration)
+    const normalizedPreset = String(fallbackDuration) as StandardDurationValue
     if (selectedDurationPreset !== normalizedPreset) {
       selectedDurationPreset = normalizedPreset
     }
@@ -1224,12 +1235,16 @@
   function handleStandardDurationChange(event: Event) {
     if (event?.currentTarget instanceof HTMLSelectElement) {
       const raw = event.currentTarget.value;
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed)) {
-        $selectedDurationHr = parsed;
-      }
-      if (selectedDurationPreset !== raw) {
-        selectedDurationPreset = raw;
+      const preset = STANDARD_DURATION_PRESETS.find(
+        (option) => option.value === raw
+      );
+      if (preset) {
+        if (Number.isFinite(preset.hours)) {
+          $selectedDurationHr = preset.hours;
+        }
+        if (selectedDurationPreset !== preset.value) {
+          selectedDurationPreset = preset.value;
+        }
       }
     }
 
@@ -1959,9 +1974,9 @@
                   bind:value={selectedDurationPreset}
                   on:change={handleStandardDurationChange}
                 >
-                  <option value={6}>6-hr</option>
-                  <option value={12}>12-hr</option>
-                  <option value={24}>24-hr</option>
+                  {#each STANDARD_DURATION_PRESETS as option}
+                    <option value={option.value}>{option.label}</option>
+                  {/each}
                 </select>
               {:else}
                 <NumericStepper
