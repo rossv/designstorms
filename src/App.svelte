@@ -1294,7 +1294,6 @@
 
   function handleStandardDurationChange(event: Event) {
     if (!(event?.currentTarget instanceof HTMLSelectElement)) {
-      // Fallback if not triggered by the select element, though less likely now
       handleDurationInput();
       return;
     }
@@ -1315,13 +1314,12 @@
       // Now apply the preset logic to update NOAA selection based on the NEW hours
       applyStandardPreset(nextHours);
 
-      // Trigger recalculations based on the updated duration/depth/ARI from applyStandardPreset
-      // Note: applyStandardPreset calls pickCell, which updates depth/ARI,
-      // which should trigger the necessary reactive updates for the storm.
-      // If pickCell doesn't trigger everything, explicitly call recalcFromAri or recalcFromDepthOrDuration here.
-      // Example: recalcFromAri(); // or recalcFromDepthOrDuration(); depending on desired interpolation logic
+      // The updates within applyStandardPreset/pickCell should trigger reactivity.
+      // If needed, uncomment one of these lines:
+      // recalcFromAri();
+      // recalcFromDepthOrDuration();
     } else {
-       // If hours didn't change numerically, still might need recalculation if other implicit states changed.
+       // If hours didn't change numerically, consider if a recalc is needed.
        // handleDurationInput(); // Or call specific recalc function if needed.
     }
   }
