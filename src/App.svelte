@@ -1261,7 +1261,43 @@
           (row) => Math.abs(toHours(row.label) - nextHours) < 1e-6
         );
         if (matchingRow) {
-          selectedDurationLabel = matchingRow.label;
+          const currentDepth = Number($selectedDepth);
+          const currentAri = Number($selectedAri);
+          const hasDepth = Number.isFinite(currentDepth);
+          const hasAri = Number.isFinite(currentAri);
+
+          let bestAriKey: string | null = null;
+          let bestScore = Number.POSITIVE_INFINITY;
+
+          for (const ariKey of table.aris) {
+            const depthValue = matchingRow.values[ariKey];
+            if (!Number.isFinite(depthValue)) {
+              continue;
+            }
+            const numericDepth = Number(depthValue);
+
+            let score = 0;
+            if (hasDepth) {
+              score = Math.abs(numericDepth - currentDepth);
+            } else if (hasAri) {
+              const ariValue = Number(ariKey);
+              if (!Number.isFinite(ariValue)) {
+                continue;
+              }
+              score = Math.abs(ariValue - currentAri);
+            }
+
+            if (score < bestScore) {
+              bestScore = score;
+              bestAriKey = ariKey;
+            }
+          }
+
+          if (bestAriKey) {
+            pickCell(matchingRow.label, bestAriKey);
+          } else {
+            selectedDurationLabel = matchingRow.label;
+          }
         }
       }
     }
