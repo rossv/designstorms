@@ -1133,16 +1133,8 @@
     interpolatedCells = result.highlight ?? []
   }
 
-    if (selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)) {
-      selectedDurationLabel = null
-      adjusted = true
-    }
-    if (adjusted) {
-      recalcFromDepthOrDuration()
-    }
-  }
-
   $: if ($durationMode === 'standard') {
+    let adjusted = false
     const parsedDuration = Number($selectedDurationHr)
     if (Number.isFinite(parsedDuration) && $selectedDurationHr !== parsedDuration) {
       $selectedDurationHr = parsedDuration
@@ -1154,6 +1146,22 @@
     const normalizedPreset = String(fallbackDuration) as StandardDurationValue
     if (selectedDurationPreset !== normalizedPreset) {
       selectedDurationPreset = normalizedPreset
+    }
+
+    if (Number.isFinite(parsedDuration) && !matchesStandardDurationHours(parsedDuration)) {
+      const nearest = nearestStandardDuration(parsedDuration)
+      if ($selectedDurationHr !== nearest) {
+        $selectedDurationHr = nearest
+        adjusted = true
+      }
+    }
+
+    if (selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)) {
+      selectedDurationLabel = null
+      adjusted = true
+    }
+    if (adjusted) {
+      recalcFromDepthOrDuration()
     }
   }
 
