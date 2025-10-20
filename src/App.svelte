@@ -1318,7 +1318,8 @@
       // If needed, uncomment one of these lines:
       // recalcFromAri();
       // recalcFromDepthOrDuration();
-    } else {
+    } 
+    else {
        // If hours didn't change numerically, consider if a recalc is needed.
        // handleDurationInput(); // Or call specific recalc function if needed.
     }
