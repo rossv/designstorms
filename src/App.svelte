@@ -1150,9 +1150,13 @@
   }
 
   $: if ($durationMode === 'standard') {
-    const durationHr = ensureNumericDuration()
-    const fallbackDuration = Number.isFinite(durationHr)
-      ? nearestStandardDuration(durationHr)
+    const parsedDuration = Number($selectedDurationHr)
+    if (Number.isFinite(parsedDuration) && $selectedDurationHr !== parsedDuration) {
+      $selectedDurationHr = parsedDuration
+    }
+
+    const fallbackDuration = Number.isFinite(parsedDuration)
+      ? nearestStandardDuration(parsedDuration)
       : DEFAULT_DURATION_HOURS
     const normalizedPreset = String(fallbackDuration) as StandardDurationValue
     if (selectedDurationPreset !== normalizedPreset) {
