@@ -1239,22 +1239,34 @@
   }
 
   function handleStandardDurationChange(event: Event) {
-    if (event?.currentTarget instanceof HTMLSelectElement) {
-      const raw = event.currentTarget.value;
-      const preset = STANDARD_DURATION_PRESETS.find(
-        (option) => option.value === raw
-      );
-      if (preset) {
-        if (Number.isFinite(preset.hours)) {
-          $selectedDurationHr = preset.hours;
-        }
-        if (selectedDurationPreset !== preset.value) {
-          selectedDurationPreset = preset.value;
+    if (!(event?.currentTarget instanceof HTMLSelectElement)) {
+      handleDurationInput();
+      return;
+    }
+
+    const rawValue = event.currentTarget.value as StandardDurationValue;
+    if (selectedDurationPreset !== rawValue) {
+      selectedDurationPreset = rawValue;
+    }
+
+    const nextHours = Number(rawValue);
+    if (Number.isFinite(nextHours) && $selectedDurationHr !== nextHours) {
+      $selectedDurationHr = nextHours;
+    }
+
+    if (Number.isFinite(nextHours)) {
+      const table = $tableStore;
+      if (table) {
+        const matchingRow = table.rows.find(
+          (row) => Math.abs(toHours(row.label) - nextHours) < 1e-6
+        );
+        if (matchingRow) {
+          selectedDurationLabel = matchingRow.label;
         }
       }
     }
 
-    handleDurationInput();
+    handleDurationInput(event);
   }
 
   function handleAriInput() {
