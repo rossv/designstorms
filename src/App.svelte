@@ -1133,15 +1133,6 @@
     interpolatedCells = result.highlight ?? []
   }
 
-  $: if ($durationMode === 'standard') {
-    let adjusted = false
-    if (!matchesStandardDurationHours($selectedDurationHr)) {
-      const nearest = nearestStandardDuration($selectedDurationHr)
-      if (nearest !== $selectedDurationHr) {
-        $selectedDurationHr = nearest
-        adjusted = true
-      }
-    }
     if (selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)) {
       selectedDurationLabel = null
       adjusted = true
@@ -1303,23 +1294,36 @@
 
   function handleStandardDurationChange(event: Event) {
     if (!(event?.currentTarget instanceof HTMLSelectElement)) {
+      // Fallback if not triggered by the select element, though less likely now
       handleDurationInput();
       return;
     }
 
     const rawValue = event.currentTarget.value as StandardDurationValue;
+    const nextHours = Number(rawValue); // Get the chosen hours (6, 12, or 24)
+
+    // Update the preset state variable bound to the select element
     if (selectedDurationPreset !== rawValue) {
       selectedDurationPreset = rawValue;
     }
 
-    const nextHours = Number(rawValue);
+    // Directly update the main duration state variable
     if (Number.isFinite(nextHours) && $selectedDurationHr !== nextHours) {
-      $selectedDurationHr = nextHours;
+      $selectedDurationHr = nextHours; // Set the hours correctly
+      lastChangedBy = 'user'; // Mark change as user-initiated
+
+      // Now apply the preset logic to update NOAA selection based on the NEW hours
+      applyStandardPreset(nextHours);
+
+      // Trigger recalculations based on the updated duration/depth/ARI from applyStandardPreset
+      // Note: applyStandardPreset calls pickCell, which updates depth/ARI,
+      // which should trigger the necessary reactive updates for the storm.
+      // If pickCell doesn't trigger everything, explicitly call recalcFromAri or recalcFromDepthOrDuration here.
+      // Example: recalcFromAri(); // or recalcFromDepthOrDuration(); depending on desired interpolation logic
+    } else {
+       // If hours didn't change numerically, still might need recalculation if other implicit states changed.
+       // handleDurationInput(); // Or call specific recalc function if needed.
     }
-
-    applyStandardPreset(nextHours);
-
-    handleDurationInput(event);
   }
 
   function handleAriInput() {
