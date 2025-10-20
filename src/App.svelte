@@ -111,8 +111,10 @@
   }
 
   const INITIAL_SCROLL_LABEL_PATTERNS = [
-    /\b10\s*[-–—]?\s*year/i,
-    /\b10\s*[-–—]?\s*yr/i,
+    /\b24\s*[-–—]?\s*hr\b/i,
+    /\b24\s*[-–—]?\s*hour/i,
+    /\b1\s*[-–—]?\s*day/i,
+    /\b1\s*[-–—]?\s*d\b/i,
     /\b10\s*[-–—]?\s*day/i,
     /\b10\s*[-–—]?\s*d\b/i
   ]
@@ -530,7 +532,7 @@
       }
     }
 
-    const targetHours = toHours('10 year')
+    const targetHours = toHours('24 hr')
     let bestIndex = -1
     let bestDiff = Number.POSITIVE_INFINITY
 
