@@ -67,6 +67,7 @@
   let lastFetchKey = ''
 
   let noaaTableScrollEl: HTMLDivElement | null = null
+  let observedNoaaScrollEl: HTMLDivElement | null = null
   let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
   let aris: string[] = []
@@ -283,6 +284,35 @@
       tableScrollObserver.observe(tableScrollEl)
     }
     observedTableScrollEl = tableScrollEl
+  }
+
+  const handleNoaaScroll = () => {
+    updateNoaaStickyOffset()
+  }
+
+  function attachNoaaScrollListener() {
+    if (observedNoaaScrollEl === noaaTableScrollEl) {
+      updateNoaaStickyOffset()
+      return
+    }
+
+    if (observedNoaaScrollEl) {
+      observedNoaaScrollEl.removeEventListener('scroll', handleNoaaScroll)
+    }
+
+    if (noaaTableScrollEl) {
+      noaaTableScrollEl.addEventListener('scroll', handleNoaaScroll, { passive: true })
+      observedNoaaScrollEl = noaaTableScrollEl
+      updateNoaaStickyOffset()
+    } else {
+      observedNoaaScrollEl = null
+    }
+  }
+
+  function updateNoaaStickyOffset() {
+    if (!noaaTableScrollEl) return
+
+    noaaTableScrollEl.style.setProperty('--noaa-scroll-left', `${noaaTableScrollEl.scrollLeft}px`)
   }
 
   function updateTableScrollHeight() {
@@ -1667,6 +1697,10 @@
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange)
     tableScrollObserver?.disconnect()
+    if (observedNoaaScrollEl) {
+      observedNoaaScrollEl.removeEventListener('scroll', handleNoaaScroll)
+      observedNoaaScrollEl = null
+    }
   })
 
   $: if (marker) {
@@ -1714,6 +1748,8 @@
 
     attachTableScrollObserver()
     updateTableScrollHeight()
+    attachNoaaScrollListener()
+    updateNoaaStickyOffset()
   })
 </script>
 
@@ -2836,6 +2872,8 @@
     border-radius: 16px;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    position: relative;
+    --noaa-scroll-left: 0px;
   }
 
   .noaa-table {
@@ -2869,12 +2907,13 @@
     text-transform: uppercase;
     color: var(--muted);
     text-align: center;
-    position: sticky;
-    left: 0;
+    position: relative;
     z-index: 3;
     background: rgba(15, 23, 42, 0.85);
     backdrop-filter: blur(4px);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
+    transform: translateX(var(--noaa-scroll-left));
+    will-change: transform;
   }
 
   .ari-label {
@@ -2922,10 +2961,11 @@
     gap: 2px;
     background: rgba(15, 23, 42, 0.75);
     font-size: 12px;
-    position: sticky;
-    left: 0;
+    position: relative;
     z-index: 2;
     border-right: 1px solid rgba(255, 255, 255, 0.06);
+    transform: translateX(var(--noaa-scroll-left));
+    will-change: transform;
   }
 
   .ari-value {
