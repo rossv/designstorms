@@ -82,7 +82,6 @@
 
   const STANDARD_DURATION_PRESETS = STANDARD_DURATION_HOURS.map((hours) => ({
     hours,
-    value: String(hours) as StandardDurationValue,
     label: `${hours}-hr`
   }))
 
@@ -207,7 +206,7 @@
 
   let lastStorm: StormResult | null = null
   
-  let lastChangedBy: 'user' | 'system' = 'user';
+  let lastChangedBy: 'user' | 'duration' = 'user';
   let recentlyRecalculated: 'ari' | 'depth' | 'duration' | null = null;
   let recalculationTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1134,42 +1133,30 @@
   }
 
   $: if ($durationMode === 'standard') {
-    let adjusted = false
-    const parsedDuration = Number($selectedDurationHr)
-    if (Number.isFinite(parsedDuration) && $selectedDurationHr !== parsedDuration) {
-      $selectedDurationHr = parsedDuration
-    }
-
-    const fallbackDuration = Number.isFinite(parsedDuration)
-      ? nearestStandardDuration(parsedDuration)
+    const numericDuration = Number($selectedDurationHr)
+    const presetHours = Number.isFinite(numericDuration)
+      ? nearestStandardDuration(numericDuration)
       : DEFAULT_DURATION_HOURS
-    const normalizedPreset = String(fallbackDuration) as StandardDurationValue
+    const normalizedPreset = String(presetHours) as StandardDurationValue
     if (selectedDurationPreset !== normalizedPreset) {
       selectedDurationPreset = normalizedPreset
     }
 
-    if (Number.isFinite(parsedDuration) && !matchesStandardDurationHours(parsedDuration)) {
-      const nearest = nearestStandardDuration(parsedDuration)
-      if ($selectedDurationHr !== nearest) {
-        $selectedDurationHr = nearest
-        adjusted = true
-      }
-    }
-
-    if (selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)) {
+    const needsNormalization = !Number.isFinite(numericDuration) || numericDuration !== presetHours
+    const hasNonStandardLabel = Boolean(
+      selectedDurationLabel && !durationLabelIsStandard(selectedDurationLabel)
+    )
+    if (hasNonStandardLabel) {
       selectedDurationLabel = null
-      adjusted = true
     }
-    if (adjusted) {
-      recalcFromDepthOrDuration()
-    }
-  }
 
-  $: if ($durationMode === 'standard') {
-    const presetHours = Number(selectedDurationPreset)
-    if (Number.isFinite(presetHours)) {
+    if (needsNormalization || lastChangedBy === 'user' || hasNonStandardLabel) {
+      if ($selectedDurationHr !== presetHours) {
+        $selectedDurationHr = presetHours
+      }
       applyStandardPreset(presetHours)
       recalcFromDepthOrDuration()
+      lastChangedBy = 'duration'
     }
   }
 
@@ -1302,39 +1289,21 @@
   }
 
   function handleStandardDurationChange(event: Event) {
-    if (!(event?.currentTarget instanceof HTMLSelectElement)) {
-      handleDurationInput();
-      return;
+    const target = event.currentTarget as HTMLSelectElement | null
+    if (!target) {
+      handleDurationInput()
+      return
     }
 
-    const rawValue = event.currentTarget.value as StandardDurationValue;
-    const nextHours = Number(rawValue); // Get the chosen hours (6, 12, or 24)
-
-    // Update the preset state variable bound to the select element
-    if (selectedDurationPreset !== rawValue) {
-      selectedDurationPreset = rawValue;
+    const nextHours = Number(target.value)
+    if (!Number.isFinite(nextHours)) {
+      return
     }
 
-    // Directly update the main duration state variable
-    if (Number.isFinite(nextHours) && $selectedDurationHr !== nextHours) {
-      $selectedDurationHr = nextHours; // Set the hours correctly
-      lastChangedBy = 'user'; // Mark change as user-initiated
-
-      // Now apply the preset logic to update NOAA selection based on the NEW hours
-      applyStandardPreset(nextHours);
-
-      // Ensure the charts and interpolations refresh after applying the preset.
-      recalcFromDepthOrDuration();
-
-      // The updates within applyStandardPreset/pickCell should trigger reactivity.
-      // If needed, uncomment one of these lines:
-      // recalcFromAri();
-      // recalcFromDepthOrDuration();
-    } 
-    else {
-       // If hours didn't change numerically, consider if a recalc is needed.
-       // handleDurationInput(); // Or call specific recalc function if needed.
+    if ($selectedDurationHr !== nextHours) {
+      $selectedDurationHr = nextHours
     }
+    lastChangedBy = 'user'
   }
 
   function handleAriInput() {
@@ -2057,11 +2026,11 @@
               {#if $durationMode === 'standard'}
                 <select
                   id="duration"
-                  bind:value={selectedDurationPreset}
+                  bind:value={$selectedDurationHr}
                   on:change={handleStandardDurationChange}
                 >
                   {#each STANDARD_DURATION_PRESETS as option}
-                    <option value={option.value}>{option.label}</option>
+                    <option value={option.hours}>{option.label}</option>
                   {/each}
                 </select>
               {:else}
