@@ -1169,6 +1169,7 @@
     const presetHours = Number(selectedDurationPreset)
     if (Number.isFinite(presetHours)) {
       applyStandardPreset(presetHours)
+      recalcFromDepthOrDuration()
     }
   }
 
@@ -1321,6 +1322,9 @@
 
       // Now apply the preset logic to update NOAA selection based on the NEW hours
       applyStandardPreset(nextHours);
+
+      // Ensure the charts and interpolations refresh after applying the preset.
+      recalcFromDepthOrDuration();
 
       // The updates within applyStandardPreset/pickCell should trigger reactivity.
       // If needed, uncomment one of these lines:
