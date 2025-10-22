@@ -53,6 +53,7 @@
   let chartsAreRendering = false
   let tableIsRendering = false
   let isoPlotIsRendering = false
+  let noaa3dPlotIsRendering = false
   let comparisonCurvesAreComputing = false
   let curvePlotIsRendering = false
   let activeRenderToken = 0
@@ -62,7 +63,7 @@
 
   const noaaVisualTabs = [
     { id: 'isoLines', label: 'Depth Iso-Lines' },
-    { id: 'threeD', label: '3D Surface' },
+    { id: 'rdi3d', label: '3D RDI Surface' },
     { id: 'intensity', label: 'Intensity Chart' }
   ] as const
 
@@ -223,6 +224,7 @@
     chartsAreRendering ||
     tableIsRendering ||
     isoPlotIsRendering ||
+    noaa3dPlotIsRendering ||
     comparisonCurvesAreComputing ||
     curvePlotIsRendering
   $: durationEntriesForTable = $tableStore
@@ -247,6 +249,16 @@
   function downloadPlot(div: HTMLDivElement | null, filename: string) {
     if (!div) return
     void Plotly.downloadImage(div, { format: 'png', filename })
+  }
+
+  function downloadActiveNoaaVisual() {
+    if (activeNoaaVisual === 'isoLines') {
+      downloadPlot(isoPlotDiv, 'designstorm-noaa-depth-iso-lines')
+    } else if (activeNoaaVisual === 'rdi3d') {
+      downloadPlot(noaa3dPlotDiv, 'designstorm-noaa-rdi-surface')
+    } else if (activeNoaaVisual === 'intensity') {
+      downloadPlot(noaaIntensityPlotDiv, 'designstorm-noaa-intensity-visual')
+    }
   }
 
   function handleNoaaTabKeydown(event: KeyboardEvent, index: number) {
@@ -312,13 +324,28 @@
       detachIsoPlotClickHandler()
       Plotly.purge(isoPlotDiv)
       isoPlotReady = false
-    } else if (previousNoaaVisual === 'threeD' && noaa3dPlotDiv) {
+    } else if (previousNoaaVisual === 'rdi3d' && noaa3dPlotDiv) {
       Plotly.purge(noaa3dPlotDiv)
+      noaa3dPlotReady = false
     } else if (previousNoaaVisual === 'intensity' && noaaIntensityPlotDiv) {
       Plotly.purge(noaaIntensityPlotDiv)
     }
 
     previousNoaaVisual = activeNoaaVisual
+  }
+
+  $: if (activeNoaaVisual === 'isoLines' && noaaContourZ.length) {
+    void tick().then(() => {
+      if (activeNoaaVisual === 'isoLines') {
+        drawIsoPlot()
+      }
+    })
+  } else if (activeNoaaVisual === 'rdi3d' && noaaIntensityZ.length) {
+    void tick().then(() => {
+      if (activeNoaaVisual === 'rdi3d') {
+        drawNoaa3dPlot()
+      }
+    })
   }
 
   let peakIntensity = 0
@@ -357,7 +384,63 @@
   let plot2Ready = false
   let plot3Ready = false
   let isoPlotReady = false
+  let noaa3dPlotReady = false
   let curvePlotReady = false
+
+  type DurationEntry = ReturnType<typeof getSortedDurationRows>[number]
+  type AriEntry = { key: string; value: number }
+
+  let noaaDurationEntries: DurationEntry[] = []
+  let noaaAriEntries: AriEntry[] = []
+  let noaaContourZ: (number | null)[][] = []
+  let noaaIntensityZ: (number | null)[][] = []
+
+  $: {
+    const table = $tableStore
+
+    if (!table || !aris.length) {
+      noaaDurationEntries = []
+      noaaAriEntries = []
+      noaaContourZ = []
+      noaaIntensityZ = []
+    } else {
+      const durationEntries = getSortedDurationRows(table)
+      const ariEntries = aris
+        .map((key) => ({ key, value: Number(key) }))
+        .filter((entry) => Number.isFinite(entry.value))
+        .sort((a, b) => a.value - b.value)
+
+      if (!durationEntries.length || !ariEntries.length) {
+        noaaDurationEntries = []
+        noaaAriEntries = []
+        noaaContourZ = []
+        noaaIntensityZ = []
+      } else {
+        const contour = ariEntries.map((ariEntry) =>
+          durationEntries.map(({ row }) => {
+            const depth = row.values[ariEntry.key]
+            return Number.isFinite(depth) ? Number(depth) : null
+          })
+        )
+
+        const intensity = contour.map((row) =>
+          row.map((depth, colIdx) => {
+            const durationEntry = durationEntries[colIdx]
+            if (!durationEntry || depth == null) {
+              return null
+            }
+            const hours = durationEntry.hr
+            return Number.isFinite(hours) && hours > 0 ? depth / hours : null
+          })
+        )
+
+        noaaDurationEntries = durationEntries
+        noaaAriEntries = ariEntries
+        noaaContourZ = contour
+        noaaIntensityZ = intensity
+      }
+    }
+  }
 
   function formatTimestamp(date: Date) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -598,6 +681,7 @@
       selectedDurationLabel = null
       lastFetchKey = ''
       drawIsoPlot()
+      drawNoaa3dPlot()
     } finally {
       isLoadingNoaa = false
     }
@@ -880,6 +964,7 @@
     }
 
     drawIsoPlot()
+    drawNoaa3dPlot()
   }
   function drawIsoPlot() {
     isoPlotReady = false
@@ -905,7 +990,7 @@
       return
     }
 
-    const durationEntries = getSortedDurationRows(table)
+    const durationEntries = noaaDurationEntries
     if (!durationEntries.length) {
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
@@ -913,11 +998,7 @@
       return
     }
 
-    const ariEntries = aris
-      .map((key) => ({ key, value: Number(key) }))
-      .filter((entry) => Number.isFinite(entry.value))
-      .sort((a, b) => a.value - b.value)
-
+    const ariEntries = noaaAriEntries
     if (!ariEntries.length) {
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
@@ -925,12 +1006,7 @@
       return
     }
 
-    const contourZ = ariEntries.map((ariEntry) =>
-      durationEntries.map(({ row }) => {
-        const depth = row.values[ariEntry.key]
-        return Number.isFinite(depth) ? Number(depth) : null
-      })
-    )
+    const contourZ = noaaContourZ
 
     const customData = ariEntries.map((ariEntry) =>
       durationEntries.map((entry) => [entry.label, ariEntry.key])
@@ -1200,6 +1276,142 @@
       })
       .finally(() => {
         isoPlotIsRendering = false
+      })
+  }
+
+  function drawNoaa3dPlot() {
+    noaa3dPlotReady = false
+    if (activeNoaaVisual !== 'rdi3d') {
+      noaa3dPlotIsRendering = false
+      if (noaa3dPlotDiv) {
+        Plotly.purge(noaa3dPlotDiv)
+      }
+      return
+    }
+
+    if (!noaa3dPlotDiv) {
+      noaa3dPlotIsRendering = false
+      return
+    }
+
+    const table = $tableStore
+
+    if (
+      !table ||
+      !noaaDurationEntries.length ||
+      !noaaAriEntries.length ||
+      !noaaContourZ.length ||
+      !noaaIntensityZ.length
+    ) {
+      noaa3dPlotIsRendering = false
+      Plotly.purge(noaa3dPlotDiv)
+      return
+    }
+
+    const finiteIntensities = noaaIntensityZ
+      .flat()
+      .filter((value): value is number => value != null && Number.isFinite(value))
+
+    if (!finiteIntensities.length) {
+      noaa3dPlotIsRendering = false
+      Plotly.purge(noaa3dPlotDiv)
+      return
+    }
+
+    const minIntensity = Math.min(...finiteIntensities)
+    const maxIntensity = Math.max(...finiteIntensities)
+
+    if (!Number.isFinite(minIntensity) || !Number.isFinite(maxIntensity)) {
+      noaa3dPlotIsRendering = false
+      Plotly.purge(noaa3dPlotDiv)
+      return
+    }
+
+    const customData = noaaAriEntries.map((ariEntry, rowIdx) =>
+      noaaDurationEntries.map((durationEntry, colIdx) => {
+        const depth = noaaContourZ[rowIdx]?.[colIdx] ?? null
+        const intensity = noaaIntensityZ[rowIdx]?.[colIdx] ?? null
+        return [
+          durationEntry.label,
+          durationEntry.hr,
+          ariEntry.key,
+          Number.isFinite(depth as number) ? depth : null,
+          Number.isFinite(intensity as number) ? intensity : null
+        ]
+      })
+    )
+
+    const colorbar: Partial<ColorBar> = {
+      title: { text: 'Intensity (in/hr)', font: { color: '#e7e7e7' } },
+      tickcolor: '#e7e7e7',
+      tickfont: { color: '#e7e7e7', size: 11 },
+      outlinecolor: 'rgba(255, 255, 255, 0.1)'
+    }
+
+    const surfaceTrace: Data = {
+      type: 'surface',
+      x: noaaDurationEntries.map((entry) => entry.hr),
+      y: noaaAriEntries.map((entry) => entry.value),
+      z: noaaIntensityZ,
+      customdata: customData,
+      colorscale: 'Viridis',
+      colorbar,
+      cmin: minIntensity,
+      cmax: maxIntensity,
+      opacity: 0.95,
+      hovertemplate:
+        'Duration: %{customdata[0]} (%{customdata[1]:.2f} hr)<br>' +
+        'ARI: %{customdata[2]}-year<br>' +
+        'Depth: %{customdata[3]:.2f} in<br>' +
+        'Intensity: %{customdata[4]:.2f} in/hr<extra></extra>'
+    }
+
+    const layout: Partial<Layout> = {
+      ...plotLayoutBase,
+      margin: { l: 10, r: 10, t: 50, b: 20 },
+      scene: {
+        bgcolor: 'rgba(15, 23, 42, 0.85)',
+        xaxis: {
+          type: 'log',
+          title: { text: 'Duration (hr)', font: { color: '#e7e7e7' } },
+          gridcolor: 'rgba(255,255,255,0.08)',
+          zerolinecolor: 'rgba(255,255,255,0.1)',
+          linecolor: 'rgba(255,255,255,0.2)',
+          tickfont: { color: '#e7e7e7' }
+        },
+        yaxis: {
+          type: 'log',
+          title: { text: 'ARI (years)', font: { color: '#e7e7e7' } },
+          gridcolor: 'rgba(255,255,255,0.08)',
+          zerolinecolor: 'rgba(255,255,255,0.1)',
+          linecolor: 'rgba(255,255,255,0.2)',
+          tickfont: { color: '#e7e7e7' }
+        },
+        zaxis: {
+          title: { text: 'Intensity (in/hr)', font: { color: '#e7e7e7' } },
+          gridcolor: 'rgba(255,255,255,0.08)',
+          zerolinecolor: 'rgba(255,255,255,0.1)',
+          linecolor: 'rgba(255,255,255,0.2)',
+          tickfont: { color: '#e7e7e7' }
+        }
+      }
+    }
+
+    noaa3dPlotIsRendering = true
+    Promise.resolve(
+      Plotly.react(noaa3dPlotDiv, [surfaceTrace], layout, {
+        ...plotConfig,
+        displayModeBar: true
+      })
+    )
+      .then(() => {
+        noaa3dPlotReady = true
+      })
+      .catch((error) => {
+        console.error('Error rendering NOAA RDI surface plot', error)
+      })
+      .finally(() => {
+        noaa3dPlotIsRendering = false
       })
   }
 
@@ -1878,6 +2090,8 @@
     if (noaa3dPlotDiv) {
       Plotly.purge(noaa3dPlotDiv)
     }
+    noaa3dPlotReady = false
+    noaa3dPlotIsRendering = false
     if (noaaIntensityPlotDiv) {
       Plotly.purge(noaaIntensityPlotDiv)
     }
@@ -2161,7 +2375,7 @@
                   <button
                     type="button"
                     class="plot-download"
-                    on:click={() => downloadPlot(isoPlotDiv, 'designstorm-noaa-depth-iso-lines')}
+                    on:click={downloadActiveNoaaVisual}
                     aria-label="Download NOAA depth iso-lines plot as PNG"
                     disabled={!isoPlotReady}
                   >
@@ -2183,20 +2397,37 @@
               {/if}
             </div>
             <div
-              id="noaa-visual-panel-threeD"
+              id="noaa-visual-panel-rdi3d"
               role="tabpanel"
-              aria-labelledby="noaa-visual-tab-threeD"
-              tabindex={activeNoaaVisual === 'threeD' ? 0 : -1}
-              hidden={activeNoaaVisual !== 'threeD'}
+              aria-labelledby="noaa-visual-tab-rdi3d"
+              tabindex={activeNoaaVisual === 'rdi3d' ? 0 : -1}
+              hidden={activeNoaaVisual !== 'rdi3d'}
             >
-              {#if activeNoaaVisual === 'threeD'}
-                <div class="noaa-visuals__panel-body">
+              {#if activeNoaaVisual === 'rdi3d'}
+                <div class="iso-plot-container">
+                  <button
+                    type="button"
+                    class="plot-download"
+                    on:click={downloadActiveNoaaVisual}
+                    aria-label="Download NOAA 3D rainfall depth-intensity surface as PNG"
+                    disabled={!noaa3dPlotReady}
+                  >
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                      <path
+                        d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+                      />
+                    </svg>
+                  </button>
                   <div
-                    class="noaa-plot"
+                    class="iso-plot"
                     bind:this={noaa3dPlotDiv}
-                    aria-label="3D NOAA depth visualization"
+                    aria-label="3D surface of rainfall depth and intensity by duration and recurrence interval"
                   ></div>
-                  <p class="noaa-visuals__placeholder-text">3D surface visualization coming soon.</p>
+                  {#if !$tableStore}
+                    <div class="iso-plot-empty">
+                      Load NOAA data to view the rainfall depth-intensity surface.
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </div>
