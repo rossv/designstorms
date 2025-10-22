@@ -42,6 +42,9 @@
   let plotDiv2: HTMLDivElement
   let plotDiv3: HTMLDivElement
   let isoPlotDiv: HTMLDivElement
+  let noaa3dPlotDiv: HTMLDivElement | null = null
+  let noaaIntensityPlotDiv: HTMLDivElement | null = null
+  let noaaTablistEl: HTMLDivElement | null = null
   let curvePlotDiv: HTMLDivElement | null = null
   let curveModalDialog: HTMLDivElement | null = null
   let customCurveModalDialog: HTMLDivElement | null = null
@@ -56,6 +59,17 @@
 
   let map: L.Map
   let marker: L.Marker
+
+  const noaaVisualTabs = [
+    { id: 'isoLines', label: 'Depth Iso-Lines' },
+    { id: 'threeD', label: '3D Surface' },
+    { id: 'intensity', label: 'Intensity Chart' }
+  ] as const
+
+  type NoaaVisualKey = (typeof noaaVisualTabs)[number]['id']
+
+  let activeNoaaVisual: NoaaVisualKey = 'isoLines'
+  let previousNoaaVisual: NoaaVisualKey = activeNoaaVisual
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -234,6 +248,45 @@
     if (!div) return
     void Plotly.downloadImage(div, { format: 'png', filename })
   }
+
+  function handleNoaaTabKeydown(event: KeyboardEvent, index: number) {
+    const { key } = event
+    const tabButtons = noaaTablistEl
+      ? (Array.from(
+          noaaTablistEl.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+        ) as HTMLButtonElement[])
+      : []
+
+    if (!tabButtons.length) {
+      return
+    }
+
+    let targetIndex = index
+
+    if (key === 'ArrowRight' || key === 'ArrowDown') {
+      event.preventDefault()
+      targetIndex = (index + 1) % tabButtons.length
+    } else if (key === 'ArrowLeft' || key === 'ArrowUp') {
+      event.preventDefault()
+      targetIndex = (index - 1 + tabButtons.length) % tabButtons.length
+    } else if (key === 'Home') {
+      event.preventDefault()
+      targetIndex = 0
+    } else if (key === 'End') {
+      event.preventDefault()
+      targetIndex = tabButtons.length - 1
+    } else {
+      return
+    }
+
+    const nextTab = noaaVisualTabs[targetIndex]
+    if (!nextTab) {
+      return
+    }
+
+    activeNoaaVisual = nextTab.id
+    tabButtons[targetIndex]?.focus()
+  }
   const plotLayoutBase: Partial<Layout> = {
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
@@ -252,6 +305,20 @@
       mirror: true
     },
     hovermode: 'closest'
+  }
+
+  $: if (previousNoaaVisual !== activeNoaaVisual) {
+    if (previousNoaaVisual === 'isoLines' && isoPlotDiv) {
+      detachIsoPlotClickHandler()
+      Plotly.purge(isoPlotDiv)
+      isoPlotReady = false
+    } else if (previousNoaaVisual === 'threeD' && noaa3dPlotDiv) {
+      Plotly.purge(noaa3dPlotDiv)
+    } else if (previousNoaaVisual === 'intensity' && noaaIntensityPlotDiv) {
+      Plotly.purge(noaaIntensityPlotDiv)
+    }
+
+    previousNoaaVisual = activeNoaaVisual
   }
 
   let peakIntensity = 0
@@ -816,6 +883,14 @@
   }
   function drawIsoPlot() {
     isoPlotReady = false
+    if (activeNoaaVisual !== 'isoLines') {
+      isoPlotIsRendering = false
+      if (isoPlotDiv) {
+        detachIsoPlotClickHandler()
+        Plotly.purge(isoPlotDiv)
+      }
+      return
+    }
     if (!isoPlotDiv) {
       isoPlotIsRendering = false
       return
@@ -1800,6 +1875,12 @@
     plot1Ready = false
     plot2Ready = false
     plot3Ready = false
+    if (noaa3dPlotDiv) {
+      Plotly.purge(noaa3dPlotDiv)
+    }
+    if (noaaIntensityPlotDiv) {
+      Plotly.purge(noaaIntensityPlotDiv)
+    }
     if (isoPlotDiv) {
       detachIsoPlotClickHandler()
       Plotly.purge(isoPlotDiv)
@@ -2039,29 +2120,105 @@
       </div>
 
       <div class="panel">
-        <h2 class="section-title">NOAA Depth Iso-Lines</h2>
-        <div class="iso-plot-container">
-          <button
-            type="button"
-            class="plot-download"
-            on:click={() => downloadPlot(isoPlotDiv, 'designstorm-noaa-depth-iso-lines')}
-            aria-label="Download NOAA depth iso-lines plot as PNG"
-            disabled={!isoPlotReady}
-          >
-            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-              <path
-                d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
-              />
-            </svg>
-          </button>
+        <h2 class="section-title">NOAA Visualizations</h2>
+        <div class="noaa-visuals">
           <div
-            class="iso-plot"
-            bind:this={isoPlotDiv}
-            aria-label="Contour plot of NOAA depths by duration and recurrence interval"
-          ></div>
-          {#if !$tableStore}
-            <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
-          {/if}
+            class="noaa-visuals__tablist"
+            role="tablist"
+            aria-label="NOAA visualizations"
+            aria-orientation="horizontal"
+            bind:this={noaaTablistEl}
+          >
+            {#each noaaVisualTabs as tab, index (tab.id)}
+              {@const tabId = `noaa-visual-tab-${tab.id}`}
+              {@const panelId = `noaa-visual-panel-${tab.id}`}
+              <button
+                id={tabId}
+                class="noaa-visuals__tab"
+                class:active={activeNoaaVisual === tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeNoaaVisual === tab.id}
+                aria-controls={panelId}
+                tabindex={activeNoaaVisual === tab.id ? 0 : -1}
+                on:click={() => (activeNoaaVisual = tab.id)}
+                on:keydown={(event) => handleNoaaTabKeydown(event, index)}
+              >
+                {tab.label}
+              </button>
+            {/each}
+          </div>
+          <div class="noaa-visuals__panels">
+            <div
+              id="noaa-visual-panel-isoLines"
+              role="tabpanel"
+              aria-labelledby="noaa-visual-tab-isoLines"
+              tabindex={activeNoaaVisual === 'isoLines' ? 0 : -1}
+              hidden={activeNoaaVisual !== 'isoLines'}
+            >
+              {#if activeNoaaVisual === 'isoLines'}
+                <div class="iso-plot-container">
+                  <button
+                    type="button"
+                    class="plot-download"
+                    on:click={() => downloadPlot(isoPlotDiv, 'designstorm-noaa-depth-iso-lines')}
+                    aria-label="Download NOAA depth iso-lines plot as PNG"
+                    disabled={!isoPlotReady}
+                  >
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                      <path
+                        d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+                      />
+                    </svg>
+                  </button>
+                  <div
+                    class="iso-plot"
+                    bind:this={isoPlotDiv}
+                    aria-label="Contour plot of NOAA depths by duration and recurrence interval"
+                  ></div>
+                  {#if !$tableStore}
+                    <div class="iso-plot-empty">Load NOAA data to view the depth iso-line preview.</div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+            <div
+              id="noaa-visual-panel-threeD"
+              role="tabpanel"
+              aria-labelledby="noaa-visual-tab-threeD"
+              tabindex={activeNoaaVisual === 'threeD' ? 0 : -1}
+              hidden={activeNoaaVisual !== 'threeD'}
+            >
+              {#if activeNoaaVisual === 'threeD'}
+                <div class="noaa-visuals__panel-body">
+                  <div
+                    class="noaa-plot"
+                    bind:this={noaa3dPlotDiv}
+                    aria-label="3D NOAA depth visualization"
+                  ></div>
+                  <p class="noaa-visuals__placeholder-text">3D surface visualization coming soon.</p>
+                </div>
+              {/if}
+            </div>
+            <div
+              id="noaa-visual-panel-intensity"
+              role="tabpanel"
+              aria-labelledby="noaa-visual-tab-intensity"
+              tabindex={activeNoaaVisual === 'intensity' ? 0 : -1}
+              hidden={activeNoaaVisual !== 'intensity'}
+            >
+              {#if activeNoaaVisual === 'intensity'}
+                <div class="noaa-visuals__panel-body">
+                  <div
+                    class="noaa-plot"
+                    bind:this={noaaIntensityPlotDiv}
+                    aria-label="NOAA intensity visualization"
+                  ></div>
+                  <p class="noaa-visuals__placeholder-text">Intensity analysis visualization coming soon.</p>
+                </div>
+              {/if}
+            </div>
+          </div>
         </div>
       </div>
     </section>
