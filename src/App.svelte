@@ -5,7 +5,7 @@
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
   import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
   import Plotly from 'plotly.js-dist-min'
-  import type { ColorBar, Config, Data, Layout } from 'plotly.js'
+  import type { ColorBar, Config, Data, Layout, PlotlyHTMLElement } from 'plotly.js'
   import { fetchNoaaTable, parseNoaaTable, type NoaaTable } from './lib/noaaClient'
   import { generateStorm, getBestScsDistribution, MAX_FAST_SAMPLES, type StormParams, type DistributionName } from './lib/stormEngine'
   import {
@@ -46,6 +46,9 @@
   let curveModalDialog: HTMLDivElement | null = null
   let customCurveModalDialog: HTMLDivElement | null = null
   let customCurveTextarea: HTMLTextAreaElement | null = null
+
+  let chartsAreRendering = false
+  let activeRenderToken = 0
 
   let map: L.Map
   let marker: L.Marker
@@ -196,6 +199,8 @@
         .trim()
         .split(/\r?\n/)
     : []
+
+  $: isStormProcessing = $stormIsComputing || chartsAreRendering
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
     : []
@@ -649,6 +654,7 @@
       timeColumnLabel = 'Time (hr)'
       tableRows = []
       hasTimestamp = false
+      chartsAreRendering = false
 
       if (plotDiv1) Plotly.purge(plotDiv1)
       if (plotDiv2) Plotly.purge(plotDiv2)
@@ -688,79 +694,103 @@
         }
       })
 
+      const currentRenderToken = ++activeRenderToken
+      const plotPromises: Promise<PlotlyHTMLElement>[] = []
+
       if (plotDiv1) {
-        Plotly.react(
-          plotDiv1,
-          [
+        plotPromises.push(
+          Plotly.react(
+            plotDiv1,
+            [
+              {
+                x: timeAxis,
+                y: storm.intensityInHr,
+                type: 'bar',
+                name: 'Intensity (in/hr)',
+                marker: { color: '#6ee7ff' },
+                hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
+                width: barWidth
+              }
+            ],
             {
-              x: timeAxis,
-              y: storm.intensityInHr,
-              type: 'bar',
-              name: 'Intensity (in/hr)',
-              marker: { color: '#6ee7ff' },
-              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
-              width: barWidth
-            }
-          ],
-          {
-            ...plotLayoutBase,
-            title: { text: 'Hyetograph (Intensity)' },
-            xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
-            yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Intensity (in/hr)' } }
-          },
-          plotConfig
+              ...plotLayoutBase,
+              title: { text: 'Hyetograph (Intensity)' },
+              xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
+              yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Intensity (in/hr)' } }
+            },
+            plotConfig
+          )
         )
         plot1Ready = true
       }
 
       if (plotDiv2) {
-        Plotly.react(
-          plotDiv2,
-          [
+        plotPromises.push(
+          Plotly.react(
+            plotDiv2,
+            [
+              {
+                x: timeAxis,
+                y: storm.incrementalIn,
+                type: 'bar',
+                name: 'Incremental Volume (in)',
+                marker: { color: '#a855f7' },
+                hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Incremental: %{y:.3f} in<extra></extra>`,
+                width: barWidth
+              }
+            ],
             {
-              x: timeAxis,
-              y: storm.incrementalIn,
-              type: 'bar',
-              name: 'Incremental Volume (in)',
-              marker: { color: '#a855f7' },
-              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Incremental: %{y:.3f} in<extra></extra>`,
-              width: barWidth
-            }
-          ],
-          {
-            ...plotLayoutBase,
-            title: { text: 'Incremental Volume' },
-            xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
-            yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Volume (in)' } }
-          },
-          plotConfig
+              ...plotLayoutBase,
+              title: { text: 'Incremental Volume' },
+              xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
+              yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Volume (in)' } }
+            },
+            plotConfig
+          )
         )
         plot2Ready = true
       }
 
       if (plotDiv3) {
-        Plotly.react(
-          plotDiv3,
-          [
+        plotPromises.push(
+          Plotly.react(
+            plotDiv3,
+            [
+              {
+                x: timeAxis,
+                y: storm.cumulativeIn,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Cumulative (in)',
+                line: { color: '#f97316', width: 3 },
+                hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Cumulative: %{y:.3f} in<extra></extra>`
+              }
+            ],
             {
-              x: timeAxis,
-              y: storm.cumulativeIn,
-              type: 'scatter',
-              mode: 'lines',
-              name: 'Cumulative (in)',
-              line: { color: '#f97316', width: 3 },
-              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Cumulative: %{y:.3f} in<extra></extra>`
-            }
-          ],
-          {
-            ...plotLayoutBase,
-            title: { text: 'Cumulative Mass Curve' },
-            xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
-            yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Cumulative Depth (in)' } }
-          },
-          plotConfig
+              ...plotLayoutBase,
+              title: { text: 'Cumulative Mass Curve' },
+              xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
+              yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Cumulative Depth (in)' } }
+            },
+            plotConfig
+          )
         )
         plot3Ready = true
+      }
+
+      if (plotPromises.length) {
+        chartsAreRendering = true
+        Promise.all(plotPromises)
+          .catch((error) => {
+            console.error('Error rendering storm plots', error)
+          })
+          .finally(() => {
+            if (currentRenderToken === activeRenderToken) {
+              chartsAreRendering = false
+            }
+          })
+      } else if (currentRenderToken === activeRenderToken) {
+        chartsAreRendering = false
       }
     }
 
@@ -2149,14 +2179,14 @@
               <label for="start">Start (ISO)</label>
               <div class="start-input">
                 <input id="start" type="datetime-local" bind:value={$startISO} />
-                {#if $stormIsComputing}
-                  <div class="start-spinner" role="status" aria-live="polite">
-                    <span class="storm-loading__spinner" aria-hidden="true"></span>
-                    <span class="sr-only">Storm computation in progress</span>
-                  </div>
-                {/if}
               </div>
             </div>
+            {#if isStormProcessing}
+              <div class="storm-processing-indicator" role="status" aria-live="polite">
+                <span class="storm-processing-indicator__spinner" aria-hidden="true"></span>
+                <span class="storm-processing-indicator__text">Processing storm…</span>
+              </div>
+            {/if}
           </div>
         </div>
 
@@ -3197,24 +3227,11 @@
     flex: 1 1 auto;
   }
 
-  .start-spinner {
+  .storm-processing-indicator {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-width: 28px;
-    min-height: 28px;
-  }
-
-  .start-spinner .storm-loading__spinner {
-    width: 18px;
-    height: 18px;
-  }
-
-  .storm-loading {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: 12px;
+    padding: 10px 16px;
     border-radius: 999px;
     border: 1px solid rgba(110, 231, 255, 0.35);
     background: rgba(110, 231, 255, 0.08);
@@ -3223,15 +3240,21 @@
     letter-spacing: 0.02em;
     margin: 4px 0 18px;
     box-shadow: 0 8px 20px rgba(5, 18, 26, 0.35);
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 
-  .storm-loading__spinner {
-    width: 18px;
-    height: 18px;
+  .storm-processing-indicator__spinner {
+    width: 28px;
+    height: 28px;
     border-radius: 999px;
-    border: 2px solid rgba(110, 231, 255, 0.2);
+    border: 3px solid rgba(110, 231, 255, 0.25);
     border-top-color: var(--accent);
     animation: storm-loading-spin 0.8s linear infinite;
+  }
+
+  .storm-processing-indicator__text {
+    font-weight: 600;
   }
 
   @keyframes storm-loading-spin {
