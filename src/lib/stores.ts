@@ -69,6 +69,41 @@ export const stormParams = derived(
   }
 )
 
-export const stormResult = derived(stormParams, ($stormParams) =>
-  $stormParams ? generateStorm($stormParams) : null
+export const stormIsComputing = writable(false)
+
+export const stormResult = derived(
+  stormParams,
+  ($stormParams, set) => {
+    if (!$stormParams) {
+      stormIsComputing.set(false)
+      set(null)
+      return
+    }
+
+    let cancelled = false
+    let finalizeHandle: ReturnType<typeof setTimeout> | null = null
+    stormIsComputing.set(true)
+
+    const handle = setTimeout(() => {
+      if (cancelled) return
+      const result = generateStorm($stormParams)
+      set(result)
+
+      finalizeHandle = setTimeout(() => {
+        if (cancelled) return
+        stormIsComputing.set(false)
+        finalizeHandle = null
+      }, 150)
+    }, 0)
+
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+      if (finalizeHandle) {
+        clearTimeout(finalizeHandle)
+        finalizeHandle = null
+      }
+    }
+  },
+  null as StormResult | null
 )
