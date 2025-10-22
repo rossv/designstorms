@@ -48,6 +48,7 @@
   let customCurveTextarea: HTMLTextAreaElement | null = null
 
   let chartsAreRendering = false
+  let tableIsRendering = false
   let activeRenderToken = 0
 
   let map: L.Map
@@ -200,7 +201,7 @@
         .split(/\r?\n/)
     : []
 
-  $: isStormProcessing = $stormIsComputing || chartsAreRendering
+  $: isStormProcessing = $stormIsComputing || chartsAreRendering || tableIsRendering
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
     : []
@@ -655,6 +656,7 @@
       tableRows = []
       hasTimestamp = false
       chartsAreRendering = false
+      tableIsRendering = false
 
       if (plotDiv1) Plotly.purge(plotDiv1)
       if (plotDiv2) Plotly.purge(plotDiv2)
@@ -681,6 +683,8 @@
 
       const startDate = $startISO ? new Date($startISO) : null
       hasTimestamp = Boolean(startDate && !Number.isNaN(startDate.getTime()))
+      tableIsRendering = true
+      const currentRenderToken = ++activeRenderToken
       tableRows = storm.timeMin.map((t, i) => {
         const timestamp = hasTimestamp
           ? formatTimestamp(new Date((startDate as Date).getTime() + t * 60000))
@@ -694,7 +698,12 @@
         }
       })
 
-      const currentRenderToken = ++activeRenderToken
+      void tick().then(() => {
+        if (currentRenderToken === activeRenderToken) {
+          tableIsRendering = false
+        }
+      })
+
       const plotPromises: Promise<PlotlyHTMLElement>[] = []
 
       if (plotDiv1) {
