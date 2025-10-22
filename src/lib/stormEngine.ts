@@ -406,14 +406,33 @@ export function generateStorm(params: StormParams): StormResult {
     finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
   }
 
-  const n = Math.ceil(durationMin / timestepMin) + 1
-  const timeMin = Array.from({ length: n }, (_, i) => {
-    if (i === n - 1) return durationMin
-    return Math.min(i * timestepMin, durationMin)
-  })
+  const rawSampleCount = Math.ceil(durationMin / timestepMin) + 1
+  let sampleCount = computationMode === 'fast'
+    ? Math.min(rawSampleCount, MAX_FAST_SAMPLES)
+    : rawSampleCount
+
+  let timeMin: number[]
+
+  if (
+    computationMode === 'fast' &&
+    rawSampleCount > MAX_FAST_SAMPLES &&
+    MAX_FAST_SAMPLES > 1
+  ) {
+    const effectiveTimestep = durationMin / (MAX_FAST_SAMPLES - 1)
+    sampleCount = MAX_FAST_SAMPLES
+    timeMin = Array.from({ length: sampleCount }, (_, i) => {
+      if (i === sampleCount - 1) return durationMin
+      return Math.min(i * effectiveTimestep, durationMin)
+    })
+  } else {
+    sampleCount = rawSampleCount
+    timeMin = Array.from({ length: sampleCount }, (_, i) => {
+      if (i === sampleCount - 1) return durationMin
+      return Math.min(i * timestepMin, durationMin)
+    })
+  }
 
   const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
-  const sampleCount = computationMode === 'fast' ? Math.min(n, MAX_FAST_SAMPLES) : n
   const baseSamples = cumulativeFromDistribution(
     finalDistribution,
     sampleCount,
@@ -424,7 +443,7 @@ export function generateStorm(params: StormParams): StormResult {
   const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
 
   const cumulativeIn = normalizedTimes.map((nt) => {
-    if (n === 1 || baseCumulative.length === 1) {
+    if (sampleCount === 1 || baseCumulative.length === 1) {
       return (baseCumulative[0] ?? 0) * depthIn
     }
     const scaledIndex = clamp01(nt) * sampleLastIndex
