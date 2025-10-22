@@ -49,6 +49,9 @@
 
   let chartsAreRendering = false
   let tableIsRendering = false
+  let isoPlotIsRendering = false
+  let comparisonCurvesAreComputing = false
+  let curvePlotIsRendering = false
   let activeRenderToken = 0
 
   let map: L.Map
@@ -201,7 +204,13 @@
         .split(/\r?\n/)
     : []
 
-  $: isStormProcessing = $stormIsComputing || chartsAreRendering || tableIsRendering
+  $: isStormProcessing =
+    $stormIsComputing ||
+    chartsAreRendering ||
+    tableIsRendering ||
+    isoPlotIsRendering ||
+    comparisonCurvesAreComputing ||
+    curvePlotIsRendering
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
     : []
@@ -807,11 +816,15 @@
   }
   function drawIsoPlot() {
     isoPlotReady = false
-    if (!isoPlotDiv) return
+    if (!isoPlotDiv) {
+      isoPlotIsRendering = false
+      return
+    }
 
     const table = $tableStore
 
     if (!table || !aris.length) {
+      isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
       return
@@ -819,6 +832,7 @@
 
     const durationEntries = getSortedDurationRows(table)
     if (!durationEntries.length) {
+      isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
       return
@@ -830,6 +844,7 @@
       .sort((a, b) => a.value - b.value)
 
     if (!ariEntries.length) {
+      isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
       return
@@ -851,6 +866,7 @@
       .filter((value): value is number => value !== null && Number.isFinite(value))
 
     if (!finiteDepths.length) {
+      isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
       return
@@ -860,6 +876,7 @@
     let maxDepth = Math.max(...finiteDepths)
 
     if (!Number.isFinite(minDepth) || !Number.isFinite(maxDepth)) {
+      isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
       return
@@ -1092,13 +1109,23 @@
       ...(stormTrace ? [stormTrace] : [])
     ]
 
-    Plotly.react(isoPlotDiv, data, layout, {
-      ...plotConfig,
-      displayModeBar: false
-    })
-
-    attachIsoPlotClickHandler()
-    isoPlotReady = true
+    isoPlotIsRendering = true
+    Promise.resolve(
+      Plotly.react(isoPlotDiv, data, layout, {
+        ...plotConfig,
+        displayModeBar: false
+      })
+    )
+      .then(() => {
+        attachIsoPlotClickHandler()
+        isoPlotReady = true
+      })
+      .catch((error) => {
+        console.error('Error rendering iso-depth plot', error)
+      })
+      .finally(() => {
+        isoPlotIsRendering = false
+      })
   }
 
   const handleIsoPlotClick = (event: any) => {
@@ -1449,7 +1476,7 @@
     showCurveModal = true
     await tick()
     curveModalDialog?.focus()
-    refreshComparisonCurves()
+    void refreshComparisonCurves()
   }
 
   function closeCurveModal() {
@@ -1510,10 +1537,10 @@
       return
     }
     selectedCurveDuration = duration
-    refreshComparisonCurves()
+    void refreshComparisonCurves()
   }
 
-  function refreshComparisonCurves() {
+  async function refreshComparisonCurves() {
     if (!showCurveModal) return
 
     const group = getComparisonGroup($distribution)
@@ -1545,69 +1572,76 @@
       return
     }
 
-    lastCurveParamsKey = key
+    comparisonCurvesAreComputing = true
+    await tick()
 
-    const availableMembers = group.members.filter((member) =>
-      hasComparisonCurveForDuration(member, duration)
-    )
+    try {
+      lastCurveParamsKey = key
 
-    comparisonCurves = availableMembers.map((member) => {
-      const params: StormParams = {
-        depthIn: 1,
-        durationHr: duration,
-        timestepMin: $timestepMin,
-        distribution: member,
-        startISO: $startISO,
-        customCurveCsv: trimmedCsv || undefined,
-        durationMode: 'standard'
-      }
-
-      const result = generateStorm(params)
-      const totalDepth = result.cumulativeIn[result.cumulativeIn.length - 1] || 1
-      const timeHr = result.timeMin.map((t) => t / 60)
-      const fraction = result.cumulativeIn.map((value) =>
-        totalDepth === 0 ? 0 : Math.min(1, Math.max(0, value / totalDepth))
+      const availableMembers = group.members.filter((member) =>
+        hasComparisonCurveForDuration(member, duration)
       )
 
-      if (timeHr.length > 0) {
-        timeHr[timeHr.length - 1] = duration
-      }
-      if (fraction.length > 0) {
-        fraction[fraction.length - 1] = 1
+      comparisonCurves = availableMembers.map((member) => {
+        const params: StormParams = {
+          depthIn: 1,
+          durationHr: duration,
+          timestepMin: $timestepMin,
+          distribution: member,
+          startISO: $startISO,
+          customCurveCsv: trimmedCsv || undefined,
+          durationMode: 'standard'
+        }
+
+        const result = generateStorm(params)
+        const totalDepth = result.cumulativeIn[result.cumulativeIn.length - 1] || 1
+        const timeHr = result.timeMin.map((t) => t / 60)
+        const fraction = result.cumulativeIn.map((value) =>
+          totalDepth === 0 ? 0 : Math.min(1, Math.max(0, value / totalDepth))
+        )
+
+        if (timeHr.length > 0) {
+          timeHr[timeHr.length - 1] = duration
+        }
+        if (fraction.length > 0) {
+          fraction[fraction.length - 1] = 1
+        }
+
+        const rows = timeHr.map((time, index) => ({
+          time,
+          fraction: fraction[index] ?? 0
+        }))
+
+        return {
+          distribution: member,
+          label: getDistributionLabel(member),
+          timeHr,
+          fraction,
+          rows
+        }
+      })
+
+      if (comparisonCurves.length === 0) {
+        selectedCurveDistribution = null
+        selectedCurveData = null
+        drawComparisonCurves()
+        return
       }
 
-      const rows = timeHr.map((time, index) => ({
-        time,
-        fraction: fraction[index] ?? 0
-      }))
-
-      return {
-        distribution: member,
-        label: getDistributionLabel(member),
-        timeHr,
-        fraction,
-        rows
+      if (
+        !selectedCurveDistribution ||
+        !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
+      ) {
+        const preferred =
+          comparisonCurves.find((curve) => curve.distribution === $distribution) ?? comparisonCurves[0]
+        selectedCurveDistribution = preferred ? preferred.distribution : null
       }
-    })
 
-    if (comparisonCurves.length === 0) {
-      selectedCurveDistribution = null
-      selectedCurveData = null
+      updateSelectedCurveData()
       drawComparisonCurves()
-      return
+    } finally {
+      comparisonCurvesAreComputing = false
     }
-
-    if (
-      !selectedCurveDistribution ||
-      !comparisonCurves.some((curve) => curve.distribution === selectedCurveDistribution)
-    ) {
-      const preferred =
-        comparisonCurves.find((curve) => curve.distribution === $distribution) ?? comparisonCurves[0]
-      selectedCurveDistribution = preferred ? preferred.distribution : null
-    }
-
-    updateSelectedCurveData()
-    drawComparisonCurves()
   }
 
   function setSelectedCurveDistribution(name: DistributionName) {
@@ -1655,8 +1689,12 @@
 
   function drawComparisonCurves() {
     curvePlotReady = false
-    if (!curvePlotDiv) return
+    if (!curvePlotDiv) {
+      curvePlotIsRendering = false
+      return
+    }
     if (!comparisonCurves.length) {
+      curvePlotIsRendering = false
       Plotly.purge(curvePlotDiv)
       detachCurvePlotClickHandler()
       return
@@ -1677,30 +1715,42 @@
         }) satisfies Data
     )
 
-    const maxDuration = selectedCurveDuration ?? Math.max(...comparisonCurves.map((curve) => curve.timeHr[curve.timeHr.length - 1] ?? 0))
+    const maxDuration =
+      selectedCurveDuration ??
+      Math.max(...comparisonCurves.map((curve) => curve.timeHr[curve.timeHr.length - 1] ?? 0))
 
-    Plotly.react(
-      curvePlotDiv,
-      traces,
-      {
-        ...plotLayoutBase,
-        title: { text: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr` },
-        xaxis: {
-          ...plotLayoutBase.xaxis,
-          title: { text: 'Time (hr)' },
-          range: [0, Math.max(6, maxDuration)]
+    curvePlotIsRendering = true
+    Promise.resolve(
+      Plotly.react(
+        curvePlotDiv,
+        traces,
+        {
+          ...plotLayoutBase,
+          title: { text: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr` },
+          xaxis: {
+            ...plotLayoutBase.xaxis,
+            title: { text: 'Time (hr)' },
+            range: [0, Math.max(6, maxDuration)]
+          },
+          yaxis: {
+            ...plotLayoutBase.yaxis,
+            title: { text: 'Rain Fraction' },
+            range: [0, 1]
+          }
         },
-        yaxis: {
-          ...plotLayoutBase.yaxis,
-          title: { text: 'Rain Fraction' },
-          range: [0, 1]
-        }
-      },
-      plotConfig
+        plotConfig
+      )
     )
-
-    attachCurvePlotClickHandler()
-    curvePlotReady = true
+      .then(() => {
+        attachCurvePlotClickHandler()
+        curvePlotReady = true
+      })
+      .catch((error) => {
+        console.error('Error rendering distribution comparison plot', error)
+      })
+      .finally(() => {
+        curvePlotIsRendering = false
+      })
   }
   
   function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
@@ -1781,7 +1831,7 @@
   }
 
   $: if (showCurveModal) {
-    refreshComparisonCurves()
+    void refreshComparisonCurves()
   }
 
   $: selectedCurveData =
