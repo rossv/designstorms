@@ -214,6 +214,11 @@
 
 
   const plotConfig: Partial<Config> = { responsive: true, displaylogo: false, displayModeBar: false }
+
+  function downloadPlot(div: HTMLDivElement | null, filename: string) {
+    if (!div) return
+    void Plotly.downloadImage(div, { format: 'png', filename })
+  }
   const plotLayoutBase: Partial<Layout> = {
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
@@ -266,6 +271,11 @@
   let lastCurveParamsKey = ''
   let selectedCurveData: ComparisonCurve | null = null
   let comparisonGroupLabel = ''
+  let plot1Ready = false
+  let plot2Ready = false
+  let plot3Ready = false
+  let isoPlotReady = false
+  let curvePlotReady = false
 
   function formatTimestamp(date: Date) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -628,6 +638,9 @@
   $: {
     const storm = $stormResult
     lastStorm = storm
+    plot1Ready = false
+    plot2Ready = false
+    plot3Ready = false
 
     if (!storm) {
       peakIntensity = 0
@@ -697,6 +710,7 @@
           },
           plotConfig
         )
+        plot1Ready = true
       }
 
       if (plotDiv2) {
@@ -721,6 +735,7 @@
           },
           plotConfig
         )
+        plot2Ready = true
       }
 
       if (plotDiv3) {
@@ -745,12 +760,14 @@
           },
           plotConfig
         )
+        plot3Ready = true
       }
     }
 
     drawIsoPlot()
   }
   function drawIsoPlot() {
+    isoPlotReady = false
     if (!isoPlotDiv) return
 
     const table = $tableStore
@@ -1042,6 +1059,7 @@
     })
 
     attachIsoPlotClickHandler()
+    isoPlotReady = true
   }
 
   const handleIsoPlotClick = (event: any) => {
@@ -1401,6 +1419,7 @@
     if (curvePlotDiv) {
       Plotly.purge(curvePlotDiv)
     }
+    curvePlotReady = false
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -1596,6 +1615,7 @@
   }
 
   function drawComparisonCurves() {
+    curvePlotReady = false
     if (!curvePlotDiv) return
     if (!comparisonCurves.length) {
       Plotly.purge(curvePlotDiv)
@@ -1641,6 +1661,7 @@
     )
 
     attachCurvePlotClickHandler()
+    curvePlotReady = true
   }
   
   function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
@@ -1687,14 +1708,19 @@
     if (plotDiv1) Plotly.purge(plotDiv1)
     if (plotDiv2) Plotly.purge(plotDiv2)
     if (plotDiv3) Plotly.purge(plotDiv3)
+    plot1Ready = false
+    plot2Ready = false
+    plot3Ready = false
     if (isoPlotDiv) {
       detachIsoPlotClickHandler()
       Plotly.purge(isoPlotDiv)
     }
+    isoPlotReady = false
     if (curvePlotDiv) {
       detachCurvePlotClickHandler()
       Plotly.purge(curvePlotDiv)
     }
+    curvePlotReady = false
     window.removeEventListener('resize', handleViewportChange)
     window.removeEventListener('scroll', handleViewportChange)
     tableScrollObserver?.disconnect()
@@ -1926,6 +1952,19 @@
       <div class="panel">
         <h2 class="section-title">NOAA Depth Iso-Lines</h2>
         <div class="iso-plot-container">
+          <button
+            type="button"
+            class="plot-download"
+            on:click={() => downloadPlot(isoPlotDiv, 'designstorm-noaa-depth-iso-lines')}
+            aria-label="Download NOAA depth iso-lines plot as PNG"
+            disabled={!isoPlotReady}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path
+                d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+              />
+            </svg>
+          </button>
           <div
             class="iso-plot"
             bind:this={isoPlotDiv}
@@ -2147,12 +2186,51 @@
 
     <section class="column column--visuals">
       <div class="panel plot">
+        <button
+          type="button"
+          class="plot-download"
+          on:click={() => downloadPlot(plotDiv1, 'designstorm-hyetograph-intensity')}
+          aria-label="Download hyetograph intensity plot as PNG"
+          disabled={!plot1Ready}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path
+              d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+            />
+          </svg>
+        </button>
         <div bind:this={plotDiv1} class="plot-area"></div>
       </div>
       <div class="panel plot">
+        <button
+          type="button"
+          class="plot-download"
+          on:click={() => downloadPlot(plotDiv2, 'designstorm-incremental-volume')}
+          aria-label="Download incremental volume plot as PNG"
+          disabled={!plot2Ready}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path
+              d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+            />
+          </svg>
+        </button>
         <div bind:this={plotDiv2} class="plot-area"></div>
       </div>
       <div class="panel plot">
+        <button
+          type="button"
+          class="plot-download"
+          on:click={() => downloadPlot(plotDiv3, 'designstorm-cumulative-mass-curve')}
+          aria-label="Download cumulative mass curve plot as PNG"
+          disabled={!plot3Ready}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path
+              d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+            />
+          </svg>
+        </button>
         <div bind:this={plotDiv3} class="plot-area"></div>
       </div>
       <div class="panel results">
@@ -2353,7 +2431,26 @@
             {/each}
           </div>
         </div>
-        <div class="curve-plot" bind:this={curvePlotDiv} aria-label="Cumulative rain fraction by distribution"></div>
+        <div class="curve-plot-wrapper">
+          <button
+            type="button"
+            class="plot-download"
+            on:click={() => downloadPlot(curvePlotDiv, 'designstorm-distribution-comparison')}
+            aria-label="Download distribution comparison plot as PNG"
+            disabled={!curvePlotReady}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path
+                d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+              />
+            </svg>
+          </button>
+          <div
+            class="curve-plot"
+            bind:this={curvePlotDiv}
+            aria-label="Cumulative rain fraction by distribution"
+          ></div>
+        </div>
         {#if comparisonCurves.length}
           {#if selectedCurveData}
             <div class="curve-table">
@@ -3169,14 +3266,63 @@
     font-size: 14px;
     background: linear-gradient(135deg, rgba(2, 6, 23, 0.8), rgba(8, 47, 73, 0.65));
     backdrop-filter: blur(2px);
+    pointer-events: none;
   }
 
   .plot {
     flex: 0 0 auto;
   }
 
+  .panel.plot {
+    position: relative;
+  }
+
   .plot-area {
     height: clamp(220px, 40vh, 320px);
+  }
+
+  .plot-download {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(15, 23, 42, 0.6);
+    color: rgba(226, 232, 240, 0.85);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0.75;
+    transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    cursor: pointer;
+    z-index: 5;
+  }
+
+  .plot-download svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+  }
+
+  .plot-download:hover:not(:disabled),
+  .plot-download:focus-visible {
+    opacity: 1;
+    background: rgba(15, 23, 42, 0.82);
+    border-color: rgba(148, 163, 184, 0.6);
+    outline: none;
+  }
+
+  .plot-download:focus-visible {
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.55);
+  }
+
+  .plot-download:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 
   .results {
@@ -3371,6 +3517,10 @@
   .curve-duration-button:hover {
     background: rgba(110, 231, 255, 0.15);
     border-color: rgba(110, 231, 255, 0.4);
+  }
+
+  .curve-plot-wrapper {
+    position: relative;
   }
 
   .curve-plot {
