@@ -2009,7 +2009,17 @@
 
     <section class="column column--controls">
       <div class="panel">
-        <h2 class="section-title">Storm Parameters</h2>
+        <div class="storm-panel-heading">
+          <h2 class="section-title">Storm Parameters</h2>
+          <div class="storm-processing-slot" aria-live="polite">
+            {#if isStormProcessing}
+              <div class="storm-processing-indicator" role="status">
+                <span class="storm-processing-indicator__spinner" aria-hidden="true"></span>
+                <span class="storm-processing-indicator__text">Processing storm…</span>
+              </div>
+            {/if}
+          </div>
+        </div>
 
         <div class="storm-form">
           <div class="storm-form__header">
@@ -2181,12 +2191,6 @@
                 <input id="start" type="datetime-local" bind:value={$startISO} />
               </div>
             </div>
-            {#if isStormProcessing}
-              <div class="storm-processing-indicator" role="status" aria-live="polite">
-                <span class="storm-processing-indicator__spinner" aria-hidden="true"></span>
-                <span class="storm-processing-indicator__text">Processing storm…</span>
-              </div>
-            {/if}
           </div>
         </div>
 
@@ -2732,6 +2736,29 @@
     flex-wrap: wrap;
   }
 
+  .storm-panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    min-height: 34px;
+  }
+
+  .storm-panel-heading .section-title {
+    margin: 0;
+  }
+
+  .storm-processing-slot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    min-height: 26px;
+    min-width: 0;
+  }
+
   .storm-form {
     display: flex;
     flex-direction: column;
@@ -2932,6 +2959,17 @@
   }
 
   @media (max-width: 720px) {
+    .storm-panel-heading {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .storm-processing-slot {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
     .storm-form {
       gap: 24px;
     }
@@ -3230,31 +3268,26 @@
   .storm-processing-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: 8px;
+    padding: 5px 12px;
     border-radius: 999px;
     border: 1px solid rgba(110, 231, 255, 0.35);
     background: rgba(110, 231, 255, 0.08);
     color: var(--accent);
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.02em;
-    margin: 4px 0 18px;
     box-shadow: 0 8px 20px rgba(5, 18, 26, 0.35);
-    grid-column: 1 / -1;
-    justify-self: end;
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   .storm-processing-indicator__spinner {
-    width: 28px;
-    height: 28px;
+    width: 16px;
+    height: 16px;
     border-radius: 999px;
-    border: 3px solid rgba(110, 231, 255, 0.25);
+    border: 2px solid rgba(110, 231, 255, 0.25);
     border-top-color: var(--accent);
     animation: storm-loading-spin 0.8s linear infinite;
-  }
-
-  .storm-processing-indicator__text {
-    font-weight: 600;
   }
 
   @keyframes storm-loading-spin {
