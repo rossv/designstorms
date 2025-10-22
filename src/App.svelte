@@ -2125,7 +2125,7 @@
               {/if}
               <p class="mode-note mode-note--computation">
                 {#if $computationMode === 'fast'}
-                  Fast mode caps the cumulative sampling at {MAX_FAST_SAMPLES.toLocaleString()} points for quicker estimates. Switch back to Precise for full resolution.
+                  Fast mode downsamples the storm to {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps for quicker updates. Switch back to Precise for the full-resolution dataset.
                 {:else}
                   Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
                 {/if}
@@ -2410,9 +2410,9 @@
         </ol>
         <h3>Computation Modes</h3>
         <p>
-          <em>Precise</em> traces every timestep for maximum fidelity. <em>Fast (approx.)</em> caps the cumulative
-          sampling resolution for quicker estimates on long storms; switch back to Precise if results need to be
-          exact.
+          <em>Precise</em> traces every timestep for maximum fidelity. <em>Fast (approx.)</em> downsamples the storm to
+          {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps so long events stay responsive; switch back to
+          Precise if results need to be exact.
         </p>
         <h3>Interpolation</h3>
         <p>
