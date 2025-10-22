@@ -30,6 +30,7 @@
     selectedDepth,
     selectedDurationHr,
     startISO,
+    stormIsComputing,
     stormResult,
     table as tableStore,
     timestepMin,
@@ -2105,18 +2106,23 @@
                 on:change={handleTimestepInput}
               />
             </div>
-            <div class="storm-card input-card">
+            <div class="storm-card input-card start-card">
               <label for="start">Start (ISO)</label>
-              <input id="start" type="datetime-local" bind:value={$startISO} />
+              <div class="start-input">
+                <input id="start" type="datetime-local" bind:value={$startISO} />
+                {#if $stormIsComputing}
+                  <div class="start-spinner" role="status" aria-live="polite">
+                    <span class="storm-loading__spinner" aria-hidden="true"></span>
+                    <span class="sr-only">Storm computation in progress</span>
+                  </div>
+                {/if}
+              </div>
             </div>
           </div>
         </div>
 
 
         <div class="actions">
-          <button class="primary" type="button" disabled aria-disabled="true">
-            Storm updates automatically
-          </button>
           <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
           <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
@@ -2816,6 +2822,10 @@
       flex: 1 1 auto;
       width: 100%;
     }
+
+    .actions button {
+      flex: 1 1 100%;
+    }
   }
 
   @media (max-width: 540px) {
@@ -3073,6 +3083,34 @@
     margin: 14px 0;
     align-items: center;
     flex-wrap: wrap;
+  }
+
+  .actions button {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+
+  .start-card .start-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .start-card .start-input input {
+    flex: 1 1 auto;
+  }
+
+  .start-spinner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+  }
+
+  .start-spinner .storm-loading__spinner {
+    width: 18px;
+    height: 18px;
   }
 
   .storm-loading {
