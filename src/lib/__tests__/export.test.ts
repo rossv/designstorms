@@ -32,4 +32,19 @@ describe('formatPcswmmDat', () => {
     const [, year, month, day, hour, minute] = lastLine.split('\t')
     expect([year, month, day, hour, minute]).toEqual(['2024', '1', '1', '0', '37'])
   })
+
+  it('uses actual storm sample times when the final interval is shorter', () => {
+    const storm: StormResult = {
+      timeMin: [0, 7, 14, 21, 28, 35, 42, 49, 56, 60],
+      incrementalIn: Array(10).fill(0.1),
+      cumulativeIn: Array.from({ length: 10 }, (_, i) => (i + 1) * 0.1),
+      intensityInHr: Array(10).fill(1)
+    }
+
+    const txt = formatPcswmmDat(storm, 7, 'Gauge', '2024-01-01T00:00:00Z')
+    const lines = txt.trim().split('\n').slice(2)
+    const lastLine = lines[lines.length - 1]
+    const [, year, month, day, hour, minute] = lastLine.split('\t')
+    expect([year, month, day, hour, minute]).toEqual(['2024', '1', '1', '1', '0'])
+  })
 })
