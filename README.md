@@ -16,11 +16,11 @@ plots, and export the results as CSV or PCSWMM-compatible DAT files.
 - Distribution comparison modal with normalized cumulative curves across 6-, 12-, and
   24-hour durations.
 - Hyetograph, incremental volume, and cumulative mass-curve plots powered by Plotly.js,
-  along with a tabular export-ready storm series that can optionally include timestamps.
+  along with a tabular export-ready storm series using minute offsets instead of timestamps.
 - Precise and fast (approximate) computation modes so you can trade fidelity for speed
   on long-duration storms.
-- CSV export with timestamp, incremental depth, cumulative depth, and intensity columns
-  plus DAT export using PCSWMM's intensity units (in/hr).
+- CSV export with `time_min`, incremental depth, cumulative depth, and intensity columns
+  (no timestamp column) plus DAT export using PCSWMM's intensity units (in/hr).
 - 100% client-side—no backend services to deploy or maintain.
 
 ## Tech Stack
@@ -64,8 +64,9 @@ npx svelte-check
 3. Choose a distribution, toggle between **Standard** or **Custom** duration entry, and pick
    **Precise** or **Fast (approx.)** computation modes. Add a custom CSV curve or open the
    comparison modal to inspect normalized cumulative distributions by duration.
-4. Adjust timestep and optional start time if you need timestamped outputs. Charts and the storm
-   table refresh automatically; export the CSV or DAT file once satisfied.
+4. Adjust timestep and optional start time to control chart labels; CSV exports use minute offsets
+   instead of timestamps. Charts and the storm table refresh automatically; export the CSV or DAT
+   file once satisfied.
 
 ## Data Sources & Exports
 
@@ -98,7 +99,8 @@ curve is normalized and resampled before intensities are derived.
 
 ### Export Formats
 
-- **CSV** – Includes timestamp (if requested), cumulative depth, incremental depth, and intensity.
+- **CSV** – Includes `time_min` (minutes since storm start), incremental depth, cumulative depth,
+  and intensity. A separate timestamp column is not currently emitted.
 - **DAT** – Encodes intensities only and always exports in inches per hour to align with PCSWMM's
   expectations.
 
