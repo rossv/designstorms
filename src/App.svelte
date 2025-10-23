@@ -54,6 +54,7 @@
   let tableIsRendering = false
   let isoPlotIsRendering = false
   let noaa3dPlotIsRendering = false
+  let noaaIntensityPlotIsRendering = false
   let comparisonCurvesAreComputing = false
   let curvePlotIsRendering = false
   let activeRenderToken = 0
@@ -225,6 +226,7 @@
     tableIsRendering ||
     isoPlotIsRendering ||
     noaa3dPlotIsRendering ||
+    noaaIntensityPlotIsRendering ||
     comparisonCurvesAreComputing ||
     curvePlotIsRendering
   $: durationEntriesForTable = $tableStore
@@ -299,6 +301,19 @@
     activeNoaaVisual = nextTab.id
     tabButtons[targetIndex]?.focus()
   }
+  const idfColorPalette = [
+    '#38bdf8',
+    '#22d3ee',
+    '#34d399',
+    '#f97316',
+    '#facc15',
+    '#f472b6',
+    '#a855f7',
+    '#60a5fa',
+    '#f87171',
+    '#0ea5e9'
+  ]
+
   const plotLayoutBase: Partial<Layout> = {
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
@@ -329,6 +344,8 @@
       noaa3dPlotReady = false
     } else if (previousNoaaVisual === 'intensity' && noaaIntensityPlotDiv) {
       Plotly.purge(noaaIntensityPlotDiv)
+      noaaIntensityPlotReady = false
+      noaaIntensityPlotIsRendering = false
     }
 
     previousNoaaVisual = activeNoaaVisual
@@ -344,6 +361,12 @@
     void tick().then(() => {
       if (activeNoaaVisual === 'rdi3d') {
         drawNoaa3dPlot()
+      }
+    })
+  } else if (activeNoaaVisual === 'intensity' && noaaIntensityZ.length) {
+    void tick().then(() => {
+      if (activeNoaaVisual === 'intensity') {
+        drawNoaaIntensityPlot()
       }
     })
   }
@@ -385,6 +408,7 @@
   let plot3Ready = false
   let isoPlotReady = false
   let noaa3dPlotReady = false
+  let noaaIntensityPlotReady = false
   let curvePlotReady = false
 
   type DurationEntry = ReturnType<typeof getSortedDurationRows>[number]
@@ -682,6 +706,7 @@
       lastFetchKey = ''
       drawIsoPlot()
       drawNoaa3dPlot()
+      drawNoaaIntensityPlot()
     } finally {
       isLoadingNoaa = false
     }
@@ -965,6 +990,7 @@
 
     drawIsoPlot()
     drawNoaa3dPlot()
+    drawNoaaIntensityPlot()
   }
   function drawIsoPlot() {
     isoPlotReady = false
@@ -1412,6 +1438,252 @@
       })
       .finally(() => {
         noaa3dPlotIsRendering = false
+      })
+  }
+
+  function drawNoaaIntensityPlot() {
+    noaaIntensityPlotReady = false
+    if (activeNoaaVisual !== 'intensity') {
+      noaaIntensityPlotIsRendering = false
+      if (noaaIntensityPlotDiv) {
+        Plotly.purge(noaaIntensityPlotDiv)
+      }
+      return
+    }
+
+    if (!noaaIntensityPlotDiv) {
+      noaaIntensityPlotIsRendering = false
+      return
+    }
+
+    const table = $tableStore
+
+    if (
+      !table ||
+      !noaaDurationEntries.length ||
+      !noaaAriEntries.length ||
+      !noaaIntensityZ.length
+    ) {
+      noaaIntensityPlotIsRendering = false
+      Plotly.purge(noaaIntensityPlotDiv)
+      return
+    }
+
+    const finiteIntensities = noaaIntensityZ
+      .flat()
+      .filter((value): value is number => value != null && Number.isFinite(value))
+
+    if (!finiteIntensities.length) {
+      noaaIntensityPlotIsRendering = false
+      Plotly.purge(noaaIntensityPlotDiv)
+      return
+    }
+
+    const durationEntries = noaaDurationEntries
+    const ariEntries = noaaAriEntries
+
+    const bounds = noaaIntensityPlotDiv.getBoundingClientRect()
+    const width = bounds.width || noaaIntensityPlotDiv.clientWidth || 0
+    const height = bounds.height || noaaIntensityPlotDiv.clientHeight || 0
+    const isCompact = width <= 640
+
+    const maxXTicks = Math.max(3, Math.floor((width || 1) / 70))
+    const filteredDurationEntries = reduceTickEntries(durationEntries, maxXTicks)
+
+    const positiveIntensities = finiteIntensities.filter((value) => value > 0)
+    const durations = durationEntries.map((entry) => entry.hr)
+
+    const traces: Data[] = ariEntries.map((ariEntry, rowIdx) => {
+      const intensities = durationEntries.map((_, colIdx) => {
+        const value = noaaIntensityZ[rowIdx]?.[colIdx]
+        return Number.isFinite(value as number) ? Number(value) : null
+      })
+
+      const hoverText = durationEntries.map((durationEntry, colIdx) => {
+        const intensityValue = intensities[colIdx]
+        if (!Number.isFinite(intensityValue)) {
+          return ''
+        }
+
+        const depth = noaaContourZ[rowIdx]?.[colIdx]
+        const depthText =
+          Number.isFinite(depth as number) && depth != null
+            ? `<br>Depth: ${(depth as number).toFixed(2)} in`
+            : ''
+
+        return `ARI: ${ariEntry.key}-year` +
+          `<br>Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)` +
+          `<br>Intensity: ${(intensityValue as number).toFixed(2)} in/hr` +
+          depthText
+      })
+
+      const color = idfColorPalette[rowIdx % idfColorPalette.length]
+
+      return {
+        type: 'scatter',
+        mode: 'lines+markers',
+        x: durations,
+        y: intensities,
+        text: hoverText,
+        hovertemplate: '%{text}<extra></extra>',
+        name: `${ariEntry.key}-year`,
+        line: { color, width: 2 },
+        marker: { color, size: 6 },
+        connectgaps: false
+      }
+    })
+
+    let highlightTrace: Data | null = null
+    if (table && selectedDurationLabel) {
+      const durationIndex = durationEntries.findIndex(
+        (entry) => entry.label === selectedDurationLabel
+      )
+      const ariIndex = ariEntries.findIndex((entry) => entry.key === String($selectedAri))
+      const highlightIntensity =
+        durationIndex >= 0 && ariIndex >= 0
+          ? noaaIntensityZ[ariIndex]?.[durationIndex]
+          : null
+
+      if (
+        durationIndex >= 0 &&
+        ariIndex >= 0 &&
+        Number.isFinite(highlightIntensity as number) &&
+        durationEntries[durationIndex].hr > 0
+      ) {
+        const durationEntry = durationEntries[durationIndex]
+        const ariEntry = ariEntries[ariIndex]
+        const highlightDepth = noaaContourZ[ariIndex]?.[durationIndex]
+        const depthSegment =
+          Number.isFinite(highlightDepth as number)
+            ? `<br>Depth: ${(highlightDepth as number).toFixed(3)} in`
+            : ''
+        highlightTrace = {
+          type: 'scatter',
+          mode: 'markers',
+          x: [durationEntry.hr],
+          y: [highlightIntensity as number],
+          marker: {
+            color: '#f8fafc',
+            size: 12,
+            line: { color: '#0ea5e9', width: 3 },
+            symbol: 'circle'
+          },
+          name: 'Selected NOAA cell',
+          showlegend: false,
+          hovertemplate:
+            `Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)` +
+            `<br>ARI: ${ariEntry.key}-year` +
+            `<br>Intensity: ${(highlightIntensity as number).toFixed(2)} in/hr` +
+            `${depthSegment}<extra></extra>`
+        }
+      }
+    }
+
+    const durationHrNumeric = Number($selectedDurationHr)
+    let stormTrace: Data | null = null
+    if (
+      Number.isFinite(durationHrNumeric) &&
+      durationHrNumeric > 0 &&
+      Number.isFinite($selectedDepth)
+    ) {
+      const intensityValue = Number($selectedDepth) / durationHrNumeric
+      if (Number.isFinite(intensityValue)) {
+        stormTrace = {
+          type: 'scatter',
+          mode: 'markers',
+          x: [durationHrNumeric],
+          y: [intensityValue],
+          marker: {
+            color: '#ef4444',
+            size: 16,
+            line: { color: '#b91c1c', width: 3 },
+            symbol: 'x'
+          },
+          name: 'Current storm parameters',
+          showlegend: false,
+          hovertemplate:
+            `Current Storm` +
+            `<br>Duration: ${durationHrNumeric.toFixed(2)} hr` +
+            `<br>Intensity: ${intensityValue.toFixed(2)} in/hr` +
+            `<br>Depth: ${Number($selectedDepth).toFixed(3)} in<extra></extra>`
+        }
+      }
+    }
+
+    const maxYTicks = Math.max(4, Math.floor((height || 1) / 42))
+    const layout: Partial<Layout> = {
+      ...plotLayoutBase,
+      title: { text: 'Intensity-Duration-Frequency Curves' },
+      margin: isCompact
+        ? { l: 64, r: 26, t: 48, b: 96 }
+        : { l: 72, r: 60, t: 52, b: 88 },
+      xaxis: {
+        ...plotLayoutBase.xaxis,
+        title: { text: 'Duration (hr)', font: { size: isCompact ? 12 : undefined } },
+        type: 'log',
+        tickmode: 'array',
+        tickvals: filteredDurationEntries.map((entry) => entry.hr),
+        ticktext: filteredDurationEntries.map((entry) => entry.label),
+        tickangle: isCompact ? -45 : 0,
+        tickfont: { size: isCompact ? 10 : 12 },
+        automargin: true
+      },
+      yaxis: {
+        ...plotLayoutBase.yaxis,
+        title: { text: 'Intensity (in/hr)', font: { size: isCompact ? 12 : undefined } },
+        type: positiveIntensities.length ? 'log' : 'linear',
+        tickfont: { size: isCompact ? 10 : 12 },
+        nticks: maxYTicks
+      },
+      legend: {
+        bgcolor: 'rgba(15, 23, 42, 0.7)',
+        bordercolor: 'rgba(148, 163, 184, 0.25)',
+        borderwidth: 1,
+        orientation: isCompact ? 'h' : 'v',
+        x: isCompact ? 0.5 : 1,
+        y: isCompact ? -0.25 : 1,
+        xanchor: isCompact ? 'center' : 'right',
+        yanchor: 'top',
+        font: { size: isCompact ? 10 : 11 },
+        itemsizing: 'constant'
+      },
+      hovermode: 'closest',
+      hoverlabel: {
+        bgcolor: '#0f172a',
+        bordercolor: '#38bdf8',
+        font: { color: '#f8fafc' }
+      }
+    }
+
+    if (!positiveIntensities.length) {
+      layout.yaxis = {
+        ...layout.yaxis,
+        type: 'linear',
+        rangemode: 'tozero'
+      }
+    }
+
+    const data: Data[] = [
+      ...traces,
+      ...(highlightTrace ? [highlightTrace] : []),
+      ...(stormTrace ? [stormTrace] : [])
+    ]
+
+    noaaIntensityPlotIsRendering = true
+    Promise.resolve(
+      Plotly.react(noaaIntensityPlotDiv, data, layout, {
+        ...plotConfig,
+        displayModeBar: false
+      })
+    )
+      .then(() => {
+        noaaIntensityPlotReady = true
+      })
+      .catch((error) => {
+        console.error('Error rendering NOAA intensity plot', error)
+      })
+      .finally(() => {
+        noaaIntensityPlotIsRendering = false
       })
   }
 
@@ -2101,6 +2373,8 @@
     if (noaaIntensityPlotDiv) {
       Plotly.purge(noaaIntensityPlotDiv)
     }
+    noaaIntensityPlotReady = false
+    noaaIntensityPlotIsRendering = false
     if (isoPlotDiv) {
       detachIsoPlotClickHandler()
       Plotly.purge(isoPlotDiv)
@@ -2445,13 +2719,30 @@
               hidden={activeNoaaVisual !== 'intensity'}
             >
               {#if activeNoaaVisual === 'intensity'}
-                <div class="noaa-visuals__panel-body">
+                <div class="iso-plot-container">
+                  <button
+                    type="button"
+                    class="plot-download"
+                    on:click={downloadActiveNoaaVisual}
+                    aria-label="Download NOAA intensity-duration-frequency chart as PNG"
+                    disabled={!noaaIntensityPlotReady}
+                  >
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                      <path
+                        d="M10 2a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2Zm-5.5 11.5a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75ZM4 16.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1-.75-.75Z"
+                      />
+                    </svg>
+                  </button>
                   <div
-                    class="noaa-plot"
+                    class="iso-plot"
                     bind:this={noaaIntensityPlotDiv}
-                    aria-label="NOAA intensity visualization"
+                    aria-label="NOAA intensity-duration-frequency visualization"
                   ></div>
-                  <p class="noaa-visuals__placeholder-text">Intensity analysis visualization coming soon.</p>
+                  {#if !$tableStore || !noaaIntensityZ.length}
+                    <div class="iso-plot-empty">
+                      Load NOAA data to view the intensity-duration-frequency curves.
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </div>
