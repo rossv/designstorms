@@ -1392,6 +1392,98 @@
         'Intensity: %{customdata[4]:.2f} in/hr<extra></extra>'
     }
 
+    const dataTraces: Data[] = [surfaceTrace]
+
+    const selectedNoaaTrace = (() => {
+      if (!table || !selectedDurationLabel) {
+        return null
+      }
+
+      const durationIndex = noaaDurationEntries.findIndex(
+        (entry) => entry.label === selectedDurationLabel
+      )
+      const ariIndex = noaaAriEntries.findIndex(
+        (entry) => entry.key === String($selectedAri)
+      )
+
+      if (durationIndex < 0 || ariIndex < 0) {
+        return null
+      }
+
+      const durationEntry = noaaDurationEntries[durationIndex]
+      const ariEntry = noaaAriEntries[ariIndex]
+      const depth = noaaContourZ[ariIndex]?.[durationIndex]
+      const intensity = noaaIntensityZ[ariIndex]?.[durationIndex]
+
+      if (!Number.isFinite(intensity as number) || !Number.isFinite(depth as number)) {
+        return null
+      }
+
+      return {
+        type: 'scatter3d',
+        mode: 'markers',
+        x: [durationEntry.hr],
+        y: [ariEntry.value],
+        z: [intensity as number],
+        marker: {
+          color: '#f8fafc',
+          size: 6,
+          line: { color: '#0ea5e9', width: 2 },
+          symbol: 'circle'
+        },
+        name: 'Selected NOAA cell',
+        showlegend: false,
+        hovertemplate:
+          `Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)` +
+          `<br>ARI: ${ariEntry.key}-year` +
+          `<br>Intensity: ${(intensity as number).toFixed(2)} in/hr` +
+          `<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
+      } satisfies Data
+    })()
+
+    if (selectedNoaaTrace) {
+      dataTraces.push(selectedNoaaTrace)
+    }
+
+    const durationHrNumeric = Number($selectedDurationHr)
+    const ariNumeric = Number($selectedAri)
+    const depthNumeric = Number($selectedDepth)
+
+    if (
+      Number.isFinite(durationHrNumeric) &&
+      durationHrNumeric > 0 &&
+      Number.isFinite(ariNumeric) &&
+      ariNumeric > 0 &&
+      Number.isFinite(depthNumeric) &&
+      depthNumeric > 0
+    ) {
+      const intensityValue = depthNumeric / durationHrNumeric
+
+      if (Number.isFinite(intensityValue) && intensityValue > 0) {
+        dataTraces.push({
+          type: 'scatter3d',
+          mode: 'markers',
+          x: [durationHrNumeric],
+          y: [ariNumeric],
+          z: [intensityValue],
+          marker: {
+            color: '#ef4444',
+            size: 7,
+            line: { color: '#b91c1c', width: 2 },
+            symbol: 'circle'
+          },
+          name: 'Current storm parameters',
+          showlegend: false,
+          hovertemplate:
+            'Current Storm' +
+            `<br>Duration: ${durationHrNumeric.toFixed(2)} hr` +
+            `<br>ARI: ${ariNumeric}-year` +
+            `<br>Intensity: ${intensityValue.toFixed(2)} in/hr` +
+            `<br>Depth: ${depthNumeric.toFixed(3)} in<extra></extra>`
+        })
+      }
+    }
+
     const layout: Partial<Layout> = {
       ...plotLayoutBase,
       margin: { l: 10, r: 10, t: 50, b: 20 },
@@ -1425,7 +1517,7 @@
 
     noaa3dPlotIsRendering = true
     Promise.resolve(
-      Plotly.react(noaa3dPlotDiv, [surfaceTrace], layout, {
+      Plotly.react(noaa3dPlotDiv, dataTraces, layout, {
         ...plotConfig,
         displayModeBar: true
       })
