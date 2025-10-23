@@ -1597,7 +1597,10 @@
   }
 
   function handleDepthInput() {
-    lastChangedBy = 'user';
+    if ($durationMode === 'standard') {
+      $durationMode = 'custom'
+    }
+    lastChangedBy = 'user'
     recalcFromDepthOrDuration()
   }
 
@@ -1709,7 +1712,10 @@
   }
 
   function handleAriInput() {
-    lastChangedBy = 'user';
+    if ($durationMode === 'standard') {
+      $durationMode = 'custom'
+    }
+    lastChangedBy = 'user'
     recalcFromAri()
   }
 
