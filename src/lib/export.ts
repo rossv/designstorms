@@ -1,14 +1,56 @@
 import type { StormResult } from './types'
 
-export function saveCsv(storm: StormResult, filename = 'design_storm.csv') {
-  const header = 'time_min,incremental_in,cumulative_in,intensity_in_hr\n'
+export function saveCsv(
+  storm: StormResult,
+  filename = 'design_storm.csv',
+  startISO?: string,
+) {
+  let includeTimestamp = false
+  let startDate: Date | null = null
+
+  if (startISO) {
+    const parsed = new Date(startISO)
+    if (!Number.isNaN(parsed.getTime())) {
+      startDate = parsed
+      includeTimestamp = true
+    }
+  }
+
+  const headerColumns = includeTimestamp
+    ? ['timestamp', 'time_min', 'incremental_in', 'cumulative_in', 'intensity_in_hr']
+    : ['time_min', 'incremental_in', 'cumulative_in', 'intensity_in_hr']
+  const header = `${headerColumns.join(',')}\n`
+
   const rows = storm.timeMin
-    .map(
-      (t, i) =>
-        `${t.toFixed(5)},${storm.incrementalIn[i].toFixed(5)},${storm.cumulativeIn[i].toFixed(5)},${storm.intensityInHr[i].toFixed(5)}`,
-    )
+    .map((t, i) => {
+      const columns: string[] = []
+
+      if (includeTimestamp && startDate) {
+        const timestamp = new Date(startDate.getTime() + t * 60000)
+        columns.push(formatTimestamp(timestamp))
+      }
+
+      columns.push(
+        t.toFixed(5),
+        storm.incrementalIn[i].toFixed(5),
+        storm.cumulativeIn[i].toFixed(5),
+        storm.intensityInHr[i].toFixed(5),
+      )
+
+      return columns.join(',')
+    })
     .join('\n')
+
   downloadText(header + rows, filename)
+}
+
+function formatTimestamp(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const year = date.getFullYear()
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}-${day}-${year} ${hour}:${minute}`
 }
 
 function parseTimezoneOffsetMinutes(value: string): number | null {
