@@ -38,7 +38,8 @@ export function formatPcswmmDat(
 
   let txt = ';Rainfall (in/hr)\n;PCSWMM generated rain gauges file (please do not edit)\n'
   for (let i = 0; i < storm.intensityInHr.length; i++) {
-    const ts = new Date(start.getTime() + (i + 1) * timestepMin * 60 * 1000)
+    const tsEpoch = start.getTime() + storm.timeMin[i] * 60 * 1000
+    const ts = new Date(tsEpoch)
 
     let y: number
     let mo: number
@@ -47,7 +48,7 @@ export function formatPcswmmDat(
     let m: number
 
     if (explicitOffset !== null) {
-      const localMs = ts.getTime() + explicitOffset * 60 * 1000
+      const localMs = tsEpoch + explicitOffset * 60 * 1000
       const local = new Date(localMs)
       y = local.getUTCFullYear()
       mo = local.getUTCMonth() + 1
