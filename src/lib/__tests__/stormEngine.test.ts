@@ -299,4 +299,38 @@ describe('generateStorm', () => {
 
     expect(maxDiff).toBeLessThan(0.2)
   })
+
+  it('smooth mode alters intensities while keeping totals and endpoints intact', () => {
+    const baseParams = {
+      depthIn: 2.5,
+      durationHr: 1,
+      timestepMin: 7,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: ''
+    }
+
+    const linear = generateStorm({ ...baseParams, smoothingMode: 'linear' })
+    const smooth = generateStorm({ ...baseParams, smoothingMode: 'smooth' })
+
+    expect(linear.cumulativeIn.at(-1)).toBeCloseTo(baseParams.depthIn, 6)
+    expect(smooth.cumulativeIn.at(-1)).toBeCloseTo(baseParams.depthIn, 6)
+    expect(linear.cumulativeIn[0]).toBeCloseTo(0, 6)
+    expect(smooth.cumulativeIn[0]).toBeCloseTo(0, 6)
+
+    const intensitiesDiffer = smooth.intensityInHr.some((value, index) => {
+      const baseline = linear.intensityInHr[index] ?? value
+      return Math.abs(value - baseline) > 1e-4
+    })
+
+    expect(intensitiesDiffer).toBe(true)
+
+    const smoothTotals = smooth.incrementalIn.reduce((sum, step) => sum + step, 0)
+    expect(smoothTotals).toBeCloseTo(baseParams.depthIn, 6)
+
+    for (let i = 1; i < smooth.cumulativeIn.length; i += 1) {
+      expect(smooth.cumulativeIn[i]).toBeGreaterThanOrEqual(
+        (smooth.cumulativeIn[i - 1] ?? 0) - 1e-6
+      )
+    }
+  })
 })

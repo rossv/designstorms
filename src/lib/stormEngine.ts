@@ -7,6 +7,8 @@ export const MAX_FAST_SAMPLES = 1000
 
 const distributionCache = new Map<string, number[]>()
 
+type SmoothingMode = 'linear' | 'smooth'
+
 const BETACF_MAX_ITER = 200
 const BETACF_FAST_ITER = 100
 const BETACF_EPS = 3e-7
@@ -53,10 +55,149 @@ function cacheKey(
   name: DistributionName,
   n: number,
   mode: 'precise' | 'fast',
-  customCsv?: string
+  customCsv?: string,
+  smoothing: SmoothingMode = 'linear'
 ): string {
   const normalizedCsv = customCsv ? customCsv.trim() : ''
-  return `${name}|${mode}|${n}|${normalizedCsv}`
+  return `${name}|${mode}|${n}|${normalizedCsv}|${smoothing}`
+}
+
+interface MonotoneSpline {
+  xs: number[]
+  ys: number[]
+  tangents: number[]
+}
+
+function prepareMonotoneSpline(xs: number[], ys: number[]): MonotoneSpline | null {
+  if (xs.length !== ys.length || xs.length < 2) {
+    return null
+  }
+
+  const filteredXs: number[] = []
+  const filteredYs: number[] = []
+
+  for (let i = 0; i < xs.length; i += 1) {
+    const x = xs[i]
+    const y = ys[i]
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+    if (filteredXs.length === 0) {
+      filteredXs.push(x)
+      filteredYs.push(y)
+      continue
+    }
+    const lastX = filteredXs[filteredXs.length - 1] ?? x
+    if (x <= lastX) {
+      // Skip or merge duplicate/unsorted points to keep spline monotonic
+      if (Math.abs(x - lastX) < 1e-9) {
+        const lastY = filteredYs[filteredYs.length - 1] ?? y
+        filteredYs[filteredYs.length - 1] = Math.max(lastY, y)
+      }
+      continue
+    }
+    filteredXs.push(x)
+    filteredYs.push(y)
+  }
+
+  if (filteredXs.length < 2) {
+    return null
+  }
+
+  const slopes: number[] = new Array(filteredXs.length - 1)
+  for (let i = 0; i < slopes.length; i += 1) {
+    const dx = filteredXs[i + 1] - filteredXs[i]
+    const dy = filteredYs[i + 1] - filteredYs[i]
+    slopes[i] = dx > 0 ? dy / dx : 0
+  }
+
+  const tangents: number[] = new Array(filteredXs.length)
+  tangents[0] = slopes[0] ?? 0
+  tangents[tangents.length - 1] = slopes[slopes.length - 1] ?? 0
+
+  for (let i = 1; i < filteredXs.length - 1; i += 1) {
+    const mPrev = slopes[i - 1]
+    const mNext = slopes[i]
+    if (!Number.isFinite(mPrev) || !Number.isFinite(mNext) || mPrev <= 0 || mNext <= 0) {
+      tangents[i] = 0
+      continue
+    }
+    const dxPrev = filteredXs[i] - filteredXs[i - 1]
+    const dxNext = filteredXs[i + 1] - filteredXs[i]
+    const w1 = 2 * dxNext + dxPrev
+    const w2 = dxNext + 2 * dxPrev
+    const denom = w1 / mPrev + w2 / mNext
+    tangents[i] = denom !== 0 ? (w1 + w2) / denom : 0
+  }
+
+  for (let i = 0; i < tangents.length; i += 1) {
+    if (!Number.isFinite(tangents[i]!)) tangents[i] = 0
+    if (tangents[i]! < 0) tangents[i] = 0
+  }
+
+  for (let i = 0; i < slopes.length; i += 1) {
+    const slope = slopes[i]
+    if (!Number.isFinite(slope) || slope === 0) {
+      tangents[i] = 0
+      tangents[i + 1] = 0
+      continue
+    }
+    const a = tangents[i]! / slope
+    const b = tangents[i + 1]! / slope
+    const sum = a * a + b * b
+    if (sum > 9) {
+      const tau = 3 / Math.sqrt(sum)
+      tangents[i] = a * tau * slope
+      tangents[i + 1] = b * tau * slope
+    }
+    if (tangents[i]! < 0) tangents[i] = 0
+    if (tangents[i + 1]! < 0) tangents[i + 1] = 0
+  }
+
+  return {
+    xs: filteredXs,
+    ys: filteredYs,
+    tangents
+  }
+}
+
+function evaluateMonotoneSpline(spline: MonotoneSpline, x: number): number {
+  const { xs, ys, tangents } = spline
+  if (xs.length < 2) return ys[0] ?? 0
+  if (x <= xs[0]!) return ys[0] ?? 0
+  const lastIndex = xs.length - 1
+  if (x >= xs[lastIndex]!) return ys[lastIndex] ?? 0
+
+  let low = 0
+  let high = xs.length - 1
+  while (high - low > 1) {
+    const mid = Math.floor((low + high) / 2)
+    if (xs[mid]! <= x) {
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+
+  const i = low
+  const x0 = xs[i] ?? 0
+  const x1 = xs[i + 1] ?? x0
+  const y0 = ys[i] ?? 0
+  const y1 = ys[i + 1] ?? y0
+  const m0 = tangents[i] ?? 0
+  const m1 = tangents[i + 1] ?? 0
+  const dx = x1 - x0
+  if (dx <= 0) return y0
+  const t = (x - x0) / dx
+  const t2 = t * t
+  const t3 = t2 * t
+  const h00 = 2 * t3 - 3 * t2 + 1
+  const h10 = t3 - 2 * t2 + t
+  const h01 = -2 * t3 + 3 * t2
+  const h11 = t3 - t2
+  const value = h00 * y0 + h10 * dx * m0 + h01 * y1 + h11 * dx * m1
+  const min = Math.min(y0, y1)
+  const max = Math.max(y0, y1)
+  const clamped = Math.min(max, Math.max(min, value))
+  return Math.max(0, Math.min(1, clamped))
 }
 
 function betacf(a: number, b: number, x: number, maxIter: number): number {
@@ -236,9 +377,10 @@ function cumulativeFromDistribution(
   name: DistributionName,
   n: number,
   customCsv?: string,
-  mode: 'precise' | 'fast' = 'precise'
+  mode: 'precise' | 'fast' = 'precise',
+  smoothingMode: SmoothingMode = 'linear'
 ): number[] {
-  const key = cacheKey(name, n, mode, customCsv)
+  const key = cacheKey(name, n, mode, customCsv, smoothingMode)
   const cached = distributionCache.get(key)
   if (cached) {
     return cached
@@ -388,7 +530,8 @@ export function generateStorm(params: StormParams): StormResult {
     distribution,
     customCurveCsv,
     durationMode,
-    computationMode = 'precise'
+    computationMode = 'precise',
+    smoothingMode = 'linear'
   } = params
   const durationMin = durationHr * 60
 
@@ -478,14 +621,24 @@ export function generateStorm(params: StormParams): StormResult {
     finalDistribution,
     sampleCount,
     customCurveCsv,
-    computationMode
+    computationMode,
+    smoothingMode
   )
   const baseCumulative = baseSamples.length > 0 ? baseSamples : [0]
   const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
 
-  const cumulativeIn = normalizedTimes.map((nt) => {
+  const baseXs = baseCumulative.map((_, idx) =>
+    sampleLastIndex > 0 ? idx / sampleLastIndex : 0
+  )
+
+  const spline =
+    smoothingMode === 'smooth' && baseCumulative.length >= 2
+      ? prepareMonotoneSpline(baseXs, baseCumulative)
+      : null
+
+  const evaluateLinear = (nt: number) => {
     if (sampleCount === 1 || baseCumulative.length === 1) {
-      return (baseCumulative[0] ?? 0) * depthIn
+      return baseCumulative[0] ?? 0
     }
     const scaledIndex = clamp01(nt) * sampleLastIndex
     const lowerIndex = Math.min(baseCumulative.length - 1, Math.floor(scaledIndex))
@@ -493,10 +646,29 @@ export function generateStorm(params: StormParams): StormResult {
     const frac = upperIndex === lowerIndex ? 0 : scaledIndex - lowerIndex
     const v0 = baseCumulative[lowerIndex] ?? baseCumulative[baseCumulative.length - 1] ?? 0
     const v1 = baseCumulative[upperIndex] ?? baseCumulative[baseCumulative.length - 1] ?? v0
-    return (v0 * (1 - frac) + v1 * frac) * depthIn
+    return v0 * (1 - frac) + v1 * frac
+  }
+
+  const normalizedCumulative = normalizedTimes.map((nt) => {
+    if (spline) {
+      return evaluateMonotoneSpline(spline, clamp01(nt))
+    }
+    return evaluateLinear(nt)
   })
 
+  const cumulativeIn: number[] = []
+  let lastValue = 0
+  for (let i = 0; i < normalizedCumulative.length; i += 1) {
+    const normalized = clamp01(normalizedCumulative[i] ?? 0)
+    const scaled = normalized * depthIn
+    const monotonic = Math.max(lastValue, scaled)
+    const bounded = Math.min(monotonic, depthIn)
+    cumulativeIn.push(bounded)
+    lastValue = bounded
+  }
+
   if (cumulativeIn.length > 0) {
+    cumulativeIn[0] = 0
     cumulativeIn[cumulativeIn.length - 1] = depthIn
   }
 

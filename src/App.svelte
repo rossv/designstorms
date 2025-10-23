@@ -30,6 +30,7 @@
     selectedDepth,
     selectedDurationHr,
     startISO,
+    smoothingMode,
     stormIsComputing,
     stormResult,
     table as tableStore,
@@ -3048,6 +3049,25 @@
                 on:change={handleTimestepInput}
               />
             </div>
+            <div class="storm-card input-card">
+              <label for="smoothingMode">
+                Curve smoothing
+                <span
+                  class="input-card__tooltip"
+                  title="Smooth mode evaluates a monotonic spline for the cumulative curve and can increase computation time."
+                  aria-label="Smooth mode evaluates a monotonic spline for the cumulative curve and can increase computation time."
+                >⚠️</span>
+              </label>
+              <select id="smoothingMode" bind:value={$smoothingMode}>
+                <option value="linear">Linear (fast)</option>
+                <option value="smooth">Smooth (spline)</option>
+              </select>
+              {#if $smoothingMode === 'smooth'}
+                <p class="field-hint field-hint--warning">
+                  Smooth mode adds a spline pass to keep totals monotonic; storms may take slightly longer to recompute.
+                </p>
+              {/if}
+            </div>
             <div class="storm-card input-card start-card">
               <label for="start">Start (ISO)</label>
               <div class="start-input">
@@ -3758,6 +3778,21 @@
 
   .input-card {
     gap: 14px;
+  }
+
+  .input-card__tooltip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    font-size: 12px;
+    cursor: help;
+    color: var(--muted);
+  }
+
+  .input-card__tooltip:hover,
+  .input-card__tooltip:focus {
+    color: var(--accent);
   }
 
   .field-hint {
