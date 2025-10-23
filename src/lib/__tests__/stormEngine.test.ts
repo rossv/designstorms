@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generateStorm, MAX_FAST_SAMPLES } from '../stormEngine'
+import { SCS_TABLES } from '../distributions'
 
 const minutes = (hrs: number) => hrs * 60
 
@@ -184,6 +185,34 @@ describe('generateStorm', () => {
     expect(allEqual).toBe(false)
   })
 
+  it('uses native SCS spacing for standard durations', () => {
+    const params = {
+      depthIn: 3,
+      durationHr: 24,
+      timestepMin: 5,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: '',
+      durationMode: 'standard' as const
+    }
+
+    const storm = generateStorm(params)
+    const table = SCS_TABLES.scs_type_ii_24hr
+    const expectedLength = table.length
+    const expectedDurationMin = params.durationHr * 60
+    const expectedTimestep = expectedLength > 1
+      ? expectedDurationMin / (expectedLength - 1)
+      : expectedDurationMin
+
+    expect(storm.timeMin.length).toBe(expectedLength)
+    expect(storm.timeMin.at(-1)).toBe(expectedDurationMin)
+    expect(storm.effectiveTimestepMin).toBeCloseTo(expectedTimestep, 6)
+    expect(storm.timestepLocked).toBe(true)
+    if (storm.timeMin.length > 1) {
+      expect(storm.timeMin[1] - storm.timeMin[0]).toBeCloseTo(expectedTimestep, 6)
+    }
+    expect(storm.cumulativeIn.at(-1)).toBeCloseTo(params.depthIn, 6)
+  })
+
   it('uses the same samples in fast mode when timesteps are below the cap', () => {
     const baseParams = {
       depthIn: 2,
@@ -214,11 +243,31 @@ describe('generateStorm', () => {
     const precise = generateStorm({ ...params, computationMode: 'precise' })
     const fast = generateStorm({ ...params, computationMode: 'fast' })
 
-    expect(fast.timeMin.length).toBe(precise.timeMin.length)
+    expect(fast.timeMin.length).toBe(Math.min(precise.timeMin.length, MAX_FAST_SAMPLES))
     expect(fast.cumulativeIn.at(-1)).toBeCloseTo(precise.cumulativeIn.at(-1) ?? 0, 6)
 
-    const maxDiff = fast.cumulativeIn.reduce((max, value, index) => {
-      const baseline = precise.cumulativeIn[index] ?? 0
+    const samplePreciseAt = (time: number) => {
+      if (!precise.timeMin.length) return 0
+      if (time <= precise.timeMin[0]!) {
+        return precise.cumulativeIn[0] ?? 0
+      }
+      for (let i = 1; i < precise.timeMin.length; i += 1) {
+        const t1 = precise.timeMin[i] ?? 0
+        if (time <= t1) {
+          const t0 = precise.timeMin[i - 1] ?? t1
+          const v0 = precise.cumulativeIn[i - 1] ?? 0
+          const v1 = precise.cumulativeIn[i] ?? v0
+          const span = t1 - t0
+          const frac = span > 0 ? (time - t0) / span : 0
+          return v0 * (1 - frac) + v1 * frac
+        }
+      }
+      return precise.cumulativeIn.at(-1) ?? 0
+    }
+
+    const maxDiff = fast.timeMin.reduce((max, time, index) => {
+      const baseline = samplePreciseAt(time)
+      const value = fast.cumulativeIn[index] ?? 0
       return Math.max(max, Math.abs(value - baseline))
     }, 0)
     expect(maxDiff).toBeLessThan(0.1)

@@ -34,6 +34,7 @@
     stormResult,
     table as tableStore,
     timestepMin,
+    timestepIsLocked,
     type StormResult
   } from './lib/stores'
 
@@ -3017,6 +3018,7 @@
                 label="Timestep (min)"
                 min={0.1}
                 step={1}
+                disabled={$timestepIsLocked}
                 bind:value={$timestepMin}
                 on:change={handleTimestepInput}
               />
