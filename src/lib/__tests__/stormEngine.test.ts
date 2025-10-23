@@ -214,11 +214,30 @@ describe('generateStorm', () => {
     const precise = generateStorm({ ...params, computationMode: 'precise' })
     const fast = generateStorm({ ...params, computationMode: 'fast' })
 
-    expect(fast.timeMin.length).toBe(precise.timeMin.length)
+    expect(fast.timeMin.length).toBe(MAX_FAST_SAMPLES)
+    expect(fast.timeMin.length).toBeLessThan(precise.timeMin.length)
     expect(fast.cumulativeIn.at(-1)).toBeCloseTo(precise.cumulativeIn.at(-1) ?? 0, 6)
 
+    let preciseIndex = 0
+    const lastPreciseIndex = Math.max(0, precise.timeMin.length - 1)
+
     const maxDiff = fast.cumulativeIn.reduce((max, value, index) => {
-      const baseline = precise.cumulativeIn[index] ?? 0
+      const targetTime = fast.timeMin[index] ?? 0
+      while (
+        preciseIndex < lastPreciseIndex &&
+        precise.timeMin[preciseIndex + 1] <= targetTime
+      ) {
+        preciseIndex += 1
+      }
+
+      const nextIndex = Math.min(preciseIndex + 1, lastPreciseIndex)
+      const t0 = precise.timeMin[preciseIndex] ?? 0
+      const t1 = precise.timeMin[nextIndex] ?? t0
+      const v0 = precise.cumulativeIn[preciseIndex] ?? 0
+      const v1 = precise.cumulativeIn[nextIndex] ?? v0
+      const span = t1 - t0
+      const frac = span <= 0 ? 0 : Math.max(0, Math.min(1, (targetTime - t0) / span))
+      const baseline = v0 + (v1 - v0) * frac
       return Math.max(max, Math.abs(value - baseline))
     }, 0)
     expect(maxDiff).toBeLessThan(0.1)
@@ -249,5 +268,39 @@ describe('generateStorm', () => {
     }, 0)
 
     expect(maxDiff).toBeLessThan(0.2)
+  })
+
+  it('adjusts intermediate increments in smooth mode while preserving totals', () => {
+    const params = {
+      depthIn: 2.5,
+      durationHr: 6,
+      timestepMin: 0.5,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: ''
+    }
+
+    const linear = generateStorm({ ...params, smoothingMode: 'linear' })
+    const smooth = generateStorm({ ...params, smoothingMode: 'smooth' })
+
+    expect(smooth.timeMin).toEqual(linear.timeMin)
+    expect(smooth.cumulativeIn.length).toBe(linear.cumulativeIn.length)
+    expect(smooth.cumulativeIn.at(-1)).toBeCloseTo(linear.cumulativeIn.at(-1) ?? 0, 6)
+    expect(smooth.cumulativeIn.at(-1)).toBeCloseTo(params.depthIn, 6)
+    expect(smooth.cumulativeIn[0]).toBeCloseTo(0, 6)
+
+    const maxIncrementDiff = smooth.incrementalIn.reduce((max, value, index) => {
+      if (index === 0 || index === smooth.incrementalIn.length - 1) return max
+      const baseline = linear.incrementalIn[index] ?? 0
+      return Math.max(max, Math.abs(value - baseline))
+    }, 0)
+
+    expect(maxIncrementDiff).toBeGreaterThan(1e-6)
+
+    const smoothTotal = smooth.incrementalIn.reduce((sum, step) => sum + step, 0)
+    expect(smoothTotal).toBeCloseTo(params.depthIn, 6)
+
+    for (let i = 1; i < smooth.cumulativeIn.length; i += 1) {
+      expect(smooth.cumulativeIn[i]).toBeGreaterThanOrEqual(smooth.cumulativeIn[i - 1] - 1e-6)
+    }
   })
 })

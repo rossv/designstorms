@@ -4,6 +4,7 @@ import type { StormParams, StormResult, DistributionName } from './types'
 export type { StormParams, StormResult, DistributionName } from './types'
 
 export const MAX_FAST_SAMPLES = 1000
+const SMOOTH_SPLINE_NODES = 512
 
 const distributionCache = new Map<string, number[]>()
 
@@ -40,6 +41,27 @@ function linspace(n: number): number[] {
 
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x))
+}
+
+function ensureMonotonic01(values: number[], forceOne: boolean): number[] {
+  const out: number[] = []
+  let last = 0
+  for (let i = 0; i < values.length; i += 1) {
+    const raw = values[i]
+    const clamped = clamp01(Number.isFinite(raw) ? raw : 0)
+    const next = Math.max(last, clamped)
+    out.push(next)
+    last = next
+  }
+
+  if (out.length > 0) {
+    out[0] = 0
+    if (forceOne && out.length > 1) {
+      out[out.length - 1] = 1
+    }
+  }
+
+  return out
 }
 
 function expClamp(logValue: number): number {
@@ -388,7 +410,8 @@ export function generateStorm(params: StormParams): StormResult {
     distribution,
     customCurveCsv,
     durationMode,
-    computationMode = 'precise'
+    computationMode = 'precise',
+    smoothingMode = 'linear'
   } = params
   const durationMin = durationHr * 60
 
@@ -440,20 +463,46 @@ export function generateStorm(params: StormParams): StormResult {
     computationMode
   )
   const baseCumulative = baseSamples.length > 0 ? baseSamples : [0]
-  const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
 
-  const cumulativeIn = normalizedTimes.map((nt) => {
-    if (sampleCount === 1 || baseCumulative.length === 1) {
-      return (baseCumulative[0] ?? 0) * depthIn
+  const normalizedCumulative = (() => {
+    const length = normalizedTimes.length
+    if (length === 0) {
+      return []
     }
-    const scaledIndex = clamp01(nt) * sampleLastIndex
-    const lowerIndex = Math.min(baseCumulative.length - 1, Math.floor(scaledIndex))
-    const upperIndex = Math.min(baseCumulative.length - 1, lowerIndex + 1)
-    const frac = upperIndex === lowerIndex ? 0 : scaledIndex - lowerIndex
-    const v0 = baseCumulative[lowerIndex] ?? baseCumulative[baseCumulative.length - 1] ?? 0
-    const v1 = baseCumulative[upperIndex] ?? baseCumulative[baseCumulative.length - 1] ?? v0
-    return (v0 * (1 - frac) + v1 * frac) * depthIn
-  })
+
+    if (baseCumulative.length <= 1) {
+      const value = clamp01(baseCumulative[0] ?? 0)
+      const linear = new Array(length).fill(value)
+      if (length > 0) {
+        linear[0] = 0
+        if (length > 1) {
+          linear[length - 1] = 1
+        }
+      }
+      return linear
+    }
+
+    if (smoothingMode === 'smooth') {
+      const ensureOne = length > 1
+      const splineNodes = buildSplineNodes(baseCumulative, SMOOTH_SPLINE_NODES)
+      return ensureMonotonic01(
+        evaluateMonotoneSpline(splineNodes, normalizedTimes),
+        ensureOne
+      )
+    }
+
+    const linear = evaluateLinearCumulative(baseCumulative, normalizedTimes).map((value, index) => {
+      if (index === 0) return 0
+      if (index === length - 1) return 1
+      return clamp01(Number.isFinite(value) ? value : 0)
+    })
+    if (linear.length === 1) {
+      linear[0] = clamp01(linear[0] ?? 0)
+    }
+    return linear
+  })()
+
+  const cumulativeIn = normalizedCumulative.map((value) => value * depthIn)
 
   if (cumulativeIn.length > 0) {
     cumulativeIn[cumulativeIn.length - 1] = depthIn
@@ -472,4 +521,138 @@ export function generateStorm(params: StormParams): StormResult {
   })
 
   return { timeMin, incrementalIn, cumulativeIn, intensityInHr }
+}
+
+function evaluateLinearCumulative(baseCumulative: number[], normalizedTimes: number[]): number[] {
+  if (baseCumulative.length <= 1) {
+    return new Array(normalizedTimes.length).fill(baseCumulative[0] ?? 0)
+  }
+
+  const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
+  return normalizedTimes.map((nt) => {
+    const scaledIndex = clamp01(nt) * sampleLastIndex
+    const lowerIndex = Math.min(baseCumulative.length - 1, Math.floor(scaledIndex))
+    const upperIndex = Math.min(baseCumulative.length - 1, lowerIndex + 1)
+    const frac = upperIndex === lowerIndex ? 0 : scaledIndex - lowerIndex
+    const v0 = baseCumulative[lowerIndex] ?? baseCumulative[baseCumulative.length - 1] ?? 0
+    const v1 = baseCumulative[upperIndex] ?? baseCumulative[baseCumulative.length - 1] ?? v0
+    return v0 * (1 - frac) + v1 * frac
+  })
+}
+
+function buildSplineNodes(baseCumulative: number[], limit: number): number[] {
+  if (baseCumulative.length <= limit) {
+    return baseCumulative.slice()
+  }
+
+  const nodes: number[] = []
+  const denom = Math.max(1, limit - 1)
+  const baseLastIndex = Math.max(1, baseCumulative.length - 1)
+
+  for (let i = 0; i < limit; i += 1) {
+    const t = i / denom
+    const scaledIndex = t * baseLastIndex
+    const lowerIndex = Math.min(baseLastIndex, Math.floor(scaledIndex))
+    const upperIndex = Math.min(baseLastIndex, lowerIndex + 1)
+    const frac = upperIndex === lowerIndex ? 0 : scaledIndex - lowerIndex
+    const v0 = baseCumulative[lowerIndex] ?? baseCumulative[baseLastIndex] ?? 0
+    const v1 = baseCumulative[upperIndex] ?? baseCumulative[baseLastIndex] ?? v0
+    nodes.push(v0 * (1 - frac) + v1 * frac)
+  }
+
+  return nodes
+}
+
+function evaluateMonotoneSpline(baseCumulative: number[], normalizedTimes: number[]): number[] {
+  if (baseCumulative.length <= 2) {
+    return evaluateLinearCumulative(baseCumulative, normalizedTimes)
+  }
+
+  const n = baseCumulative.length
+  const xs = baseCumulative.map((_, idx) => (n === 1 ? 0 : idx / (n - 1)))
+  const ys = baseCumulative.slice()
+  const hs: number[] = []
+  const deltas: number[] = []
+
+  for (let i = 0; i < n - 1; i += 1) {
+    const h = xs[i + 1] - xs[i]
+    hs[i] = h
+    const diff = ys[i + 1] - ys[i]
+    deltas[i] = h !== 0 ? diff / h : 0
+  }
+
+  const tangents: number[] = new Array(n).fill(0)
+  tangents[0] = deltas[0] ?? 0
+  tangents[n - 1] = deltas[n - 2] ?? 0
+
+  for (let i = 1; i < n - 1; i += 1) {
+    const deltaPrev = deltas[i - 1] ?? 0
+    const deltaNext = deltas[i] ?? 0
+    if (deltaPrev <= 0 || deltaNext <= 0) {
+      tangents[i] = 0
+      continue
+    }
+    const hPrev = hs[i - 1] ?? 0
+    const hNext = hs[i] ?? 0
+    const w1 = 2 * hNext + hPrev
+    const w2 = hNext + 2 * hPrev
+    const denominator = w1 / deltaPrev + w2 / deltaNext
+    tangents[i] = denominator !== 0 ? (w1 + w2) / denominator : 0
+  }
+
+  const results: number[] = []
+
+  for (const tRaw of normalizedTimes) {
+    const t = clamp01(Number.isFinite(tRaw) ? tRaw : 0)
+    if (t <= xs[0]) {
+      results.push(ys[0])
+      continue
+    }
+    if (t >= xs[n - 1]) {
+      results.push(ys[n - 1])
+      continue
+    }
+
+    let segmentIndex = Math.floor(t * (n - 1))
+    if (segmentIndex >= n - 1) {
+      segmentIndex = n - 2
+    } else if (segmentIndex < 0) {
+      segmentIndex = 0
+    }
+
+    while (segmentIndex < n - 2 && t > xs[segmentIndex + 1]) {
+      segmentIndex += 1
+    }
+    while (segmentIndex > 0 && t < xs[segmentIndex]) {
+      segmentIndex -= 1
+    }
+
+    const x0 = xs[segmentIndex]
+    const x1 = xs[segmentIndex + 1]
+    const y0 = ys[segmentIndex]
+    const y1 = ys[segmentIndex + 1]
+    const h = x1 - x0
+
+    if (h <= 0) {
+      results.push(y0)
+      continue
+    }
+
+    const tau = (t - x0) / h
+    const tau2 = tau * tau
+    const tau3 = tau2 * tau
+
+    const h00 = 2 * tau3 - 3 * tau2 + 1
+    const h10 = tau3 - 2 * tau2 + tau
+    const h01 = -2 * tau3 + 3 * tau2
+    const h11 = tau3 - tau2
+
+    const m0 = tangents[segmentIndex] ?? 0
+    const m1 = tangents[segmentIndex + 1] ?? 0
+
+    const value = h00 * y0 + h10 * h * m0 + h01 * y1 + h11 * h * m1
+    results.push(value)
+  }
+
+  return results
 }

@@ -6,6 +6,7 @@ export type StormResult = ReturnType<typeof generateStorm>
 
 type DurationMode = 'standard' | 'custom'
 type ComputationMode = 'precise' | 'fast'
+type SmoothingMode = 'linear' | 'smooth'
 
 export const lat = writable(40.4406)
 export const lon = writable(-79.9959)
@@ -22,6 +23,7 @@ export const startISO = writable('2003-01-01T00:00')
 export const customCurveCsv = writable('')
 export const durationMode = writable<DurationMode>('standard')
 export const computationMode = writable<ComputationMode>('precise')
+export const smoothingMode = writable<SmoothingMode>('linear')
 
 export const stormParams = derived(
   [
@@ -32,7 +34,8 @@ export const stormParams = derived(
     startISO,
     customCurveCsv,
     durationMode,
-    computationMode
+    computationMode,
+    smoothingMode
   ],
   ([
     depthIn,
@@ -42,7 +45,8 @@ export const stormParams = derived(
     start,
     curveCsv,
     mode,
-    computeMode
+    computeMode,
+    smoothMode
   ]) => {
     if (!Number.isFinite(durationHr) || durationHr <= 0) {
       return null
@@ -62,7 +66,8 @@ export const stormParams = derived(
       startISO: start,
       customCurveCsv: curveCsv.trim() || undefined,
       durationMode: mode,
-      computationMode: computeMode
+      computationMode: computeMode,
+      smoothingMode: smoothMode
     }
 
     return params

@@ -34,6 +34,7 @@
     stormResult,
     table as tableStore,
     timestepMin,
+    smoothingMode,
     type StormResult
   } from './lib/stores'
 
@@ -3020,6 +3021,19 @@
                 bind:value={$timestepMin}
                 on:change={handleTimestepInput}
               />
+            </div>
+            <div class="storm-card input-card">
+              <label for="smoothing-mode" title="Spline smoothing adds extra math and can slow long storms.">
+                Smoothing Mode
+              </label>
+              <select id="smoothing-mode" bind:value={$smoothingMode}>
+                <option value="linear">Linear (fast)</option>
+                <option value="smooth">Monotone spline (slower)</option>
+              </select>
+              <div class="field-hint field-hint--warning">
+                Spline smoothing uses a monotonic curve fit before intensities are computed. Expect slower updates on
+                very fine timesteps.
+              </div>
             </div>
             <div class="storm-card input-card start-card">
               <label for="start">Start (ISO)</label>
