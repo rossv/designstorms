@@ -568,7 +568,7 @@ def write_pcswmm_dat(
 ) -> None:
     t0 = start or datetime(2003, 1, 1)
     with Path(path).open("w", encoding="utf-8", newline="") as f:
-        f.write(";Rainfall (in/hr)\n;PCSWMM generated rain gages file (please do not edit)\n")
+        f.write(";Rainfall (in/hr)\n;PCSWMM generated rain gauges file (please do not edit)\n")
         for i, val in enumerate(df[column], start=1):
             ts = t0 + timedelta(minutes=i * timestep_min)
             f.write(f"{gauge}\t{ts.year}\t{ts.month}\t{ts.day}\t{ts.hour}\t{ts.minute}\t{val:.7G}\n")
