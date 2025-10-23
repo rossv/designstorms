@@ -38,7 +38,14 @@ export function formatPcswmmDat(
 
   let txt = ';Rainfall (in/hr)\n;PCSWMM generated rain gauges file (please do not edit)\n'
   for (let i = 0; i < storm.intensityInHr.length; i++) {
-    const ts = new Date(start.getTime() + (i + 1) * timestepMin * 60 * 1000)
+    const sampleMinutes = (() => {
+      if (storm.timeMin.length === 0) return (i + 1) * timestepMin
+      const nextIndex = Math.min(i + 1, storm.timeMin.length - 1)
+      const actual = storm.timeMin[nextIndex]
+      return Number.isFinite(actual) ? actual : (i + 1) * timestepMin
+    })()
+
+    const ts = new Date(start.getTime() + sampleMinutes * 60 * 1000)
 
     let y: number
     let mo: number
