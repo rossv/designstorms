@@ -62,6 +62,16 @@
   let map: L.Map
   let marker: L.Marker
 
+  const CONTINENTAL_US_CENTER = { lat: 39.8283, lon: -98.5795 }
+  const CONTINENTAL_US_ZOOM = 4
+  const USER_LOCATION_ZOOM = 9
+
+  function setMapViewToContinentalUs() {
+    $lat = CONTINENTAL_US_CENTER.lat
+    $lon = CONTINENTAL_US_CENTER.lon
+    map?.setView([$lat, $lon], CONTINENTAL_US_ZOOM)
+  }
+
   const noaaVisualTabs = [
     { id: 'isoLines', label: 'Depth Iso-Lines' },
     { id: 'rdi3d', label: '3D RDI Surface' },
@@ -2419,10 +2429,8 @@
   }
 
   onMount(() => {
-    map = L.map(mapDiv, { attributionControl: false, zoomControl: true }).setView(
-      [$lat, $lon],
-      9
-    )
+    map = L.map(mapDiv, { attributionControl: false, zoomControl: true })
+    setMapViewToContinentalUs()
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '© OpenStreetMap contributors'
@@ -2438,6 +2446,23 @@
       $lat = ev.latlng.lat
       $lon = ev.latlng.lng
     })
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          $lat = position.coords.latitude
+          $lon = position.coords.longitude
+          map.setView([$lat, $lon], USER_LOCATION_ZOOM)
+        },
+        (error) => {
+          console.warn('Unable to access geolocation; using continental US view.', error)
+          setMapViewToContinentalUs()
+        }
+      )
+    } else {
+      console.warn('Geolocation is not supported; using continental US view.')
+      setMapViewToContinentalUs()
+    }
 
     void loadNoaa()
 

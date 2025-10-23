@@ -7,8 +7,8 @@ export type StormResult = ReturnType<typeof generateStorm>
 type DurationMode = 'standard' | 'custom'
 type ComputationMode = 'precise' | 'fast'
 
-export const lat = writable(40.4406)
-export const lon = writable(-79.9959)
+export const lat = writable(39.8283)
+export const lon = writable(-98.5795)
 
 export const table = writable<NoaaTable | null>(null)
 
