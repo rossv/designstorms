@@ -1,14 +1,39 @@
 import type { StormResult } from './types'
 
 export function saveCsv(storm: StormResult, filename = 'design_storm.csv') {
-  const header = 'time_min,incremental_in,cumulative_in,intensity_in_hr\n'
+  const startISO = (storm as { startISO?: string }).startISO
+  const startDate =
+    typeof startISO === 'string' && startISO
+      ? new Date(startISO)
+      : null
+  const hasValidStart = Boolean(startDate && !Number.isNaN(startDate.getTime()))
+
+  const headerColumns = [
+    ...(hasValidStart ? ['timestamp_iso'] : []),
+    'time_min',
+    'incremental_in',
+    'cumulative_in',
+    'intensity_in_hr'
+  ]
+
   const rows = storm.timeMin
-    .map(
-      (t, i) =>
-        `${t.toFixed(5)},${storm.incrementalIn[i].toFixed(5)},${storm.cumulativeIn[i].toFixed(5)},${storm.intensityInHr[i].toFixed(5)}`,
-    )
+    .map((t, i) => {
+      const values: string[] = []
+      if (hasValidStart) {
+        const ms = (startDate as Date).getTime() + t * 60_000
+        values.push(new Date(ms).toISOString())
+      }
+      values.push(
+        t.toFixed(5),
+        storm.incrementalIn[i].toFixed(5),
+        storm.cumulativeIn[i].toFixed(5),
+        storm.intensityInHr[i].toFixed(5)
+      )
+      return values.join(',')
+    })
     .join('\n')
-  downloadText(header + rows, filename)
+
+  downloadText(`${headerColumns.join(',')}\n${rows}`, filename)
 }
 
 function parseTimezoneOffsetMinutes(value: string): number | null {
