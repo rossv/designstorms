@@ -10,6 +10,8 @@ export interface StormResult {
   incrementalIn: number[]
   cumulativeIn: number[]
   intensityInHr: number[]
+  effectiveTimestepMin: number
+  timestepLocked: boolean
 }
 
 export interface StormParams {

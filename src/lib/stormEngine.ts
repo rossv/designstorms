@@ -392,45 +392,86 @@ export function generateStorm(params: StormParams): StormResult {
   } = params
   const durationMin = durationHr * 60
 
-  if (durationMin <= 0 || timestepMin <= 0) {
-    return {
-      timeMin: [0],
-      incrementalIn: [0],
-      cumulativeIn: [0],
-      intensityInHr: [0]
-    }
-  }
-
   let finalDistribution = distribution
   if (distribution.startsWith('scs_')) {
     finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
   }
 
-  const rawSampleCount = Math.ceil(durationMin / timestepMin) + 1
-  let sampleCount = computationMode === 'fast'
-    ? Math.min(rawSampleCount, MAX_FAST_SAMPLES)
-    : rawSampleCount
+  const scsTable =
+    durationMode === 'standard'
+      ? (SCS_TABLES as Record<string, number[]>)[finalDistribution]
+      : undefined
+  const hasScsTable = Array.isArray(scsTable) && scsTable.length > 0
 
-  let timeMin: number[]
+  if (durationMin <= 0) {
+    return {
+      timeMin: [0],
+      incrementalIn: [0],
+      cumulativeIn: [0],
+      intensityInHr: [0],
+      effectiveTimestepMin: 0,
+      timestepLocked: false
+    }
+  }
 
-  if (
-    computationMode === 'fast' &&
-    rawSampleCount > MAX_FAST_SAMPLES &&
-    MAX_FAST_SAMPLES > 1
-  ) {
-    const effectiveTimestep = durationMin / (MAX_FAST_SAMPLES - 1)
-    sampleCount = MAX_FAST_SAMPLES
+  if (timestepMin <= 0 && !hasScsTable) {
+    return {
+      timeMin: [0],
+      incrementalIn: [0],
+      cumulativeIn: [0],
+      intensityInHr: [0],
+      effectiveTimestepMin: 0,
+      timestepLocked: false
+    }
+  }
+
+  let sampleCount = 0
+  let timeMin: number[] = []
+  let timestepLocked = false
+
+  if (hasScsTable) {
+    sampleCount = scsTable.length
+    timestepLocked = true
+    const spacing = sampleCount > 1 ? durationMin / (sampleCount - 1) : durationMin
     timeMin = Array.from({ length: sampleCount }, (_, i) => {
       if (i === sampleCount - 1) return durationMin
-      return Math.min(i * effectiveTimestep, durationMin)
+      return Math.min(i * spacing, durationMin)
     })
   } else {
-    sampleCount = rawSampleCount
-    timeMin = Array.from({ length: sampleCount }, (_, i) => {
-      if (i === sampleCount - 1) return durationMin
-      return Math.min(i * timestepMin, durationMin)
-    })
+    const rawSampleCount = Math.ceil(durationMin / timestepMin) + 1
+    if (
+      computationMode === 'fast' &&
+      rawSampleCount > MAX_FAST_SAMPLES &&
+      MAX_FAST_SAMPLES > 1
+    ) {
+      const effectiveTimestep = durationMin / (MAX_FAST_SAMPLES - 1)
+      sampleCount = MAX_FAST_SAMPLES
+      timeMin = Array.from({ length: sampleCount }, (_, i) => {
+        if (i === sampleCount - 1) return durationMin
+        return Math.min(i * effectiveTimestep, durationMin)
+      })
+    } else {
+      sampleCount = rawSampleCount
+      timeMin = Array.from({ length: sampleCount }, (_, i) => {
+        if (i === sampleCount - 1) return durationMin
+        return Math.min(i * timestepMin, durationMin)
+      })
+    }
   }
+
+  if (timeMin.length === 0) {
+    return {
+      timeMin: [0],
+      incrementalIn: [0],
+      cumulativeIn: [0],
+      intensityInHr: [0],
+      effectiveTimestepMin: 0,
+      timestepLocked
+    }
+  }
+
+  const effectiveTimestepMin =
+    timeMin.length > 1 ? Math.max(0, timeMin[1] - timeMin[0]) : durationMin
 
   const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
   const baseSamples = cumulativeFromDistribution(
@@ -471,5 +512,12 @@ export function generateStorm(params: StormParams): StormResult {
     return (depth / dt) * 60
   })
 
-  return { timeMin, incrementalIn, cumulativeIn, intensityInHr }
+  return {
+    timeMin,
+    incrementalIn,
+    cumulativeIn,
+    intensityInHr,
+    effectiveTimestepMin,
+    timestepLocked
+  }
 }

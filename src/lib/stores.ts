@@ -1,4 +1,4 @@
-import { derived, writable } from 'svelte/store'
+import { derived, get, writable } from 'svelte/store'
 import type { NoaaTable } from './noaaClient'
 import { generateStorm, type StormParams, type DistributionName } from './stormEngine'
 
@@ -70,12 +70,16 @@ export const stormParams = derived(
 )
 
 export const stormIsComputing = writable(false)
+export const enforcedTimestepMin = writable<number | null>(null)
+export const timestepIsLocked = writable(false)
 
 export const stormResult = derived(
   stormParams,
   ($stormParams, set) => {
     if (!$stormParams) {
       stormIsComputing.set(false)
+      enforcedTimestepMin.set(null)
+      timestepIsLocked.set(false)
       set(null)
       return
     }
@@ -88,6 +92,23 @@ export const stormResult = derived(
       if (cancelled) return
       const result = generateStorm($stormParams)
       set(result)
+
+      const locked = result.timestepLocked ?? false
+      const effective = Number.isFinite(result.effectiveTimestepMin)
+        ? result.effectiveTimestepMin
+        : $stormParams.timestepMin
+
+      if (locked) {
+        enforcedTimestepMin.set(effective)
+        timestepIsLocked.set(true)
+        const current = get(timestepMin)
+        if (!Number.isFinite(current) || Math.abs(current - effective) > 1e-6) {
+          timestepMin.set(effective)
+        }
+      } else {
+        enforcedTimestepMin.set(null)
+        timestepIsLocked.set(false)
+      }
 
       finalizeHandle = setTimeout(() => {
         if (cancelled) return
