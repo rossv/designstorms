@@ -40,14 +40,24 @@ export function saveCsv(
 }
 
 function parseTimezoneOffsetMinutes(value: string): number | null {
-  const tzMatch = value.match(/(Z|[+-]\d{2}:?\d{2})$/)
+  const tzMatch = value.match(/([Zz]|[+-]\d{2}(?::?\d{2})?)$/)
   if (!tzMatch) return null
   const token = tzMatch[1]
-  if (token === 'Z') return 0
+  if (!token) return null
+  if (token.toUpperCase() === 'Z') return 0
+
   const sign = token[0] === '-' ? -1 : 1
-  const hours = Number(token.slice(1, 3))
-  const minutes = Number(token.slice(token.length - 2))
+  const normalized = token.slice(1).replace(':', '')
+  if (normalized.length < 2) {
+    return null
+  }
+
+  const hours = Number(normalized.slice(0, 2))
+  const minutesText = normalized.slice(2)
+  const minutes = minutesText ? Number(minutesText) : 0
+
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+
   return sign * (hours * 60 + minutes)
 }
 

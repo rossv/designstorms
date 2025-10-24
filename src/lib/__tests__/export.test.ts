@@ -47,6 +47,34 @@ describe('formatPcswmmDat', () => {
     const [, year, month, day, hour, minute] = lastLine.split('\t')
     expect([year, month, day, hour, minute]).toEqual(['2024', '1', '1', '1', '0'])
   })
+
+  it('treats lowercase z timezones as UTC offsets', () => {
+    const storm: StormResult = {
+      timeMin: [0, 30],
+      incrementalIn: [0.5, 0.5],
+      cumulativeIn: [0.5, 1],
+      intensityInHr: [1, 1]
+    }
+
+    const getFullYearSpy = vi.spyOn(Date.prototype, 'getFullYear')
+    const getUTCFullYearSpy = vi.spyOn(Date.prototype, 'getUTCFullYear')
+
+    getFullYearSpy.mockClear()
+    getUTCFullYearSpy.mockClear()
+
+    try {
+      const txt = formatPcswmmDat(storm, 30, 'Gauge', '2024-01-01T00:00:00z')
+      const lines = txt.trim().split('\n')
+      const dataLine = lines[3]
+      const [, year, month, day, hour, minute] = dataLine.split('\t')
+      expect([year, month, day, hour, minute]).toEqual(['2024', '1', '1', '0', '30'])
+      expect(getFullYearSpy).not.toHaveBeenCalled()
+      expect(getUTCFullYearSpy).toHaveBeenCalled()
+    } finally {
+      getFullYearSpy.mockRestore()
+      getUTCFullYearSpy.mockRestore()
+    }
+  })
 })
 
 describe('saveCsv', () => {
