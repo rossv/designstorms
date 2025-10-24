@@ -303,8 +303,8 @@ describe('generateStorm', () => {
   it('smooth mode alters intensities while keeping totals and endpoints intact', () => {
     const baseParams = {
       depthIn: 2.5,
-      durationHr: 1,
-      timestepMin: 7,
+      durationHr: 6,
+      timestepMin: 2,
       distribution: 'scs_type_ii' as const,
       customCurveCsv: ''
     }

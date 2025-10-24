@@ -627,14 +627,23 @@ export function generateStorm(params: StormParams): StormResult {
   const baseCumulative = baseSamples.length > 0 ? baseSamples : [0]
   const sampleLastIndex = Math.max(1, baseCumulative.length - 1)
 
-  const baseXs = baseCumulative.map((_, idx) =>
-    sampleLastIndex > 0 ? idx / sampleLastIndex : 0
-  )
-
-  const spline =
-    smoothingMode === 'smooth' && baseCumulative.length >= 2
-      ? prepareMonotoneSpline(baseXs, baseCumulative)
-      : null
+  let spline: MonotoneSpline | null = null
+  if (smoothingMode === 'smooth' && baseCumulative.length >= 2) {
+    const controlCount = Math.max(2, Math.min(sampleCount, 64))
+    const controlSamples = cumulativeFromDistribution(
+      finalDistribution,
+      controlCount,
+      customCurveCsv,
+      computationMode,
+      'linear'
+    )
+    const controlCumulative = controlSamples.length > 0 ? controlSamples : [0]
+    const controlLastIndex = Math.max(1, controlCumulative.length - 1)
+    const splineXs = controlCumulative.map((_, idx) =>
+      controlLastIndex > 0 ? idx / controlLastIndex : 0
+    )
+    spline = prepareMonotoneSpline(splineXs, controlCumulative)
+  }
 
   const evaluateLinear = (nt: number) => {
     if (sampleCount === 1 || baseCumulative.length === 1) {
