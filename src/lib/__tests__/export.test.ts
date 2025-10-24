@@ -50,7 +50,7 @@ describe('formatPcswmmDat', () => {
 })
 
 describe('saveCsv', () => {
-  async function captureCsvText(storm: StormResult & { startISO?: string }) {
+  async function captureCsvText(storm: StormResult, startISO?: string) {
     const originalDocument = globalThis.document
     const appendChild = vi.fn()
     const anchor = {
@@ -70,7 +70,7 @@ describe('saveCsv', () => {
       .mockImplementation(() => 'blob:mock')
     const revokeUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
 
-    saveCsv(storm, 'out.csv')
+    saveCsv(storm, 'out.csv', startISO)
 
     expect(createUrlSpy).toHaveBeenCalledTimes(1)
     const blob = createUrlSpy.mock.calls[0]?.[0]
@@ -111,17 +111,16 @@ describe('saveCsv', () => {
   })
 
   it('includes ISO timestamps when a start time is present', async () => {
-    const storm = {
+    const storm: StormResult = {
       timeMin: [0, 5],
       incrementalIn: [0.1, 0.2],
       cumulativeIn: [0.1, 0.3],
       intensityInHr: [0, 2.4],
       effectiveTimestepMin: 5,
-      timestepLocked: false,
-      startISO: '2024-01-01T00:00:00Z'
-    } satisfies StormResult & { startISO: string }
+      timestepLocked: false
+    }
 
-    const csv = await captureCsvText(storm)
+    const csv = await captureCsvText(storm, '2024-01-01T00:00:00Z')
     const lines = csv.trim().split('\n')
 
     expect(lines[0]).toBe('timestamp_iso,time_min,incremental_in,cumulative_in,intensity_in_hr')

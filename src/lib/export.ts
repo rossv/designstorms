@@ -1,7 +1,10 @@
 import type { StormResult } from './types'
 
-export function saveCsv(storm: StormResult, filename = 'design_storm.csv') {
-  const startISO = (storm as { startISO?: string }).startISO
+export function saveCsv(
+  storm: StormResult,
+  filename = 'design_storm.csv',
+  startISO?: string | null
+) {
   const startDate =
     typeof startISO === 'string' && startISO
       ? new Date(startISO)
