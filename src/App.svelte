@@ -30,7 +30,6 @@
     selectedDepth,
     selectedDurationHr,
     startISO,
-    smoothingMode,
     stormIsComputing,
     stormResult,
     table as tableStore,
@@ -2970,35 +2969,8 @@
                       Fast (approx.)
                     </button>
                   </div>
-                  <div class="mode-toggle" role="group" aria-label="Smoothing mode">
-                    <span
-                      class="mode-toggle__tooltip"
-                      title="Smooth mode evaluates a monotonic spline for the cumulative curve and can increase computation time."
-                      aria-label="Smooth mode evaluates a monotonic spline for the cumulative curve and can increase computation time."
-                      tabindex="0"
-                    >⚠️</span>
-                    <button
-                      type="button"
-                      class:active={$smoothingMode === 'linear'}
-                      on:click={() => ($smoothingMode = 'linear')}
-                    >
-                      Linear (fast)
-                    </button>
-                    <button
-                      type="button"
-                      class:active={$smoothingMode === 'smooth'}
-                      on:click={() => ($smoothingMode = 'smooth')}
-                    >
-                      Smooth (spline)
-                    </button>
-                  </div>
                 </div>
               </div>
-              {#if $smoothingMode === 'smooth'}
-                <p class="mode-note mode-note--smoothing field-hint field-hint--warning">
-                  Smooth mode adds a spline pass to keep totals monotonic; storms may take slightly longer to recompute.
-                </p>
-              {/if}
               {#if $durationMode === 'custom'}
                 <div class="mode-note field-hint field-hint--warning">
                   <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
@@ -3748,21 +3720,6 @@
     background: rgba(8, 13, 20, 0.82);
   }
 
-  .mode-toggle__tooltip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    cursor: help;
-    color: var(--muted);
-    flex: 0 0 auto;
-  }
-
-  .mode-toggle__tooltip:hover,
-  .mode-toggle__tooltip:focus {
-    color: var(--accent);
-  }
-
   .mode-toggle button {
     background: transparent;
     border: none;
@@ -3793,10 +3750,6 @@
   }
 
   .mode-note--computation {
-    margin-top: 10px;
-  }
-
-  .mode-note--smoothing {
     margin-top: 10px;
   }
 
