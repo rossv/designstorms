@@ -25,8 +25,9 @@ scale as expected.
 - **Custom curve rejected** – Ensure the CSV includes two columns (time and cumulative fraction) and that
   the cumulative values increase monotonically from 0 to 1. The importer trims, normalizes, and resamples the
   curve to match the storm duration.
-- **DAT export confusion** – DAT files only contain intensities in inches per hour. Use the CSV export if
-  you need timestamps, cumulative depth, or incremental depth columns.
+- **DAT export confusion** – DAT files only contain intensities in inches per hour. Use the CSV export
+  (with a valid start time if you need timestamps) for timestamp, cumulative depth, or incremental
+  depth columns.
 - **Atlas 14 iso-lines missing** – The contour preview appears only after a table is loaded. Verify that the
   NOAA fetch succeeded (status text under the refresh button) and that JavaScript errors are not preventing
   Plotly from rendering.

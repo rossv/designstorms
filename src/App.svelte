@@ -2103,7 +2103,9 @@
 
   function doCsv() {
     if (!lastStorm) return
-    saveCsv(lastStorm, 'design_storm.csv')
+    const startDate = $startISO ? new Date($startISO) : null
+    const start = startDate && !Number.isNaN(startDate.getTime()) ? $startISO : undefined
+    saveCsv(lastStorm, 'design_storm.csv', start)
   }
   function doDat() {
     if (!lastStorm) return
