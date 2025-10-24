@@ -219,6 +219,7 @@
   }
 
   let interpolatedCells: InterpolationCell[] = []
+  let isExtrapolating = false
   type NoaaRow = NoaaTable['rows'][number]
 
   let customCurveDraft = ''
@@ -813,6 +814,7 @@
       $selectedDepth = Number(depth)
     }
     interpolatedCells = []
+    isExtrapolating = false
   }
 
   function applyNoaaSelection() {
@@ -826,15 +828,18 @@
     if (Number.isFinite(exactDepth)) {
       $selectedDepth = Number(exactDepth)
       interpolatedCells = []
+      isExtrapolating = false
       return
     }
     const interpolated = interpolateDepthFromAri(row, $selectedAri, table.aris)
     if (interpolated) {
       $selectedDepth = interpolated.depth
       interpolatedCells = interpolated.highlight ?? []
+      isExtrapolating = interpolated.extrapolated
       return
     }
     interpolatedCells = []
+    isExtrapolating = false
   }
 
   $: {
@@ -1882,11 +1887,13 @@
   function recalcFromDepthOrDuration() {
     const durationHr = ensureNumericDuration()
     if (!Number.isFinite($selectedDepth) || !Number.isFinite(durationHr)) {
+      isExtrapolating = false
       return
     }
     const table = $tableStore
     if (!table) {
       interpolatedCells = []
+      isExtrapolating = false
       return
     }
 
@@ -1895,6 +1902,7 @@
     })
     if (!result) {
       interpolatedCells = []
+      isExtrapolating = false
       return
     }
 
@@ -1907,6 +1915,7 @@
       $selectedAri = newAri
     }
     interpolatedCells = result.highlight ?? []
+    isExtrapolating = result.extrapolated
   }
 
   $: if ($durationMode === 'standard') {
@@ -1940,11 +1949,13 @@
   function recalcFromAri() {
     const durationHr = ensureNumericDuration()
     if (!Number.isFinite($selectedAri) || !Number.isFinite(durationHr)) {
+      isExtrapolating = false
       return
     }
     const table = $tableStore
     if (!table) {
       interpolatedCells = []
+      isExtrapolating = false
       return
     }
     const { row, label } = getRowForCalculation(
@@ -1954,6 +1965,7 @@
     )
     if (!row || !label) {
       interpolatedCells = []
+      isExtrapolating = false
       return
     }
     if (selectedDurationLabel !== label) {
@@ -1966,8 +1978,10 @@
         $selectedDepth = newDepth
       }
       interpolatedCells = result.highlight ?? []
+      isExtrapolating = result.extrapolated
     } else {
       interpolatedCells = []
+      isExtrapolating = false
     }
   }
 
@@ -3026,35 +3040,40 @@
                 />
               {/if}
             </div>
-            <div class="storm-card input-card">
-              <label for="ari">Average Recurrence Interval (years)</label>
-              <NumericStepper
-                id="ari"
-                label="Average Recurrence Interval (years)"
-                min={0}
-                step={1}
-                bind:value={$selectedAri}
-                on:change={handleAriInput}
-                recalculated={recentlyRecalculated === 'ari'}
-              />
+          <div class="storm-card input-card">
+            <label for="ari">Average Recurrence Interval (years)</label>
+            <NumericStepper
+              id="ari"
+              label="Average Recurrence Interval (years)"
+              min={0}
+              step={1}
+              bind:value={$selectedAri}
+              on:change={handleAriInput}
+              recalculated={recentlyRecalculated === 'ari'}
+            />
+          </div>
+          <div class="storm-card input-card">
+            <label for="timestep">Timestep (min)</label>
+            <NumericStepper
+              id="timestep"
+              label="Timestep (min)"
+              min={0.1}
+              step={1}
+              disabled={$timestepIsLocked}
+              bind:value={$timestepMin}
+              on:change={handleTimestepInput}
+            />
+          </div>
+          {#if isExtrapolating}
+            <p class="field-hint field-hint--warning storm-form__extrapolation-note" role="status">
+              <strong>Extrapolation in effect.</strong> Values extend beyond the NOAA table and are estimated using the nearest trend.
+            </p>
+          {/if}
+          <div class="storm-card input-card start-card">
+            <label for="start">Start (ISO)</label>
+            <div class="start-input">
+              <input id="start" type="datetime-local" bind:value={$startISO} />
             </div>
-            <div class="storm-card input-card">
-              <label for="timestep">Timestep (min)</label>
-              <NumericStepper
-                id="timestep"
-                label="Timestep (min)"
-                min={0.1}
-                step={1}
-                disabled={$timestepIsLocked}
-                bind:value={$timestepMin}
-                on:change={handleTimestepInput}
-              />
-            </div>
-            <div class="storm-card input-card start-card">
-              <label for="start">Start (ISO)</label>
-              <div class="start-input">
-                <input id="start" type="datetime-local" bind:value={$startISO} />
-              </div>
             </div>
           </div>
         </div>
@@ -3789,6 +3808,18 @@
     background: rgba(234, 179, 8, 0.1);
     border: 1px solid rgba(234, 179, 8, 0.3);
     border-radius: 8px;
+  }
+
+  .storm-form__extrapolation-note {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .storm-form__extrapolation-note strong {
+    display: block;
+    font-weight: 600;
+    color: inherit;
+    margin-bottom: 4px;
   }
 
   .custom-curve-preview {

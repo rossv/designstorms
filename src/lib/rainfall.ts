@@ -14,17 +14,20 @@ interface RowPoint {
 export interface AriInterpolationResult {
   ari: number
   highlight: InterpolationCell[] | null
+  extrapolated: boolean
 }
 
 export interface DepthInterpolationResult {
   depth: number
   highlight: InterpolationCell[] | null
+  extrapolated: boolean
 }
 
 export interface DurationInterpolationResult {
   ari: number
   label: string | null
   highlight: InterpolationCell[] | null
+  extrapolated: boolean
 }
 
 export function toHours(label: string): number {
@@ -115,8 +118,34 @@ export function interpolateAriFromDepth(
     return null
   }
 
+  if (points.length === 1) {
+    return { ari: points[0].ari, highlight: null, extrapolated: false }
+  }
+
+  const interpolateBetween = (a: RowPoint, b: RowPoint): AriInterpolationResult | null => {
+    const span = b.depth - a.depth
+    if (Math.abs(span) < 1e-9) {
+      return null
+    }
+
+    const ratio = (targetDepth - a.depth) / span
+    const interpolatedAri = a.ari + ratio * (b.ari - a.ari)
+    const highlightPair: InterpolationCell[] = [
+      { duration: row.label, ari: a.key },
+      { duration: row.label, ari: b.key }
+    ]
+    const isExtrapolated = ratio < 0 || ratio > 1
+    const highlight = isExtrapolated || (ratio > 0 && ratio < 1) ? highlightPair : null
+
+    return { ari: interpolatedAri, highlight, extrapolated: isExtrapolated }
+  }
+
   if (targetDepth <= points[0].depth) {
-    return { ari: points[0].ari, highlight: null }
+    const result = interpolateBetween(points[0], points[1])
+    if (result) {
+      return result
+    }
+    return { ari: points[0].ari, highlight: null, extrapolated: false }
   }
 
   for (let i = 0; i < points.length - 1; i += 1) {
@@ -126,27 +155,20 @@ export function interpolateAriFromDepth(
     const high = Math.max(a.depth, b.depth)
 
     if (targetDepth >= low && targetDepth <= high) {
-      const span = b.depth - a.depth
-      if (Math.abs(span) < 1e-9) {
-        return { ari: b.ari, highlight: null }
+      const result = interpolateBetween(a, b)
+      if (result) {
+        return result
       }
-
-      const ratio = (targetDepth - a.depth) / span
-      const interpolatedAri = a.ari + ratio * (b.ari - a.ari)
-      const highlight =
-        ratio > 0 && ratio < 1
-          ? [
-              { duration: row.label, ari: a.key },
-              { duration: row.label, ari: b.key }
-            ]
-          : null
-
-      return { ari: interpolatedAri, highlight }
+      return { ari: b.ari, highlight: null, extrapolated: false }
     }
   }
 
   const last = points[points.length - 1]
-  return { ari: last.ari, highlight: null }
+  const result = interpolateBetween(points[points.length - 2], last)
+  if (result) {
+    return result
+  }
+  return { ari: last.ari, highlight: null, extrapolated: false }
 }
 
 export function interpolateDepthFromAri(
@@ -159,35 +181,54 @@ export function interpolateDepthFromAri(
     return null
   }
 
+  if (points.length === 1) {
+    return { depth: points[0].depth, highlight: null, extrapolated: false }
+  }
+
+  const interpolateBetween = (a: RowPoint, b: RowPoint): DepthInterpolationResult | null => {
+    const span = b.ari - a.ari
+    if (Math.abs(span) < 1e-9) {
+      return null
+    }
+
+    const ratio = (targetAri - a.ari) / span
+    const interpolatedDepth = a.depth + ratio * (b.depth - a.depth)
+    const highlightPair: InterpolationCell[] = [
+      { duration: row.label, ari: a.key },
+      { duration: row.label, ari: b.key }
+    ]
+    const isExtrapolated = ratio < 0 || ratio > 1
+    const highlight = isExtrapolated || (ratio > 0 && ratio < 1) ? highlightPair : null
+
+    return { depth: interpolatedDepth, highlight, extrapolated: isExtrapolated }
+  }
+
   if (targetAri <= points[0].ari) {
-    return { depth: points[0].depth, highlight: null }
+    const result = interpolateBetween(points[0], points[1])
+    if (result) {
+      return result
+    }
+    return { depth: points[0].depth, highlight: null, extrapolated: false }
   }
 
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i]
     const b = points[i + 1]
     if (targetAri >= a.ari && targetAri <= b.ari) {
-      const span = b.ari - a.ari
-      if (Math.abs(span) < 1e-9) {
-        return { depth: b.depth, highlight: null }
+      const result = interpolateBetween(a, b)
+      if (result) {
+        return result
       }
-
-      const ratio = (targetAri - a.ari) / span
-      const interpolatedDepth = a.depth + ratio * (b.depth - a.depth)
-      const highlight =
-        ratio > 0 && ratio < 1
-          ? [
-              { duration: row.label, ari: a.key },
-              { duration: row.label, ari: b.key }
-            ]
-          : null
-
-      return { depth: interpolatedDepth, highlight }
+      return { depth: b.depth, highlight: null, extrapolated: false }
     }
   }
 
   const last = points[points.length - 1]
-  return { depth: last.depth, highlight: null }
+  const result = interpolateBetween(points[points.length - 2], last)
+  if (result) {
+    return result
+  }
+  return { depth: last.depth, highlight: null, extrapolated: false }
 }
 
 export function interpolateAriForDuration(
@@ -211,21 +252,36 @@ export function interpolateAriForDuration(
     if (exact && Math.abs(exact.hr - durationHr) < 1e-6) {
       const result = interpolateAriFromDepth(exact.row, depth, table.aris)
       if (!result) return null
-      return { ari: result.ari, label: exact.label, highlight: result.highlight }
+      return {
+        ari: result.ari,
+        label: exact.label,
+        highlight: result.highlight,
+        extrapolated: result.extrapolated
+      }
     }
   }
 
   if (durationHr <= entries[0].hr) {
     const result = interpolateAriFromDepth(entries[0].row, depth, table.aris)
     if (!result) return null
-    return { ari: result.ari, label: entries[0].label, highlight: result.highlight }
+    return {
+      ari: result.ari,
+      label: entries[0].label,
+      highlight: result.highlight,
+      extrapolated: result.extrapolated
+    }
   }
 
   const lastEntry = entries[entries.length - 1]
   if (durationHr >= lastEntry.hr) {
     const result = interpolateAriFromDepth(lastEntry.row, depth, table.aris)
     if (!result) return null
-    return { ari: result.ari, label: lastEntry.label, highlight: result.highlight }
+    return {
+      ari: result.ari,
+      label: lastEntry.label,
+      highlight: result.highlight,
+      extrapolated: result.extrapolated
+    }
   }
 
   for (let i = 0; i < entries.length - 1; i += 1) {
@@ -236,7 +292,12 @@ export function interpolateAriForDuration(
       if (span < 1e-6) {
         const fallback = interpolateAriFromDepth(upper.row, depth, table.aris)
         if (!fallback) return null
-        return { ari: fallback.ari, label: upper.label, highlight: fallback.highlight }
+        return {
+          ari: fallback.ari,
+          label: upper.label,
+          highlight: fallback.highlight,
+          extrapolated: fallback.extrapolated
+        }
       }
 
       const lowerResult = interpolateAriFromDepth(lower.row, depth, table.aris)
@@ -246,11 +307,17 @@ export function interpolateAriForDuration(
         const fallback = lowerResult ?? upperResult
         if (!fallback) return null
         const fallbackLabel = lowerResult ? lower.label : upper.label
-        return { ari: fallback.ari, label: fallbackLabel, highlight: fallback.highlight }
+        return {
+          ari: fallback.ari,
+          label: fallbackLabel,
+          highlight: fallback.highlight,
+          extrapolated: fallback.extrapolated
+        }
       }
 
       const ratio = (durationHr - lower.hr) / span
       const interpolatedAri = lowerResult.ari + ratio * (upperResult.ari - lowerResult.ari)
+      const isExtrapolated = lowerResult.extrapolated || upperResult.extrapolated
 
       const combinedHighlights = [
         ...(lowerResult.highlight ?? []),
@@ -267,7 +334,8 @@ export function interpolateAriForDuration(
       return {
         ari: interpolatedAri,
         label: ratio < 0.5 ? lower.label : upper.label,
-        highlight: uniqueHighlights.length ? uniqueHighlights : null
+        highlight: uniqueHighlights.length ? uniqueHighlights : null,
+        extrapolated: isExtrapolated
       }
     }
   }
