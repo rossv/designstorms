@@ -749,6 +749,16 @@
 
   const handleViewportChange = () => {
     updateTableScrollHeight()
+
+    if (!map) return
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        map?.invalidateSize()
+      })
+    } else {
+      map.invalidateSize()
+    }
   }
 
   function scheduleNoaaFetch(delay = 700) {
