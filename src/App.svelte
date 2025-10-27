@@ -4605,12 +4605,13 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     max-width: 720px;
-    width: min(720px, 100%);
+    width: min(720px, calc(100vw - 48px));
     max-height: calc(100vh - 80px);
     overflow: auto;
     padding: 24px 24px 16px;
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
     outline: none;
+    box-sizing: border-box;
   }
 
   .modal-content h2 {
