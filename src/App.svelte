@@ -218,6 +218,91 @@
     return numeric <= 1 ? 'year' : 'years'
   }
 
+  const HUFF_BETA_PARAMS: Record<string, [number, number]> = {
+    huff_q1: [1.5, 5.0],
+    huff_q2: [2.0, 3.0],
+    huff_q3: [3.0, 2.0],
+    huff_q4: [5.0, 1.5]
+  }
+
+  function formatList(items: string[]): string {
+    if (items.length === 0) return ''
+    if (items.length === 1) return items[0]
+    if (items.length === 2) return `${items[0]} and ${items[1]}`
+    return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
+  }
+
+  function formatAriValue(value: number | string) {
+    const numeric = typeof value === 'number' ? value : Number.parseFloat(value)
+    if (Number.isFinite(numeric)) {
+      return `${numeric.toLocaleString()}-year`
+    }
+    return `${value}-year`
+  }
+
+  function formatDurationText(label: string | null, hours: number | null) {
+    if (label) {
+      return label
+    }
+    if (!Number.isFinite(hours)) {
+      return 'the selected duration'
+    }
+    if ((hours ?? 0) >= 1) {
+      const fractionDigits = hours && hours < 10 ? 2 : 1
+      return `${hours.toLocaleString(undefined, { maximumFractionDigits: fractionDigits })} hr`
+    }
+    const minutes = (hours ?? 0) * 60
+    const fractionDigits = minutes < 10 ? 1 : 0
+    return `${minutes.toLocaleString(undefined, { maximumFractionDigits: fractionDigits })} min`
+  }
+
+  function describeInterpolationCells(cells: InterpolationCell[]) {
+    if (!cells.length) {
+      return ''
+    }
+
+    const grouped = new Map<string, Set<string>>()
+    cells.forEach((cell) => {
+      if (!grouped.has(cell.duration)) {
+        grouped.set(cell.duration, new Set())
+      }
+      grouped.get(cell.duration)?.add(cell.ari)
+    })
+
+    const entries = Array.from(grouped.entries()).map(([duration, ariSet]) => {
+      const aris = Array.from(ariSet)
+        .map((value) => ({ raw: value, numeric: Number.parseFloat(value) }))
+        .sort((a, b) => {
+          if (Number.isFinite(a.numeric) && Number.isFinite(b.numeric)) {
+            return a.numeric - b.numeric
+          }
+          return a.raw.localeCompare(b.raw)
+        })
+        .map((entry) => entry.raw)
+
+      return {
+        duration,
+        durationHr: toHours(duration),
+        aris
+      }
+    })
+
+    entries.sort((a, b) => {
+      const diff = a.durationHr - b.durationHr
+      if (Number.isFinite(diff)) {
+        return diff
+      }
+      return a.duration.localeCompare(b.duration)
+    })
+
+    const pieces = entries.map(({ duration, aris }) => {
+      const ariList = formatList(aris.map((value) => formatAriValue(value)))
+      return `${duration} row (${ariList})`
+    })
+
+    return `the NOAA ${formatList(pieces)}`
+  }
+
   let interpolatedCells: InterpolationCell[] = []
   let isExtrapolating = false
   type NoaaRow = NoaaTable['rows'][number]
@@ -401,6 +486,9 @@
   let observedTableScrollEl: HTMLDivElement | null = null
   let tableScrollMaxHeight = 320
 
+  let resolvedDistribution: DistributionName = 'scs_type_ii'
+  let stormSummaryLines: string[] = []
+
   type ComparisonCurve = {
     distribution: DistributionName
     label: string
@@ -430,6 +518,103 @@
   let noaaAriEntries: AriEntry[] = []
   let noaaContourZ: (number | null)[][] = []
   let noaaIntensityZ: (number | null)[][] = []
+
+  $: {
+    const numericDuration = Number($selectedDurationHr)
+    const safeDuration = Number.isFinite(numericDuration) ? numericDuration : DEFAULT_DURATION_HOURS
+    resolvedDistribution = getBestScsDistribution($distribution, safeDuration, $durationMode)
+  }
+
+  $: {
+    const lines: string[] = []
+    const numericDuration = Number($selectedDurationHr)
+    const durationHr = Number.isFinite(numericDuration) ? numericDuration : null
+    const durationText = formatDurationText(selectedDurationLabel, durationHr)
+    const depthValue = Number.isFinite($selectedDepth) ? Number($selectedDepth) : null
+    const depthText = depthValue != null ? `${depthValue.toFixed(2)} in` : null
+    const ariValue = Number.isFinite($selectedAri) ? Number($selectedAri) : null
+    const ariText = ariValue != null ? formatAriValue(ariValue) : null
+
+    const resolvedLabel = getDistributionLabel(resolvedDistribution)
+
+    let distributionLine = ''
+    if ($distribution === 'user') {
+      if (customCurveLines.length >= 2) {
+        distributionLine = `Rainfall pattern comes from the custom CSV (${customCurveLines.length} rows) and is stretched across ${durationText}.`
+      } else {
+        distributionLine = 'Rainfall pattern falls back to a straight-line ramp because no custom CSV points are loaded.'
+      }
+    } else if (resolvedDistribution !== $distribution) {
+      const modeLabel = $durationMode === 'standard' ? 'preset' : 'custom duration'
+      distributionLine = `Rainfall pattern uses the ${resolvedLabel} table as the closest match for the ${modeLabel} of ${durationText}.`
+    } else if (resolvedDistribution.startsWith('huff_')) {
+      const params = HUFF_BETA_PARAMS[resolvedDistribution]
+      if (params) {
+        distributionLine = `Rainfall pattern follows the ${resolvedLabel} curve, generated from a Beta distribution (a = ${params[0]}, b = ${params[1]}).`
+      } else {
+        distributionLine = `Rainfall pattern follows the ${resolvedLabel} curve.`
+      }
+    } else {
+      distributionLine = `Rainfall pattern follows the ${resolvedLabel} curve.`
+    }
+
+    if (distributionLine) {
+      lines.push(distributionLine)
+    }
+
+    const table = $tableStore
+    let noaaLine = ''
+    if (depthText && ariText) {
+      if (table && selectedDurationLabel) {
+        const row = table.rows.find((entry) => entry.label === selectedDurationLabel)
+        const ariKey = String($selectedAri)
+        const tableDepth = row ? row.values[ariKey] : Number.NaN
+        const hasExactDepth = Number.isFinite(tableDepth) && Math.abs(Number(tableDepth) - depthValue!) < 0.005
+
+        if (hasExactDepth) {
+          noaaLine = `Depth of ${depthText} comes directly from ${selectedDurationLabel} / ${ariText} in the NOAA table.`
+        } else if (interpolatedCells.length) {
+          const description = describeInterpolationCells(interpolatedCells)
+          if (description) {
+            noaaLine = `Depth of ${depthText} was ${isExtrapolating ? 'extrapolated' : 'interpolated'} from ${description}.`
+          }
+        } else {
+          noaaLine = `Depth of ${depthText} was entered manually for ${ariText}.`
+        }
+      } else {
+        noaaLine = `Depth of ${depthText} was entered manually because no NOAA table is loaded.`
+      }
+    }
+
+    if (noaaLine) {
+      lines.push(noaaLine)
+    }
+
+    let computationLine = ''
+    if (lastStorm) {
+      const effectiveStep = Number(lastStorm.effectiveTimestepMin)
+      const sampleCount = Array.isArray(lastStorm.timeMin) ? lastStorm.timeMin.length : null
+      if (lastStorm.timestepLocked && Number.isFinite(effectiveStep)) {
+        computationLine = `NRCS table locks the timestep at ${effectiveStep.toLocaleString(undefined, { maximumFractionDigits: 2 })} minutes (${sampleCount?.toLocaleString() ?? '0'} points).`
+      } else if ($computationMode === 'fast' && Number.isFinite(effectiveStep)) {
+        computationLine = `Fast mode condensed the storm to ${sampleCount?.toLocaleString() ?? '0'} steps (about ${effectiveStep.toLocaleString(undefined, { maximumFractionDigits: 2 })} minutes apart).`
+      } else if (Number.isFinite(effectiveStep)) {
+        computationLine = `Precise mode is using ${sampleCount?.toLocaleString() ?? '0'} steps at ${effectiveStep.toLocaleString(undefined, { maximumFractionDigits: 2 })} minute spacing.`
+      } else if (sampleCount != null) {
+        computationLine = `Storm output spans ${sampleCount.toLocaleString()} steps.`
+      }
+    } else if ($computationMode === 'fast') {
+      computationLine = `Fast mode will limit the storm to ${MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps if the requested spacing is denser.`
+    } else if (Number.isFinite($timestepMin)) {
+      computationLine = `Precise mode will follow every ${Number($timestepMin).toLocaleString(undefined, { maximumFractionDigits: 2 })}-minute timestep.`
+    }
+
+    if (computationLine) {
+      lines.push(computationLine)
+    }
+
+    stormSummaryLines = lines.filter(Boolean)
+  }
 
   $: {
     const table = $tableStore
@@ -3099,6 +3284,18 @@
             <div class="stat-value">{$selectedAri} {formatYearLabel($selectedAri)}</div>
           </div>
         </div>
+      </div>
+      <div class="panel storm-summary-panel">
+        <h2 class="section-title">How this storm was built</h2>
+        {#if stormSummaryLines.length}
+          <ul class="storm-summary-list">
+            {#each stormSummaryLines as line}
+              <li>{line}</li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="empty">Adjust the parameters to see how the storm will be constructed.</p>
+        {/if}
       </div>
     </section>
 
