@@ -88,8 +88,9 @@
   let previousNoaaVisual: NoaaVisualKey = activeNoaaVisual
 
   const stormRainDrops = Array.from({ length: 8 }, (_, index) => index)
+  const STORM_PROCESSING_RAIN_HOLD_MS = 1800
   let stormProcessingRainVisible = false
-  let stormProcessingRainHideTimer: ReturnType<typeof setTimeout> | null = null
+  let stormProcessingRainHideTimeout: ReturnType<typeof setTimeout> | null = null
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -432,19 +433,17 @@
     noaaIntensityPlotIsRendering ||
     comparisonCurvesAreComputing ||
     curvePlotIsRendering
-  $: {
-    if (isStormProcessing) {
-      stormProcessingRainVisible = true
-      if (stormProcessingRainHideTimer) {
-        clearTimeout(stormProcessingRainHideTimer)
-        stormProcessingRainHideTimer = null
-      }
-    } else if (!stormProcessingRainHideTimer) {
-      stormProcessingRainHideTimer = setTimeout(() => {
-        stormProcessingRainVisible = false
-        stormProcessingRainHideTimer = null
-      }, 1800)
+  $: if (isStormProcessing) {
+    stormProcessingRainVisible = true
+    if (stormProcessingRainHideTimeout) {
+      clearTimeout(stormProcessingRainHideTimeout)
+      stormProcessingRainHideTimeout = null
     }
+  } else if (stormProcessingRainVisible && !stormProcessingRainHideTimeout) {
+    stormProcessingRainHideTimeout = setTimeout(() => {
+      stormProcessingRainVisible = false
+      stormProcessingRainHideTimeout = null
+    }, STORM_PROCESSING_RAIN_HOLD_MS)
   }
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
@@ -1374,6 +1373,7 @@
       const plotPromises: Promise<PlotlyHTMLElement>[] = []
 
       if (plotDiv1) {
+        chartsAreRendering = true
         plotPromises.push(
           Plotly.react(
             plotDiv1,
@@ -1410,6 +1410,7 @@
       }
 
       if (plotDiv2) {
+        chartsAreRendering = true
         plotPromises.push(
           Plotly.react(
             plotDiv2,
@@ -1443,6 +1444,7 @@
       }
 
       if (plotDiv3) {
+        chartsAreRendering = true
         plotPromises.push(
           Plotly.react(
             plotDiv3,
@@ -3266,7 +3268,6 @@
   onDestroy(() => {
     teardownTheme()
     if (fetchTimer) clearTimeout(fetchTimer)
-    if (stormProcessingRainHideTimer) clearTimeout(stormProcessingRainHideTimer)
     if (map) map.remove()
     if (plotDiv1) Plotly.purge(plotDiv1)
     if (plotDiv2) Plotly.purge(plotDiv2)
@@ -3302,6 +3303,10 @@
     if (observedNoaaScrollEl) {
       observedNoaaScrollEl.removeEventListener('scroll', handleNoaaScroll)
       observedNoaaScrollEl = null
+    }
+    if (stormProcessingRainHideTimeout) {
+      clearTimeout(stormProcessingRainHideTimeout)
+      stormProcessingRainHideTimeout = null
     }
   })
 
@@ -3358,6 +3363,20 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="page">
+  {#if stormProcessingRainVisible}
+    <div
+      class="storm-processing-rain storm-processing-rain--page"
+      aria-hidden="true"
+      transition:fade
+    >
+      {#each stormRainDrops as drop}
+        <span
+          class="storm-processing-rain__drop storm-processing-rain__drop--page"
+          style={`animation-delay: ${drop * 120}ms`}
+        ></span>
+      {/each}
+    </div>
+  {/if}
   <header class="panel header">
     <div class="title-group">
       <img src={designStormIcon} alt="Design Storm" class="app-icon" />
@@ -3698,7 +3717,11 @@
               </div>
             {/if}
             {#if stormProcessingRainVisible}
-              <div class="storm-processing-rain" aria-hidden="true" transition:fade>
+              <div
+                class="storm-processing-rain storm-processing-rain--indicator"
+                aria-hidden="true"
+                transition:fade
+              >
                 {#each stormRainDrops as drop}
                   <span
                     class="storm-processing-rain__drop"
@@ -5173,15 +5196,27 @@
   }
 
   .storm-processing-rain {
-    position: absolute;
-    inset: 0;
     display: flex;
-    justify-content: space-between;
     align-items: flex-start;
     pointer-events: none;
+  }
+
+  .storm-processing-rain--indicator {
+    position: absolute;
+    inset: 0;
+    justify-content: space-between;
     gap: 6px;
     padding-inline: 4px;
     z-index: 0;
+  }
+
+  .storm-processing-rain--page {
+    position: fixed;
+    inset: 0;
+    justify-content: space-evenly;
+    gap: clamp(24px, 6vw, 120px);
+    padding-inline: clamp(32px, 12vw, 240px);
+    z-index: 2;
   }
 
   .storm-processing-rain__drop {
@@ -5192,6 +5227,10 @@
     background: linear-gradient(180deg, transparent 0%, var(--accent) 85%, var(--accent) 100%);
     opacity: 0;
     transform: translate3d(0, -140%, 0);
+  }
+
+  .storm-processing-rain__drop--page {
+    height: 110vh;
   }
 
   @media (prefers-reduced-motion: no-preference) {
