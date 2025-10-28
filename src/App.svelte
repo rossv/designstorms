@@ -3699,12 +3699,12 @@
               <tbody>
                 {#each tableRows as row}
                   <tr>
-                    <td class="left">{row.time.toFixed(2)}</td>
-                    <td>{row.intensity.toFixed(5)}</td>
-                    <td>{row.incremental.toFixed(5)}</td>
-                    <td>{row.cumulative.toFixed(5)}</td>
+                    <td class="left" data-label={timeColumnLabel}>{row.time.toFixed(2)}</td>
+                    <td data-label="Intensity (in/hr)">{row.intensity.toFixed(5)}</td>
+                    <td data-label="Incremental (in)">{row.incremental.toFixed(5)}</td>
+                    <td data-label="Cumulative (in)">{row.cumulative.toFixed(5)}</td>
                     {#if hasTimestamp}
-                      <td class="left">{row.timestamp}</td>
+                      <td class="left" data-label="Datetime">{row.timestamp}</td>
                     {/if}
                   </tr>
                 {/each}
@@ -4961,6 +4961,89 @@
     margin-top: 6px;
     font-size: 20px;
     font-weight: 600;
+  }
+
+  @media (max-width: 720px) {
+    .results .table-scroll {
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      overflow-x: visible;
+    }
+
+    .data-table {
+      display: block;
+      border-collapse: separate;
+    }
+
+    .data-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      border: 0;
+    }
+
+    .data-table tbody {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .data-table tr {
+      display: grid;
+      padding: 14px;
+      background: var(--stat-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--mobile-card-shadow, none);
+    }
+
+    .data-table tr:nth-child(even) {
+      background: var(--stat-bg);
+    }
+
+    .data-table th,
+    .data-table td {
+      white-space: normal;
+    }
+
+    .data-table td {
+      display: grid;
+      grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+      gap: 10px;
+      text-align: left;
+      padding: 6px 0;
+      word-break: break-word;
+      border-bottom: none;
+    }
+
+    .data-table td::before {
+      content: attr(data-label);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .data-table td + td {
+      border-top: 1px solid var(--table-divider);
+      padding-top: 12px;
+      margin-top: 8px;
+    }
+
+    .data-table td:first-child {
+      padding-top: 0;
+    }
+
+    .data-table td:last-child {
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
   }
 
   button.ghost {
