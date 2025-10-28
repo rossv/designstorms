@@ -18,7 +18,8 @@
   } from './lib/rainfall'
   import { saveCsv, savePcswmmDat } from './lib/export'
   import NumericStepper from './lib/components/NumericStepper.svelte'
-  import designStormIcon from './design_storm.ico'
+  import designStormLightIcon from './design_storm.ico'
+  import designStormDarkIcon from './design_storm_dark.ico'
   import {
     computationMode,
     customCurveCsv,
@@ -95,6 +96,7 @@
   type Theme = 'light' | 'dark'
   const THEME_STORAGE_KEY = 'designstorms:theme'
   let theme: Theme = 'dark'
+  let designStormIcon = designStormDarkIcon
   let hasExplicitTheme = false
   let prefersLightMedia: MediaQueryList | null = null
   let prefersLightChangeHandler: ((event: MediaQueryListEvent) => void) | null = null
@@ -102,6 +104,8 @@
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.theme = theme
   }
+
+  $: designStormIcon = theme === 'light' ? designStormLightIcon : designStormDarkIcon
 
   function applyTheme(value: Theme) {
     theme = value
