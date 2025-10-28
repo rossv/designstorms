@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
+  import { fade } from 'svelte/transition'
+  import { flip } from 'svelte/animate'
   import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
@@ -3883,9 +3885,9 @@
       <div class="panel storm-summary-panel">
         <h2 class="section-title">How this storm was built</h2>
         {#if stormSummaryLines.length}
-          <ul class="storm-summary-list">
-            {#each stormSummaryLines as line}
-              <li>{line}</li>
+          <ul class="storm-summary-list" animate:flip>
+            {#each stormSummaryLines as line (line)}
+              <li transition:fade={{ delay: 50 }}>{line}</li>
             {/each}
           </ul>
         {:else}
