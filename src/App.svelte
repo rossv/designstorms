@@ -210,6 +210,48 @@
   const MIN_DURATION_HOURS = 1 / 60
   const DEFAULT_ARI_YEARS = 2
 
+  const SAMPLE_NOAA_TABLE: NoaaTable = {
+    aris: ['1', '2', '5', '10', '25', '50', '100'],
+    rows: [
+      {
+        label: '5 min',
+        values: { '1': 0.52, '2': 0.63, '5': 0.78, '10': 0.89, '25': 1.03, '50': 1.15, '100': 1.27 }
+      },
+      {
+        label: '15 min',
+        values: { '1': 0.84, '2': 1.02, '5': 1.26, '10': 1.45, '25': 1.68, '50': 1.88, '100': 2.08 }
+      },
+      {
+        label: '30 min',
+        values: { '1': 1.12, '2': 1.34, '5': 1.68, '10': 1.92, '25': 2.24, '50': 2.52, '100': 2.78 }
+      },
+      {
+        label: '1 hr',
+        values: { '1': 1.54, '2': 1.82, '5': 2.24, '10': 2.56, '25': 3.02, '50': 3.36, '100': 3.68 }
+      },
+      {
+        label: '2 hr',
+        values: { '1': 1.98, '2': 2.34, '5': 2.84, '10': 3.24, '25': 3.78, '50': 4.18, '100': 4.58 }
+      },
+      {
+        label: '6 hr',
+        values: { '1': 2.68, '2': 3.16, '5': 3.84, '10': 4.32, '25': 5.02, '50': 5.56, '100': 6.08 }
+      },
+      {
+        label: '12 hr',
+        values: { '1': 3.28, '2': 3.86, '5': 4.68, '10': 5.28, '25': 6.12, '50': 6.78, '100': 7.42 }
+      },
+      {
+        label: '24 hr',
+        values: { '1': 4.12, '2': 4.84, '5': 5.86, '10': 6.58, '25': 7.62, '50': 8.44, '100': 9.22 }
+      },
+      {
+        label: '2 day',
+        values: { '1': 4.86, '2': 5.72, '5': 6.88, '10': 7.72, '25': 8.94, '50': 9.88, '100': 10.76 }
+      }
+    ]
+  }
+
   const STANDARD_DURATION_HOURS = [6, 12, 24] as const
 
   type StandardDurationValue = `${(typeof STANDARD_DURATION_HOURS)[number]}`
@@ -433,6 +475,7 @@
 
   let isLoadingNoaa = false
   let noaaError = ''
+  let isUsingSampleNoaaTable = false
 
   let lastStorm: StormResult | null = null
   
@@ -1087,6 +1130,68 @@
     }
   }
 
+  function applyNoaaTableData(
+    table: NoaaTable,
+    hadTable: boolean,
+    options?: { fetchKey?: string | null }
+  ) {
+    $tableStore = table
+    durations = table.rows.map((r) => r.label)
+    aris = table.aris
+
+    const defaultDurationLabel = table.rows.find(
+      (r) => Math.abs(toHours(r.label) - DEFAULT_DURATION_HOURS) < 1e-6
+    )?.label
+
+    const defaultDurationIndex = defaultDurationLabel
+      ? table.rows.findIndex((r) => r.label === defaultDurationLabel)
+      : -1
+
+    if (!hadTable) {
+      const initialScrollIndex = findInitialNoaaScrollIndex(table.rows)
+      if (initialScrollIndex != null) {
+        pendingNoaaScrollIndex = initialScrollIndex
+      } else {
+        pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
+      }
+    } else {
+      const selectedIndex = selectedDurationLabel
+        ? table.rows.findIndex((row) => row.label === selectedDurationLabel)
+        : -1
+      if (selectedIndex >= 0) {
+        pendingNoaaScrollIndex = selectedIndex
+      } else {
+        pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
+      }
+    }
+
+    if (!hadTable && defaultDurationLabel) {
+      selectedDurationLabel = defaultDurationLabel
+    } else if (!selectedDurationLabel || !table.rows.some((r) => r.label === selectedDurationLabel)) {
+      selectedDurationLabel = defaultDurationLabel ?? table.rows[0]?.label ?? null
+    }
+
+    if (!hadTable && table.aris.includes(String(DEFAULT_ARI_YEARS))) {
+      $selectedAri = DEFAULT_ARI_YEARS
+    }
+
+    if (!table.aris.includes(String($selectedAri)) && table.aris.length) {
+      $selectedAri = Number(table.aris[0])
+    }
+
+    if (selectedDurationLabel) {
+      applyNoaaSelection()
+    }
+
+    if (options) {
+      if (typeof options.fetchKey === 'string') {
+        lastFetchKey = options.fetchKey
+      } else if (options.fetchKey === null) {
+        lastFetchKey = ''
+      }
+    }
+  }
+
   async function loadNoaa() {
     const hadTable = Boolean($tableStore)
     if (fetchTimer) {
@@ -1108,60 +1213,20 @@
       const txt = await fetchNoaaTable($lat, $lon)
       const parsed = parseNoaaTable(txt)
       if (!parsed) throw new Error('NOAA table parse failed')
-      $tableStore = parsed
-      durations = parsed.rows.map((r) => r.label)
-      aris = parsed.aris
-      const defaultDurationLabel = parsed.rows.find(
-        (r) => Math.abs(toHours(r.label) - DEFAULT_DURATION_HOURS) < 1e-6
-      )?.label
-      const defaultDurationIndex = defaultDurationLabel
-        ? parsed.rows.findIndex((r) => r.label === defaultDurationLabel)
-        : -1
-      if (!hadTable) {
-        const initialScrollIndex = findInitialNoaaScrollIndex(parsed.rows)
-        if (initialScrollIndex != null) {
-          pendingNoaaScrollIndex = initialScrollIndex
-        } else {
-          pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
-        }
-      } else {
-        const selectedIndex = selectedDurationLabel
-          ? parsed.rows.findIndex((row) => row.label === selectedDurationLabel)
-          : -1
-        if (selectedIndex >= 0) {
-          pendingNoaaScrollIndex = selectedIndex
-        } else {
-          pendingNoaaScrollIndex = defaultDurationIndex >= 0 ? defaultDurationIndex : null
-        }
-      }
-      if (!hadTable && defaultDurationLabel) {
-        selectedDurationLabel = defaultDurationLabel
-      } else if (
-        !selectedDurationLabel ||
-        !parsed.rows.some((r) => r.label === selectedDurationLabel)
-      ) {
-        selectedDurationLabel = defaultDurationLabel ?? parsed.rows[0]?.label ?? null
-      }
-      if (!hadTable && aris.includes(String(DEFAULT_ARI_YEARS))) {
-        $selectedAri = DEFAULT_ARI_YEARS
-      }
-      if (!aris.includes(String($selectedAri)) && aris.length) {
-        $selectedAri = Number(aris[0])
-      }
-      if (selectedDurationLabel) {
-        applyNoaaSelection()
-      }
-      lastFetchKey = key
+      applyNoaaTableData(parsed, hadTable, { fetchKey: key })
+      isUsingSampleNoaaTable = false
     } catch (e: any) {
-      noaaError = e?.message ?? 'Unable to fetch NOAA data.'
-      $tableStore = null
-      durations = []
-      aris = []
-      selectedDurationLabel = null
-      lastFetchKey = ''
-      drawIsoPlot()
-      drawNoaa3dPlot()
-      drawNoaaIntensityPlot()
+      const errorMessage = e?.message ?? 'Unable to fetch NOAA data.'
+      if (!hadTable) {
+        applyNoaaTableData(SAMPLE_NOAA_TABLE, false, { fetchKey: null })
+        isUsingSampleNoaaTable = true
+        noaaError = `${errorMessage} Showing sample NOAA data for preview.`
+      } else {
+        noaaError = isUsingSampleNoaaTable
+          ? `${errorMessage} Showing sample NOAA data for preview.`
+          : errorMessage
+        lastFetchKey = ''
+      }
     } finally {
       isLoadingNoaa = false
     }
@@ -3265,6 +3330,11 @@
               </div>
             </div>
           </div>
+          {#if isUsingSampleNoaaTable}
+            <p class="field-hint field-hint--warning noaa-sample-note" role="status">
+              Showing sample NOAA rainfall depths for preview. Refresh once live NOAA data is available.
+            </p>
+          {/if}
           <div class="small">Tip: Click a table cell to apply the depth, duration, and Average Recurrence Interval to the storm parameters.</div>
         {/if}
 
@@ -4552,6 +4622,10 @@
 
   .noaa-status .error {
     color: var(--err);
+  }
+
+  .noaa-sample-note {
+    margin-top: 12px;
   }
 
   .noaa-table-scroll {
