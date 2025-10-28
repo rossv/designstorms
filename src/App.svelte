@@ -198,6 +198,8 @@
   let lastFetchKey = ''
 
   let noaaTableScrollEl: HTMLDivElement | null = null
+  let isCompactViewport = false
+  const COMPACT_VIEWPORT_MAX_WIDTH = 768
   let observedNoaaScrollEl: HTMLDivElement | null = null
   let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
@@ -988,6 +990,13 @@
 
   const handleViewportChange = () => {
     updateTableScrollHeight()
+
+    if (typeof window !== 'undefined') {
+      const nextIsCompactViewport = window.innerWidth <= COMPACT_VIEWPORT_MAX_WIDTH
+      if (nextIsCompactViewport !== isCompactViewport) {
+        isCompactViewport = nextIsCompactViewport
+      }
+    }
 
     if (!map) return
 
@@ -2984,7 +2993,7 @@
     window.addEventListener('scroll', handleViewportChange, { passive: true })
     tableScrollObserver = new ResizeObserver(handleViewportChange)
     attachTableScrollObserver()
-    updateTableScrollHeight()
+    handleViewportChange()
   })
 
   onDestroy(() => {
@@ -3194,62 +3203,63 @@
 
         {#if $tableStore}
           <div class="noaa-table-scroll" bind:this={noaaTableScrollEl}>
-            <div class="noaa-table panel">
-              <div
-                class="table-header"
-                style={`grid-template-columns: minmax(0, var(--ari-column-width, 150px)) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
-              >
+            <div
+              class="noaa-table panel"
+              class:noaa-table--compact={isCompactViewport}
+              style={`--noaa-duration-columns: ${Math.max(durationEntriesForTable.length, 1)};`}
+            >
+              <div class="table-header">
                 <div class="table-header__ari">
                   <span class="ari-label">Average Recurrence Interval (years)</span>
                 </div>
-                {#each durationEntriesForTable as entry}
-                  {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
-                  <div class="table-header__duration" class:column-active={selectedDurationLabel === entry.label}>
-                    <button
-                      type="button"
-                      class="table-button duration-btn"
-                      class:active={selectedDurationLabel === entry.label}
-                      data-column-index={entry.index}
-                      disabled={!isSelectable}
-                      on:click={() => pickCell(entry.label, String($selectedAri))}
-                    >
-                      {entry.label}
-                    </button>
-                  </div>
-                {/each}
+                <div class="table-header__durations">
+                  {#each durationEntriesForTable as entry}
+                    {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
+                    <div class="table-header__duration" class:column-active={selectedDurationLabel === entry.label}>
+                      <button
+                        type="button"
+                        class="table-button duration-btn"
+                        class:active={selectedDurationLabel === entry.label}
+                        data-column-index={entry.index}
+                        disabled={!isSelectable}
+                        on:click={() => pickCell(entry.label, String($selectedAri))}
+                      >
+                        {entry.label}
+                      </button>
+                    </div>
+                  {/each}
+                </div>
               </div>
               <div class="table-body">
                 {#each aris as ariKey}
-                  <div
-                    class="table-row"
-                    class:ari-active={String($selectedAri) === ariKey}
-                    style={`grid-template-columns: minmax(0, var(--ari-column-width, 150px)) repeat(${durationEntriesForTable.length}, minmax(80px, 1fr));`}
-                  >
+                  <div class="table-row" class:ari-active={String($selectedAri) === ariKey}>
                     <div class="ari-cell">
                       <div class="ari-value">
                         <strong>{ariKey}</strong>
                       </div>
                       <div class="ari-caption">{formatYearLabel(ariKey)}</div>
                     </div>
-                    {#each durationEntriesForTable as entry}
-                      {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
-                      {@const rawDepth = entry.row.values[ariKey]}
-                      {@const depthValue = Number.isFinite(rawDepth) ? Number(rawDepth) : null}
-                      {@const depthText = depthValue != null ? depthValue.toFixed(3) : ''}
-                      <button
-                        type="button"
-                        class="table-button cell"
-                        class:selected={selectedDurationLabel === entry.label && String($selectedAri) === ariKey}
-                        class:column-active={selectedDurationLabel === entry.label}
-                        class:interpolated={cellIsInterpolated(entry.label, ariKey)}
-                        disabled={!isSelectable}
-                        data-ari={ariKey}
-                        aria-label={`${entry.label} duration, ${ariKey}-year Average Recurrence Interval depth ${depthText ? `${depthText} in` : 'not available'}`}
-                        on:click={() => pickCell(entry.label, ariKey)}
-                      >
-                        {depthText}
-                      </button>
-                    {/each}
+                    <div class="table-row__durations">
+                      {#each durationEntriesForTable as entry}
+                        {@const isSelectable = isCustomDurationMode || durationLabelIsStandard(entry.label)}
+                        {@const rawDepth = entry.row.values[ariKey]}
+                        {@const depthValue = Number.isFinite(rawDepth) ? Number(rawDepth) : null}
+                        {@const depthText = depthValue != null ? depthValue.toFixed(3) : ''}
+                        <button
+                          type="button"
+                          class="table-button cell"
+                          class:selected={selectedDurationLabel === entry.label && String($selectedAri) === ariKey}
+                          class:column-active={selectedDurationLabel === entry.label}
+                          class:interpolated={cellIsInterpolated(entry.label, ariKey)}
+                          disabled={!isSelectable}
+                          data-ari={ariKey}
+                          aria-label={`${entry.label} duration, ${ariKey}-year Average Recurrence Interval depth ${depthText ? `${depthText} in` : 'not available'}`}
+                          on:click={() => pickCell(entry.label, ariKey)}
+                        >
+                          {depthText}
+                        </button>
+                      {/each}
+                    </div>
                   </div>
                 {/each}
               </div>
@@ -4554,6 +4564,7 @@
   }
 
   .noaa-table {
+    --noaa-duration-columns: 1;
     padding: 0;
     overflow: visible;
     width: max-content;
@@ -4563,10 +4574,29 @@
     gap: 0;
   }
 
+  .noaa-table--compact {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .table-header,
   .table-row {
     display: grid;
+    grid-template-columns: minmax(0, var(--ari-column-width, 150px)) minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .table-header__durations,
+  .table-row__durations {
+    display: grid;
+    grid-template-columns: repeat(var(--noaa-duration-columns), minmax(80px, 1fr));
+    align-items: stretch;
+    min-width: 0;
+  }
+
+  .table-header__durations,
+  .table-row__durations {
+    border-left: 1px solid var(--table-header-divider);
   }
 
   .table-header {
@@ -4600,9 +4630,16 @@
   }
 
   .table-header__duration {
-    border-left: 1px solid var(--table-header-divider);
     display: flex;
     align-items: stretch;
+  }
+
+  .table-header__duration {
+    border-left: 1px solid var(--table-header-divider);
+  }
+
+  .table-header__duration:first-child {
+    border-left: none;
   }
 
   .table-header__duration.column-active {
@@ -4690,6 +4727,62 @@
 
   .table-button.cell {
     border-left: 1px solid var(--table-header-divider);
+  }
+
+  .table-row__durations .table-button.cell:first-child {
+    border-left: none;
+  }
+
+  .noaa-table--compact .table-header,
+  .noaa-table--compact .table-row {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .noaa-table--compact .table-header__durations,
+  .noaa-table--compact .table-row__durations {
+    border-left: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .noaa-table--compact .table-header__durations {
+    padding: 12px;
+  }
+
+  .noaa-table--compact .table-row__durations {
+    padding: 8px 12px 12px;
+  }
+
+  .noaa-table--compact .table-header__duration,
+  .noaa-table--compact .table-row__durations .table-button.cell {
+    border-left: none;
+    flex: 1 1 140px;
+    min-width: 140px;
+  }
+
+  .noaa-table--compact .table-row__durations .table-button.cell {
+    text-align: left;
+  }
+
+  .noaa-table--compact .table-header__ari,
+  .noaa-table--compact .ari-cell {
+    transform: none;
+    border-right: none;
+    width: 100%;
+    text-align: left;
+  }
+
+  .noaa-table--compact .table-header__ari {
+    justify-content: flex-start;
+    padding: 12px;
+  }
+
+  .noaa-table--compact .ari-cell {
+    padding: 12px;
+    gap: 4px;
   }
 
   .table-button.cell.column-active {
