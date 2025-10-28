@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
+  import { fade } from 'svelte/transition'
   import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
   import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
@@ -84,6 +85,8 @@
 
   let activeNoaaVisual: NoaaVisualKey = 'isoLines'
   let previousNoaaVisual: NoaaVisualKey = activeNoaaVisual
+
+  const stormRainDrops = Array.from({ length: 8 }, (_, index) => index)
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -3675,6 +3678,14 @@
                 <span class="storm-processing-indicator__spinner" aria-hidden="true"></span>
                 <span class="storm-processing-indicator__text">Processing storm…</span>
               </div>
+              <div class="storm-processing-rain" aria-hidden="true" transition:fade>
+                {#each stormRainDrops as drop}
+                  <span
+                    class="storm-processing-rain__drop"
+                    style={`animation-delay: ${drop * 120}ms`}
+                  ></span>
+                {/each}
+              </div>
             {/if}
           </div>
         </div>
@@ -4500,6 +4511,8 @@
     flex: 0 0 auto;
     min-height: 26px;
     min-width: 0;
+    position: relative;
+    overflow: hidden;
   }
 
   .storm-form {
@@ -5072,6 +5085,8 @@
     box-shadow: var(--processing-shadow);
     font-weight: 600;
     white-space: nowrap;
+    position: relative;
+    z-index: 1;
   }
 
   .storm-processing-indicator__spinner {
@@ -5081,6 +5096,54 @@
     border: 2px solid var(--processing-border);
     border-top-color: var(--accent);
     animation: storm-loading-spin 0.8s linear infinite;
+  }
+
+  .storm-processing-rain {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    gap: 6px;
+    padding-inline: 4px;
+    z-index: 0;
+  }
+
+  .storm-processing-rain__drop {
+    display: block;
+    width: 2px;
+    height: 180%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, transparent 0%, var(--accent) 85%, var(--accent) 100%);
+    opacity: 0;
+    transform: translate3d(0, -140%, 0);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .storm-processing-rain__drop {
+      animation: storm-rainfall 1.4s linear infinite;
+    }
+
+    @keyframes storm-rainfall {
+      0% {
+        transform: translate3d(0, -140%, 0);
+        opacity: 0;
+      }
+
+      25% {
+        opacity: 0.8;
+      }
+
+      70% {
+        opacity: 0.85;
+      }
+
+      100% {
+        transform: translate3d(12%, 140%, 0);
+        opacity: 0;
+      }
+    }
   }
 
   @keyframes storm-loading-spin {
