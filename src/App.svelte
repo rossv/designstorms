@@ -92,6 +92,102 @@
 
   L.Icon.Default.mergeOptions(defaultMarkerIcons)
 
+  type Theme = 'light' | 'dark'
+  const THEME_STORAGE_KEY = 'designstorms:theme'
+  let theme: Theme = 'dark'
+  let hasExplicitTheme = false
+  let prefersLightMedia: MediaQueryList | null = null
+  let prefersLightChangeHandler: ((event: MediaQueryListEvent) => void) | null = null
+
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.theme = theme
+  }
+
+  function applyTheme(value: Theme) {
+    theme = value
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.theme = value
+    }
+  }
+
+  function readStoredTheme(): Theme | null {
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY)
+      if (stored === 'light' || stored === 'dark') {
+        return stored
+      }
+    } catch (error) {
+      console.warn('Unable to read stored theme preference.', error)
+    }
+    return null
+  }
+
+  function addMediaQueryListener(mediaQuery: MediaQueryList, handler: (event: MediaQueryListEvent) => void) {
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handler)
+    } else {
+      const legacyMediaQuery = mediaQuery as unknown as {
+        addListener?: (listener: (event: MediaQueryListEvent) => void) => void
+      }
+      legacyMediaQuery.addListener?.(handler)
+    }
+  }
+
+  function removeMediaQueryListener(mediaQuery: MediaQueryList, handler: (event: MediaQueryListEvent) => void) {
+    if (typeof mediaQuery.removeEventListener === 'function') {
+      mediaQuery.removeEventListener('change', handler)
+    } else {
+      const legacyMediaQuery = mediaQuery as unknown as {
+        removeListener?: (listener: (event: MediaQueryListEvent) => void) => void
+      }
+      legacyMediaQuery.removeListener?.(handler)
+    }
+  }
+
+  function initializeTheme() {
+    let initialTheme: Theme = theme
+
+    const storedTheme = readStoredTheme()
+    if (storedTheme) {
+      initialTheme = storedTheme
+      hasExplicitTheme = true
+    }
+
+    if (!hasExplicitTheme && typeof window !== 'undefined') {
+      prefersLightMedia = window.matchMedia('(prefers-color-scheme: light)')
+      if (prefersLightMedia.matches) {
+        initialTheme = 'light'
+      }
+      prefersLightChangeHandler = (event: MediaQueryListEvent) => {
+        if (!hasExplicitTheme) {
+          applyTheme(event.matches ? 'light' : 'dark')
+        }
+      }
+      addMediaQueryListener(prefersLightMedia, prefersLightChangeHandler)
+    }
+
+    applyTheme(initialTheme)
+  }
+
+  function teardownTheme() {
+    if (prefersLightMedia && prefersLightChangeHandler) {
+      removeMediaQueryListener(prefersLightMedia, prefersLightChangeHandler)
+    }
+    prefersLightMedia = null
+    prefersLightChangeHandler = null
+  }
+
+  function toggleTheme() {
+    const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark'
+    hasExplicitTheme = true
+    applyTheme(nextTheme)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+    } catch (error) {
+      console.warn('Unable to persist theme preference.', error)
+    }
+  }
+
   let searchQuery = ''
   let isSearchingLocation = false
   let searchFeedback = ''
@@ -398,38 +494,181 @@
     activeNoaaVisual = nextTab.id
     tabButtons[targetIndex]?.focus()
   }
-  const idfColorPalette = [
-    '#38bdf8',
-    '#22d3ee',
-    '#34d399',
-    '#f97316',
-    '#facc15',
-    '#f472b6',
-    '#a855f7',
-    '#60a5fa',
-    '#f87171',
-    '#0ea5e9'
-  ]
-
-  const plotLayoutBase: Partial<Layout> = {
-    paper_bgcolor: 'transparent',
-    plot_bgcolor: 'transparent',
-    font: { color: '#e7e7e7' },
-    margin: { l: 60, r: 24, t: 30, b: 45 },
-    xaxis: {
-      gridcolor: 'rgba(255,255,255,0.08)',
-      zerolinecolor: 'rgba(255,255,255,0.1)',
-      linecolor: 'rgba(255,255,255,0.2)',
-      mirror: true
-    },
-    yaxis: {
-      gridcolor: 'rgba(255,255,255,0.08)',
-      zerolinecolor: 'rgba(255,255,255,0.1)',
-      linecolor: 'rgba(255,255,255,0.2)',
-      mirror: true
-    },
-    hovermode: 'closest'
+  type ChartTheme = {
+    text: string
+    axisGrid: string
+    axisZero: string
+    axisLine: string
+    hyetographBar: string
+    incrementalBar: string
+    cumulativeLine: string
+    hoverBg: string
+    hoverBorder: string
+    hoverText: string
+    isoPoint: string
+    isoPointBorder: string
+    isoHighlight: string
+    isoHighlightBorder: string
+    isoLabel: string
+    isoLine: string
+    isoColorbarText: string
+    isoColorbarTick: string
+    isoColorbarOutline: string
+    legendBg: string
+    legendBorder: string
+    sceneBg: string
+    sceneText: string
+    sceneGrid: string
+    sceneZero: string
+    sceneLine: string
+    comparisonPalette: string[]
+    idfPalette: string[]
   }
+
+  const chartThemes: Record<Theme, ChartTheme> = {
+    dark: {
+      text: '#e7e7e7',
+      axisGrid: 'rgba(255,255,255,0.08)',
+      axisZero: 'rgba(255,255,255,0.1)',
+      axisLine: 'rgba(255,255,255,0.2)',
+      hyetographBar: '#6ee7ff',
+      incrementalBar: '#a855f7',
+      cumulativeLine: '#f97316',
+      hoverBg: '#0f172a',
+      hoverBorder: '#38bdf8',
+      hoverText: '#f8fafc',
+      isoPoint: 'rgba(226, 241, 255, 0.85)',
+      isoPointBorder: 'rgba(11, 31, 75, 0.9)',
+      isoHighlight: '#f8fafc',
+      isoHighlightBorder: '#0ea5e9',
+      isoLabel: '#0f172a',
+      isoLine: 'rgba(15, 23, 42, 0.35)',
+      isoColorbarText: '#e7e7e7',
+      isoColorbarTick: '#e7e7e7',
+      isoColorbarOutline: 'rgba(255, 255, 255, 0.1)',
+      legendBg: 'rgba(15, 23, 42, 0.7)',
+      legendBorder: 'rgba(148, 163, 184, 0.25)',
+      sceneBg: 'rgba(15, 23, 42, 0.85)',
+      sceneText: '#e7e7e7',
+      sceneGrid: 'rgba(255,255,255,0.08)',
+      sceneZero: 'rgba(255,255,255,0.1)',
+      sceneLine: 'rgba(255,255,255,0.2)',
+      comparisonPalette: [
+        '#38bdf8',
+        '#22d3ee',
+        '#34d399',
+        '#f97316',
+        '#facc15',
+        '#f472b6',
+        '#a855f7',
+        '#60a5fa',
+        '#f87171',
+        '#0ea5e9'
+      ],
+      idfPalette: [
+        '#38bdf8',
+        '#22d3ee',
+        '#34d399',
+        '#f97316',
+        '#facc15',
+        '#f472b6',
+        '#a855f7',
+        '#60a5fa',
+        '#f87171',
+        '#0ea5e9'
+      ]
+    },
+    light: {
+      text: '#0f172a',
+      axisGrid: 'rgba(148, 163, 184, 0.35)',
+      axisZero: 'rgba(148, 163, 184, 0.5)',
+      axisLine: 'rgba(15, 23, 42, 0.25)',
+      hyetographBar: '#0284c7',
+      incrementalBar: '#7c3aed',
+      cumulativeLine: '#ea580c',
+      hoverBg: '#ffffff',
+      hoverBorder: 'rgba(148, 163, 184, 0.65)',
+      hoverText: '#0f172a',
+      isoPoint: 'rgba(148, 197, 240, 0.85)',
+      isoPointBorder: 'rgba(30, 64, 175, 0.6)',
+      isoHighlight: '#0ea5e9',
+      isoHighlightBorder: '#0369a1',
+      isoLabel: '#0f172a',
+      isoLine: 'rgba(15, 23, 42, 0.35)',
+      isoColorbarText: '#0f172a',
+      isoColorbarTick: '#0f172a',
+      isoColorbarOutline: 'rgba(148, 163, 184, 0.35)',
+      legendBg: 'rgba(255, 255, 255, 0.9)',
+      legendBorder: 'rgba(148, 163, 184, 0.45)',
+      sceneBg: '#f8fafc',
+      sceneText: '#0f172a',
+      sceneGrid: 'rgba(148, 163, 184, 0.35)',
+      sceneZero: 'rgba(148, 163, 184, 0.5)',
+      sceneLine: 'rgba(15, 23, 42, 0.25)',
+      comparisonPalette: [
+        '#0ea5e9',
+        '#06b6d4',
+        '#10b981',
+        '#f97316',
+        '#f59e0b',
+        '#ec4899',
+        '#8b5cf6',
+        '#3b82f6',
+        '#ef4444',
+        '#0369a1'
+      ],
+      idfPalette: [
+        '#0ea5e9',
+        '#0891b2',
+        '#22c55e',
+        '#ea580c',
+        '#ca8a04',
+        '#d946ef',
+        '#7c3aed',
+        '#2563eb',
+        '#dc2626',
+        '#0f172a'
+      ]
+    }
+  }
+
+  function createPlotLayoutBase(theme: ChartTheme): Partial<Layout> {
+    return {
+      paper_bgcolor: 'transparent',
+      plot_bgcolor: 'transparent',
+      font: { color: theme.text },
+      margin: { l: 60, r: 24, t: 30, b: 45 },
+      colorway: theme.comparisonPalette,
+      hovermode: 'closest',
+      hoverlabel: {
+        bgcolor: theme.hoverBg,
+        bordercolor: theme.hoverBorder,
+        font: { color: theme.hoverText }
+      },
+      xaxis: {
+        gridcolor: theme.axisGrid,
+        zerolinecolor: theme.axisZero,
+        linecolor: theme.axisLine,
+        mirror: true,
+        tickfont: { color: theme.text },
+        title: { font: { color: theme.text } }
+      },
+      yaxis: {
+        gridcolor: theme.axisGrid,
+        zerolinecolor: theme.axisZero,
+        linecolor: theme.axisLine,
+        mirror: true,
+        tickfont: { color: theme.text },
+        title: { font: { color: theme.text } }
+      }
+    }
+  }
+
+  let chartTheme: ChartTheme = chartThemes.dark
+  let plotLayoutBase: Partial<Layout> = createPlotLayoutBase(chartTheme)
+
+  $: chartTheme = chartThemes[theme] ?? chartThemes.dark
+  $: plotLayoutBase = createPlotLayoutBase(chartTheme)
 
   $: if (previousNoaaVisual !== activeNoaaVisual) {
     if (previousNoaaVisual === 'isoLines' && isoPlotDiv) {
@@ -1112,16 +1351,25 @@
                 y: storm.intensityInHr,
                 type: 'bar',
                 name: 'Intensity (in/hr)',
-                marker: { color: '#6ee7ff' },
+                marker: { color: chartTheme.hyetographBar },
                 hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
                 width: barWidth
               }
             ],
             {
               ...plotLayoutBase,
-              title: { text: 'Hyetograph (Intensity)' },
-              xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
-              yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Intensity (in/hr)' } }
+              title: { text: 'Hyetograph (Intensity)', font: { color: chartTheme.text } },
+              xaxis: {
+                ...plotLayoutBase.xaxis,
+                title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
+              },
+              yaxis: {
+                ...plotLayoutBase.yaxis,
+                title: {
+                  ...(plotLayoutBase.yaxis?.title ?? {}),
+                  text: 'Intensity (in/hr)'
+                }
+              }
             },
             plotConfig
           )
@@ -1139,16 +1387,22 @@
                 y: storm.incrementalIn,
                 type: 'bar',
                 name: 'Incremental Volume (in)',
-                marker: { color: '#a855f7' },
+                marker: { color: chartTheme.incrementalBar },
                 hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Incremental: %{y:.3f} in<extra></extra>`,
                 width: barWidth
               }
             ],
             {
               ...plotLayoutBase,
-              title: { text: 'Incremental Volume' },
-              xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
-              yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Volume (in)' } }
+              title: { text: 'Incremental Volume', font: { color: chartTheme.text } },
+              xaxis: {
+                ...plotLayoutBase.xaxis,
+                title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
+              },
+              yaxis: {
+                ...plotLayoutBase.yaxis,
+                title: { ...(plotLayoutBase.yaxis?.title ?? {}), text: 'Volume (in)' }
+              }
             },
             plotConfig
           )
@@ -1167,15 +1421,24 @@
                 type: 'scatter',
                 mode: 'lines',
                 name: 'Cumulative (in)',
-                line: { color: '#f97316', width: 3 },
+                line: { color: chartTheme.cumulativeLine, width: 3 },
                 hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Cumulative: %{y:.3f} in<extra></extra>`
               }
             ],
             {
               ...plotLayoutBase,
-              title: { text: 'Cumulative Mass Curve' },
-              xaxis: { ...plotLayoutBase.xaxis, title: { text: axisTitle } },
-              yaxis: { ...plotLayoutBase.yaxis, title: { text: 'Cumulative Depth (in)' } }
+              title: { text: 'Cumulative Mass Curve', font: { color: chartTheme.text } },
+              xaxis: {
+                ...plotLayoutBase.xaxis,
+                title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
+              },
+              yaxis: {
+                ...plotLayoutBase.yaxis,
+                title: {
+                  ...(plotLayoutBase.yaxis?.title ?? {}),
+                  text: 'Cumulative Depth (in)'
+                }
+              }
             },
             plotConfig
           )
@@ -1291,12 +1554,12 @@
     const colorbar: Partial<ColorBar> = {
       title: {
         text: 'Depth (in)',
-        font: { color: '#e7e7e7', size: isCompact ? 12 : undefined }
+        font: { color: chartTheme.isoColorbarText, size: isCompact ? 12 : undefined }
       },
       thickness: isCompact ? 10 : 14,
-      tickcolor: '#e7e7e7',
-      tickfont: { color: '#e7e7e7', size: isCompact ? 10 : 12 },
-      outlinecolor: 'rgba(255, 255, 255, 0.1)'
+      tickcolor: chartTheme.isoColorbarTick,
+      tickfont: { color: chartTheme.isoColorbarTick, size: isCompact ? 10 : 12 },
+      outlinecolor: chartTheme.isoColorbarOutline
     }
 
     if (isCompact) {
@@ -1328,9 +1591,9 @@
         end: maxDepth,
         size: 0.5,
         showlabels: true,
-        labelfont: { color: '#0f172a', size: isCompact ? 10 : 11 }
+        labelfont: { color: chartTheme.isoLabel, size: isCompact ? 10 : 11 }
       },
-      line: { color: 'rgba(15, 23, 42, 0.35)', smoothing: 0.6, width: 1 },
+      line: { color: chartTheme.isoLine, smoothing: 0.6, width: 1 },
       colorscale: [
         [0, '#e2f1ff'],
         [0.2, '#bfd7ff'],
@@ -1376,9 +1639,9 @@
       y: pointYs,
       customdata: pointLabels,
       marker: {
-        color: 'rgba(226, 241, 255, 0.85)',
+        color: chartTheme.isoPoint,
         size: 8,
-        line: { color: 'rgba(11, 31, 75, 0.9)', width: 1.5 },
+        line: { color: chartTheme.isoPointBorder, width: 1.5 },
         symbol: 'circle'
       },
       hovertemplate:
@@ -1401,9 +1664,9 @@
           x: [highlightDuration.hr],
           y: [highlightAri.value],
           marker: {
-            color: '#f8fafc',
+            color: chartTheme.isoHighlight,
             size: 12,
-            line: { color: '#0ea5e9', width: 3 },
+            line: { color: chartTheme.isoHighlightBorder, width: 3 },
             symbol: 'circle'
           },
           name: 'Selected NOAA cell',
@@ -1417,43 +1680,51 @@
 
     const layout: Partial<Layout> = {
       ...plotLayoutBase,
-      title: { text: 'NOAA Depth Iso-Lines' },
+      title: { text: 'NOAA Depth Iso-Lines', font: { color: chartTheme.text } },
       margin: isCompact
         ? { l: 64, r: 26, t: 48, b: 96 }
         : { l: 72, r: 70, t: 40, b: 88 },
       xaxis: {
         ...plotLayoutBase.xaxis,
         title: {
+          ...(plotLayoutBase.xaxis?.title ?? {}),
           text: 'Duration (hr)',
-          font: { size: isCompact ? 12 : undefined }
+          font: {
+            ...(plotLayoutBase.xaxis?.title?.font ?? {}),
+            size: isCompact ? 12 : undefined
+          }
         },
         type: 'log',
         tickmode: 'array',
         tickvals: filteredDurationEntries.map((entry) => entry.hr),
         ticktext: filteredDurationEntries.map((entry) => entry.label),
         tickangle: isCompact ? -45 : 0,
-        tickfont: { size: isCompact ? 10 : 12 },
+        tickfont: { color: chartTheme.text, size: isCompact ? 10 : 12 },
         automargin: true
       },
       yaxis: {
         ...plotLayoutBase.yaxis,
         title: {
+          ...(plotLayoutBase.yaxis?.title ?? {}),
           text: 'Average Recurrence Interval (years)',
-          font: { size: isCompact ? 12 : undefined }
+          font: {
+            ...(plotLayoutBase.yaxis?.title?.font ?? {}),
+            size: isCompact ? 12 : undefined
+          }
         },
         type: 'log',
         tickmode: 'array',
         tickvals: filteredAriEntries.map((entry) => entry.value),
         ticktext: filteredAriEntries.map((entry) => entry.key),
-        tickfont: { size: isCompact ? 10 : 12 },
+        tickfont: { color: chartTheme.text, size: isCompact ? 10 : 12 },
         automargin: true
       },
       hovermode: 'closest',
       hoverlabel: {
-        bgcolor: '#0f172a',
-        bordercolor: '#38bdf8',
+        bgcolor: chartTheme.hoverBg,
+        bordercolor: chartTheme.hoverBorder,
         font: {
-          color: '#f8fafc'
+          color: chartTheme.hoverText
         }
       }
     }
@@ -1579,10 +1850,10 @@
     )
 
     const colorbar: Partial<ColorBar> = {
-      title: { text: 'Intensity (in/hr)', font: { color: '#e7e7e7' } },
-      tickcolor: '#e7e7e7',
-      tickfont: { color: '#e7e7e7', size: 11 },
-      outlinecolor: 'rgba(255, 255, 255, 0.1)'
+      title: { text: 'Intensity (in/hr)', font: { color: chartTheme.isoColorbarText } },
+      tickcolor: chartTheme.isoColorbarTick,
+      tickfont: { color: chartTheme.isoColorbarTick, size: 11 },
+      outlinecolor: chartTheme.isoColorbarOutline
     }
 
     const surfaceTrace: Data = {
@@ -1637,9 +1908,9 @@
         y: [ariEntry.value],
         z: [intensity as number],
         marker: {
-          color: '#f8fafc',
+          color: chartTheme.isoHighlight,
           size: 6,
-          line: { color: '#0ea5e9', width: 2 },
+          line: { color: chartTheme.isoHighlightBorder, width: 2 },
           symbol: 'circle'
         },
         name: 'Selected NOAA cell',
@@ -1699,29 +1970,29 @@
       ...plotLayoutBase,
       margin: { l: 10, r: 10, t: 50, b: 20 },
       scene: {
-        bgcolor: 'rgba(15, 23, 42, 0.85)',
+        bgcolor: chartTheme.sceneBg,
         xaxis: {
           type: 'log',
-          title: { text: 'Duration (hr)', font: { color: '#e7e7e7' } },
-          gridcolor: 'rgba(255,255,255,0.08)',
-          zerolinecolor: 'rgba(255,255,255,0.1)',
-          linecolor: 'rgba(255,255,255,0.2)',
-          tickfont: { color: '#e7e7e7' }
+          title: { text: 'Duration (hr)', font: { color: chartTheme.sceneText } },
+          gridcolor: chartTheme.sceneGrid,
+          zerolinecolor: chartTheme.sceneZero,
+          linecolor: chartTheme.sceneLine,
+          tickfont: { color: chartTheme.sceneText }
         },
         yaxis: {
           type: 'log',
-          title: { text: 'ARI (years)', font: { color: '#e7e7e7' } },
-          gridcolor: 'rgba(255,255,255,0.08)',
-          zerolinecolor: 'rgba(255,255,255,0.1)',
-          linecolor: 'rgba(255,255,255,0.2)',
-          tickfont: { color: '#e7e7e7' }
+          title: { text: 'ARI (years)', font: { color: chartTheme.sceneText } },
+          gridcolor: chartTheme.sceneGrid,
+          zerolinecolor: chartTheme.sceneZero,
+          linecolor: chartTheme.sceneLine,
+          tickfont: { color: chartTheme.sceneText }
         },
         zaxis: {
-          title: { text: 'Intensity (in/hr)', font: { color: '#e7e7e7' } },
-          gridcolor: 'rgba(255,255,255,0.08)',
-          zerolinecolor: 'rgba(255,255,255,0.1)',
-          linecolor: 'rgba(255,255,255,0.2)',
-          tickfont: { color: '#e7e7e7' }
+          title: { text: 'Intensity (in/hr)', font: { color: chartTheme.sceneText } },
+          gridcolor: chartTheme.sceneGrid,
+          zerolinecolor: chartTheme.sceneZero,
+          linecolor: chartTheme.sceneLine,
+          tickfont: { color: chartTheme.sceneText }
         }
       }
     }
@@ -1820,7 +2091,7 @@
           depthText
       })
 
-      const color = idfColorPalette[rowIdx % idfColorPalette.length]
+      const color = chartTheme.idfPalette[rowIdx % chartTheme.idfPalette.length]
 
       return {
         type: 'scatter',
@@ -1866,9 +2137,9 @@
           x: [durationEntry.hr],
           y: [highlightIntensity as number],
           marker: {
-            color: '#f8fafc',
+            color: chartTheme.isoHighlight,
             size: 12,
-            line: { color: '#0ea5e9', width: 3 },
+            line: { color: chartTheme.isoHighlightBorder, width: 3 },
             symbol: 'circle'
           },
           name: 'Selected NOAA cell',
@@ -1916,45 +2187,59 @@
     const maxYTicks = Math.max(4, Math.floor((height || 1) / 42))
     const layout: Partial<Layout> = {
       ...plotLayoutBase,
-      title: { text: 'Intensity-Duration-Frequency Curves' },
+      title: { text: 'Intensity-Duration-Frequency Curves', font: { color: chartTheme.text } },
       margin: isCompact
         ? { l: 64, r: 26, t: 48, b: 96 }
         : { l: 72, r: 60, t: 52, b: 88 },
       xaxis: {
         ...plotLayoutBase.xaxis,
-        title: { text: 'Duration (hr)', font: { size: isCompact ? 12 : undefined } },
+        title: {
+          ...(plotLayoutBase.xaxis?.title ?? {}),
+          text: 'Duration (hr)',
+          font: {
+            ...(plotLayoutBase.xaxis?.title?.font ?? {}),
+            size: isCompact ? 12 : undefined
+          }
+        },
         type: 'log',
         tickmode: 'array',
         tickvals: filteredDurationEntries.map((entry) => entry.hr),
         ticktext: filteredDurationEntries.map((entry) => entry.label),
         tickangle: isCompact ? -45 : 0,
-        tickfont: { size: isCompact ? 10 : 12 },
+        tickfont: { color: chartTheme.text, size: isCompact ? 10 : 12 },
         automargin: true
       },
       yaxis: {
         ...plotLayoutBase.yaxis,
-        title: { text: 'Intensity (in/hr)', font: { size: isCompact ? 12 : undefined } },
+        title: {
+          ...(plotLayoutBase.yaxis?.title ?? {}),
+          text: 'Intensity (in/hr)',
+          font: {
+            ...(plotLayoutBase.yaxis?.title?.font ?? {}),
+            size: isCompact ? 12 : undefined
+          }
+        },
         type: positiveIntensities.length ? 'log' : 'linear',
-        tickfont: { size: isCompact ? 10 : 12 },
+        tickfont: { color: chartTheme.text, size: isCompact ? 10 : 12 },
         nticks: maxYTicks
       },
       legend: {
-        bgcolor: 'rgba(15, 23, 42, 0.7)',
-        bordercolor: 'rgba(148, 163, 184, 0.25)',
+        bgcolor: chartTheme.legendBg,
+        bordercolor: chartTheme.legendBorder,
         borderwidth: 1,
         orientation: isCompact ? 'h' : 'v',
         x: isCompact ? 0.5 : 1,
         y: isCompact ? -0.25 : 1,
         xanchor: isCompact ? 'center' : 'right',
         yanchor: 'top',
-        font: { size: isCompact ? 10 : 11 },
+        font: { size: isCompact ? 10 : 11, color: chartTheme.text },
         itemsizing: 'constant'
       },
       hovermode: 'closest',
       hoverlabel: {
-        bgcolor: '#0f172a',
-        bordercolor: '#38bdf8',
-        font: { color: '#f8fafc' }
+        bgcolor: chartTheme.hoverBg,
+        bordercolor: chartTheme.hoverBorder,
+        font: { color: chartTheme.hoverText }
       }
     }
 
@@ -2605,15 +2890,24 @@
         traces,
         {
           ...plotLayoutBase,
-          title: { text: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr` },
+          title: {
+            text: `${comparisonGroupLabel || 'Distribution'} Comparison — ${maxDuration}-hr`,
+            font: { color: chartTheme.text }
+          },
           xaxis: {
             ...plotLayoutBase.xaxis,
-            title: { text: 'Time (hr)' },
+            title: {
+              ...(plotLayoutBase.xaxis?.title ?? {}),
+              text: 'Time (hr)'
+            },
             range: [0, Math.max(6, maxDuration)]
           },
           yaxis: {
             ...plotLayoutBase.yaxis,
-            title: { text: 'Rain Fraction' },
+            title: {
+              ...(plotLayoutBase.yaxis?.title ?? {}),
+              text: 'Rain Fraction'
+            },
             range: [0, 1]
           }
         },
@@ -2631,6 +2925,12 @@
         curvePlotIsRendering = false
       })
   }
+
+  $: if (curvePlotDiv && comparisonCurves.length) {
+    // Re-render comparison curves when the active theme changes
+    void chartTheme
+    drawComparisonCurves()
+  }
   
   function flashRecalculated(param: 'ari' | 'depth' | 'duration'){
       recentlyRecalculated = param;
@@ -2641,6 +2941,8 @@
   }
 
   onMount(() => {
+    initializeTheme()
+
     map = L.map(mapDiv, { attributionControl: false, zoomControl: true })
     setMapViewToContinentalUs()
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -2686,6 +2988,7 @@
   })
 
   onDestroy(() => {
+    teardownTheme()
     if (fetchTimer) clearTimeout(fetchTimer)
     if (map) map.remove()
     if (plotDiv1) Plotly.purge(plotDiv1)
@@ -2783,7 +3086,22 @@
         <h1>Design Storm Generator</h1>
       </div>
     </div>
-    <div class="badge">Beta</div>
+    <div class="header-actions">
+      <button
+        type="button"
+        class="theme-toggle"
+        on:click={toggleTheme}
+        aria-pressed={theme === 'light' ? 'true' : 'false'}
+        aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+      >
+        <span class="theme-toggle__icon" aria-hidden="true">
+          {theme === 'light' ? '☀️' : '🌙'}
+        </span>
+        <span class="theme-toggle__label">{theme === 'light' ? 'Light' : 'Dark'}</span>
+      </button>
+      <div class="badge">Beta</div>
+    </div>
   </header>
 
   <div class="layout">
@@ -3620,7 +3938,7 @@
 
 <style>
   :global(.leaflet-pane) {
-    filter: saturate(0.9) brightness(0.9);
+    filter: var(--map-filter);
   }
 
   .page {
@@ -3636,23 +3954,25 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: clamp(0.75rem, 1.2vw + 0.5rem, 1.25rem);
-    text-align: center;
+    text-align: left;
   }
 
   .title-group {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: clamp(0.6rem, 0.9vw + 0.4rem, 1rem);
+    flex: 1 1 280px;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   .app-icon {
     width: clamp(40px, 4vw + 24px, 56px);
     height: clamp(40px, 4vw + 24px, 56px);
     border-radius: 12px;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--icon-shadow);
     flex: 0 0 auto;
   }
 
@@ -3660,6 +3980,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
   }
 
   .header h1 {
@@ -3669,24 +3990,85 @@
   }
 
   .badge {
-    background: rgba(110, 231, 255, 0.15);
-    color: #6ee7ff;
-    border: 1px solid rgba(110, 231, 255, 0.4);
+    background: var(--badge-bg);
+    color: var(--badge-text);
+    border: 1px solid var(--badge-border);
     border-radius: 20px;
     padding: 6px 14px;
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .header > * {
-    flex: 1 1 100%;
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex: 0 0 auto;
   }
 
   .header .badge {
-    flex: 0 0 auto;
-    margin-inline: auto;
+    margin: 0;
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .theme-toggle:hover:not(:disabled),
+  .theme-toggle:focus-visible {
+    background: var(--button-hover-bg);
+    border-color: var(--border);
+    outline: none;
+  }
+
+  .theme-toggle:focus-visible {
+    box-shadow: 0 0 0 2px var(--plot-download-focus-ring);
+  }
+
+  .theme-toggle__icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .theme-toggle__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  @media (max-width: 720px) {
+    .header {
+      justify-content: center;
+      text-align: center;
+    }
+
+    .title-group {
+      justify-content: center;
+    }
+
+    .header-actions {
+      width: 100%;
+      justify-content: center;
+    }
   }
 
   .layout {
@@ -3724,8 +4106,9 @@
       flex: 0 0 auto;
     }
 
-    .header .badge {
-      margin-inline: 0 0;
+    .header-actions {
+      justify-content: flex-end;
+      gap: 12px;
       margin-left: auto;
     }
   }
@@ -3864,11 +4247,11 @@
   }
 
   .storm-card {
-    background: rgba(15, 19, 26, 0.9);
-    border: 1px solid rgba(58, 71, 90, 0.55);
+    background: var(--glass-card-bg);
+    border: 1px solid var(--glass-card-border);
     border-radius: 18px;
     padding: 18px 20px;
-    box-shadow: 0 16px 32px rgba(5, 12, 18, 0.45);
+    box-shadow: var(--glass-card-shadow);
     backdrop-filter: blur(12px);
     display: flex;
     flex-direction: column;
@@ -3942,8 +4325,8 @@
     gap: 6px;
     padding: 4px;
     border-radius: 999px;
-    border: 1px solid rgba(110, 231, 255, 0.18);
-    background: rgba(8, 13, 20, 0.82);
+    border: 1px solid var(--toggle-border);
+    background: var(--toggle-bg);
   }
 
   .mode-toggle button {
@@ -3957,15 +4340,15 @@
   }
 
   .mode-toggle button:hover:not(:disabled) {
-    background: rgba(110, 231, 255, 0.08);
+    background: var(--toggle-hover-bg);
     color: var(--text);
   }
 
   .mode-toggle button.active {
     background: var(--accent);
-    color: #05121a;
+    color: var(--accent-foreground);
     font-weight: 600;
-    box-shadow: 0 0 0 1px rgba(5, 18, 26, 0.25);
+    box-shadow: var(--accent-shadow);
   }
 
   .mode-note {
@@ -4031,8 +4414,8 @@
 
   .custom-curve-preview {
     width: 100%;
-    background: rgba(148, 163, 184, 0.12);
-    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
     border-radius: 10px;
     padding: 12px 14px;
     font-size: 13px;
@@ -4203,9 +4586,9 @@
     text-align: center;
     position: relative;
     z-index: 3;
-    background: rgba(15, 23, 42, 0.85);
+    background: var(--table-header-ari-bg);
     backdrop-filter: blur(4px);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    border-right: 1px solid var(--table-header-ari-border);
     transform: translateX(var(--noaa-scroll-left));
     will-change: transform;
   }
@@ -4217,13 +4600,13 @@
   }
 
   .table-header__duration {
-    border-left: 1px solid rgba(255, 255, 255, 0.04);
+    border-left: 1px solid var(--table-header-divider);
     display: flex;
     align-items: stretch;
   }
 
   .table-header__duration.column-active {
-    background: rgba(110, 231, 255, 0.12);
+    background: var(--table-row-active);
   }
 
   .table-body {
@@ -4232,7 +4615,7 @@
   }
 
   .table-row {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--table-divider);
   }
 
   .table-row:last-child {
@@ -4240,11 +4623,11 @@
   }
 
   .table-row:hover {
-    background: rgba(110, 231, 255, 0.08);
+    background: var(--table-row-hover);
   }
 
   .table-row.ari-active {
-    background: rgba(110, 231, 255, 0.12);
+    background: var(--table-row-active);
   }
 
   .ari-cell {
@@ -4253,11 +4636,11 @@
     flex-direction: column;
     justify-content: center;
     gap: 2px;
-    background: rgba(15, 23, 42, 0.75);
+    background: var(--table-ari-cell-bg);
     font-size: 12px;
     position: relative;
     z-index: 2;
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    border-right: 1px solid var(--table-sticky-border);
     transform: translateX(var(--noaa-scroll-left));
     will-change: transform;
   }
@@ -4301,30 +4684,30 @@
   }
 
   .duration-btn.active {
-    background: rgba(110, 231, 255, 0.18);
-    color: #04131c;
+    background: var(--table-cell-hover);
+    color: var(--accent-foreground);
   }
 
   .table-button.cell {
-    border-left: 1px solid rgba(255, 255, 255, 0.04);
+    border-left: 1px solid var(--table-header-divider);
   }
 
   .table-button.cell.column-active {
-    background: rgba(110, 231, 255, 0.12);
+    background: var(--table-row-active);
   }
 
   .table-button.cell:hover:not(:disabled) {
-    background: rgba(110, 231, 255, 0.18);
-    color: #04131c;
+    background: var(--table-cell-hover);
+    color: var(--accent-foreground);
   }
 
   .table-button.cell.column-active:hover:not(:disabled) {
-    background: rgba(110, 231, 255, 0.24);
+    background: var(--table-cell-column-hover);
   }
 
   .table-button.cell.selected {
     background: var(--accent);
-    color: #04131c;
+    color: var(--accent-foreground);
     font-weight: 600;
   }
 
@@ -4333,13 +4716,13 @@
   }
 
   .table-button.cell.interpolated {
-    background: rgba(249, 115, 22, 0.6);
-    color: #04131c;
+    background: var(--table-interpolated-bg);
+    color: var(--accent-foreground);
     font-weight: 600;
   }
 
   .table-button.cell.interpolated:hover {
-    background: rgba(249, 115, 22, 0.75);
+    background: var(--table-interpolated-hover);
   }
 
   @media (max-width: 720px) {
@@ -4390,12 +4773,12 @@
     gap: 8px;
     padding: 5px 12px;
     border-radius: 999px;
-    border: 1px solid rgba(110, 231, 255, 0.35);
-    background: rgba(110, 231, 255, 0.08);
+    border: 1px solid var(--processing-border);
+    background: var(--processing-bg);
     color: var(--accent);
     font-size: 12px;
     letter-spacing: 0.02em;
-    box-shadow: 0 8px 20px rgba(5, 18, 26, 0.35);
+    box-shadow: var(--processing-shadow);
     font-weight: 600;
     white-space: nowrap;
   }
@@ -4404,7 +4787,7 @@
     width: 16px;
     height: 16px;
     border-radius: 999px;
-    border: 2px solid rgba(110, 231, 255, 0.25);
+    border: 2px solid var(--processing-border);
     border-top-color: var(--accent);
     animation: storm-loading-spin 0.8s linear infinite;
   }
@@ -4420,7 +4803,7 @@
     min-height: clamp(320px, 45vh, 460px);
     border-radius: 16px;
     border: 1px solid var(--border);
-    background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(8, 47, 73, 0.45));
+    background: var(--surface-gradient);
     overflow: hidden;
   }
 
@@ -4439,7 +4822,7 @@
     text-align: center;
     color: var(--muted);
     font-size: 14px;
-    background: linear-gradient(135deg, rgba(2, 6, 23, 0.8), rgba(8, 47, 73, 0.65));
+    background: var(--surface-overlay-gradient);
     backdrop-filter: blur(2px);
     pointer-events: none;
   }
@@ -4463,9 +4846,9 @@
     width: 30px;
     height: 30px;
     border-radius: 999px;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    background: rgba(15, 23, 42, 0.6);
-    color: rgba(226, 232, 240, 0.85);
+    border: 1px solid var(--plot-download-border);
+    background: var(--plot-download-bg);
+    color: var(--plot-download-color);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -4485,13 +4868,13 @@
   .plot-download:hover:not(:disabled),
   .plot-download:focus-visible {
     opacity: 1;
-    background: rgba(15, 23, 42, 0.82);
-    border-color: rgba(148, 163, 184, 0.6);
+    background: var(--plot-download-hover-bg);
+    border-color: var(--plot-download-hover-border);
     outline: none;
   }
 
   .plot-download:focus-visible {
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.55);
+    box-shadow: 0 0 0 2px var(--plot-download-focus-ring);
   }
 
   .plot-download:disabled {
@@ -4527,7 +4910,7 @@
   .data-table th,
   .data-table td {
     padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--table-divider);
     text-align: right;
     white-space: nowrap;
   }
@@ -4537,11 +4920,11 @@
     position: sticky;
     top: 0;
     z-index: 1;
-    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 -1px 0 var(--table-header-shadow);
   }
 
   .data-table tr:nth-child(even) {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--table-row-stripe);
   }
 
   .data-table .left {
@@ -4559,7 +4942,7 @@
   }
 
   .stat-box {
-    background: #0f131a;
+    background: var(--stat-bg);
     border-radius: 12px;
     padding: 12px;
     border: 1px solid var(--border);
@@ -4585,7 +4968,7 @@
   }
 
   button.ghost:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ghost-hover-bg);
   }
 
   .help-button {
@@ -4601,7 +4984,7 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(5, 12, 18, 0.78);
+    background: var(--modal-backdrop-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4619,7 +5002,7 @@
     max-height: calc(100vh - 80px);
     overflow: auto;
     padding: 24px 24px 16px;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--modal-shadow);
     outline: none;
     box-sizing: border-box;
   }
