@@ -4960,6 +4960,9 @@
     cursor: pointer;
     border-radius: 0;
     text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: background 180ms ease, color 180ms ease;
   }
 
   .table-button:focus-visible {
@@ -4985,6 +4988,18 @@
     border-left: 1px solid var(--table-header-divider);
   }
 
+  .table-button.cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0.35);
+    transform-origin: center;
+    pointer-events: none;
+    animation: none;
+  }
+
   .table-button.cell.column-active {
     background: var(--table-row-active);
   }
@@ -5002,6 +5017,13 @@
     background: var(--accent);
     color: var(--accent-foreground);
     font-weight: 600;
+    transition: background 240ms ease, color 180ms ease;
+    animation: none;
+  }
+
+  .table-button.cell.selected::after,
+  .table-button.cell.column-active.selected::after {
+    animation: noaa-cell-ripple 420ms ease-out;
   }
 
   .table-button.cell.selected:hover {
@@ -5016,6 +5038,30 @@
 
   .table-button.cell.interpolated:hover {
     background: var(--table-interpolated-hover);
+  }
+
+  @keyframes noaa-cell-ripple {
+    0% {
+      transform: scale(0.35);
+      opacity: 0.45;
+    }
+
+    100% {
+      transform: scale(1.75);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .table-button {
+      transition: none;
+    }
+
+    .table-button.cell::after {
+      animation: none !important;
+      opacity: 0;
+      transform: none;
+    }
   }
 
   @media (max-width: 720px) {
