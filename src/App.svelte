@@ -3942,10 +3942,9 @@
                 class="storm-summary-item"
                 animate:flip
                 in:fly={{ y: 8, duration: 200 }}
-                in:fade={{ duration: 150 }}
                 out:fade={{ duration: 120 }}
               >
-                {line}
+                <span in:fade={{ duration: 150 }}>{line}</span>
               </li>
             {/each}
           </ul>
