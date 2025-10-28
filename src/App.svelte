@@ -3186,8 +3186,17 @@
             <input type="checkbox" bind:checked={autoFetch} />
             Auto refresh when location changes
           </label>
-          <button class="primary" on:click={() => void loadNoaa()} disabled={isLoadingNoaa}>
-            {isLoadingNoaa ? 'Refreshing…' : 'Refresh NOAA Data'}
+          <button
+            class="primary noaa-refresh-button"
+            on:click={() => void loadNoaa()}
+            disabled={isLoadingNoaa}
+          >
+            {#if isLoadingNoaa}
+              <span class="noaa-refresh-button__spinner" aria-hidden="true"></span>
+              <span class="noaa-refresh-button__text">Refreshing…</span>
+            {:else}
+              <span class="noaa-refresh-button__text">Refresh NOAA Data</span>
+            {/if}
           </button>
         </div>
         <div class="noaa-status">
@@ -4544,6 +4553,28 @@
   .checkbox input[type='checkbox'] {
     width: 16px;
     height: 16px;
+  }
+
+  .noaa-refresh-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .noaa-refresh-button__spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid rgba(110, 231, 255, 0.18);
+    border-top-color: var(--accent);
+    animation: storm-loading-spin 0.8s linear infinite;
+  }
+
+  .noaa-refresh-button__text {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .noaa-status {
