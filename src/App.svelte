@@ -772,7 +772,11 @@
     const lines: string[] = []
     const numericDuration = Number($selectedDurationHr)
     const durationHr = Number.isFinite(numericDuration) ? numericDuration : null
-    const durationText = formatDurationText(selectedDurationLabel, durationHr)
+    const durationText = formatDurationText(
+      $durationMode === 'custom' ? null : selectedDurationLabel,
+      durationHr
+    )
+    const tableDurationText = formatDurationText(selectedDurationLabel, durationHr)
     const depthValue = Number.isFinite($selectedDepth) ? Number($selectedDepth) : null
     const depthText = depthValue != null ? `${depthValue.toFixed(2)} in` : null
     const ariValue = Number.isFinite($selectedAri) ? Number($selectedAri) : null
@@ -815,17 +819,19 @@
         const hasExactDepth = Number.isFinite(tableDepth) && Math.abs(Number(tableDepth) - depthValue!) < 0.005
 
         if (hasExactDepth) {
-          noaaLine = `Depth of ${depthText} comes directly from ${selectedDurationLabel} / ${ariText} in the NOAA table.`
+          noaaLine = `Depth of ${depthText} for the ${durationText} storm comes directly from ${tableDurationText} / ${ariText} in the NOAA table.`
         } else if (interpolatedCells.length) {
           const description = describeInterpolationCells(interpolatedCells)
           if (description) {
-            noaaLine = `Depth of ${depthText} was ${isExtrapolating ? 'extrapolated' : 'interpolated'} from ${description}.`
+            noaaLine = `Depth of ${depthText} for the ${durationText} storm was ${
+              isExtrapolating ? 'extrapolated' : 'interpolated'
+            } from ${description}.`
           }
         } else {
-          noaaLine = `Depth of ${depthText} was entered manually for ${ariText}.`
+          noaaLine = `Depth of ${depthText} for the ${durationText} storm was entered manually for ${ariText}.`
         }
       } else {
-        noaaLine = `Depth of ${depthText} was entered manually because no NOAA table is loaded.`
+        noaaLine = `Depth of ${depthText} for the ${durationText} storm was entered manually because no NOAA table is loaded.`
       }
     }
 
