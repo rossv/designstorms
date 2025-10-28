@@ -334,12 +334,48 @@ a:hover { text-decoration: underline; }
   line-height: 1.45;
 }
 
+.storm-summary-item {
+  position: relative;
+  padding: 4px 12px 4px 2px;
+  border-radius: 10px;
+  background: transparent;
+  transition: background-color 220ms ease, color 220ms ease, box-shadow 220ms ease;
+  animation: stormSummaryHighlight 420ms ease-out;
+  list-style-position: outside;
+}
+
+.storm-summary-item::marker {
+  color: var(--accent);
+}
+
 .storm-summary-list li + li {
   margin-top: 8px;
 }
 
 .storm-summary-panel .empty {
   margin-top: 8px;
+}
+
+@keyframes stormSummaryHighlight {
+  0% {
+    background-color: rgba(110, 231, 255, 0.18);
+    box-shadow: 0 0 0 1px rgba(110, 231, 255, 0.25);
+  }
+  70% {
+    background-color: rgba(110, 231, 255, 0.12);
+    box-shadow: 0 0 0 1px rgba(110, 231, 255, 0.15);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storm-summary-item {
+    animation: none;
+    transition: none;
+  }
 }
 
 [data-theme='light'] {
