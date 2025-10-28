@@ -4143,6 +4143,8 @@
     flex-direction: column;
     gap: 16px;
     min-height: 0;
+    min-width: 0;
+    width: 100%;
   }
 
   .section-title {
