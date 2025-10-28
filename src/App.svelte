@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
-  import { fade } from 'svelte/transition'
+  import { fade, fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
@@ -3897,7 +3897,15 @@
         {#if stormSummaryLines.length}
           <ul class="storm-summary-list">
             {#each stormSummaryLines as line (line)}
-              <li animate:flip transition:fade={{ delay: 50 }}>{line}</li>
+              <li
+                class="storm-summary-item"
+                animate:flip
+                in:fly={{ y: 8, duration: 200 }}
+                in:fade={{ duration: 150 }}
+                out:fade={{ duration: 120 }}
+              >
+                {line}
+              </li>
             {/each}
           </ul>
         {:else}
