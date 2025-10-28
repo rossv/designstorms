@@ -89,7 +89,7 @@
 
   const stormRainDrops = Array.from({ length: 8 }, (_, index) => index)
   let stormProcessingRainVisible = false
-  let stormProcessingRainHideTimeout: ReturnType<typeof setTimeout> | null = null
+  let stormProcessingRainHideTimer: ReturnType<typeof setTimeout> | null = null
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -434,15 +434,15 @@
     curvePlotIsRendering
   $: if (isStormProcessing) {
     stormProcessingRainVisible = true
-    if (stormProcessingRainHideTimeout) {
-      clearTimeout(stormProcessingRainHideTimeout)
-      stormProcessingRainHideTimeout = null
+    if (stormProcessingRainHideTimer) {
+      clearTimeout(stormProcessingRainHideTimer)
+      stormProcessingRainHideTimer = null
     }
-  } else if (stormProcessingRainVisible && !stormProcessingRainHideTimeout) {
-    stormProcessingRainHideTimeout = setTimeout(() => {
+  } else if (!stormProcessingRainHideTimer) {
+    stormProcessingRainHideTimer = setTimeout(() => {
       stormProcessingRainVisible = false
-      stormProcessingRainHideTimeout = null
-    }, 600)
+      stormProcessingRainHideTimer = null
+    }, 1800)
   }
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
@@ -3303,9 +3303,9 @@
       observedNoaaScrollEl.removeEventListener('scroll', handleNoaaScroll)
       observedNoaaScrollEl = null
     }
-    if (stormProcessingRainHideTimeout) {
-      clearTimeout(stormProcessingRainHideTimeout)
-      stormProcessingRainHideTimeout = null
+    if (stormProcessingRainHideTimer) {
+      clearTimeout(stormProcessingRainHideTimer)
+      stormProcessingRainHideTimer = null
     }
   })
 
