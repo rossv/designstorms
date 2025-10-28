@@ -1358,6 +1358,7 @@
       const plotPromises: Promise<PlotlyHTMLElement>[] = []
 
       if (plotDiv1) {
+        chartsAreRendering = true
         plotPromises.push(
           Plotly.react(
             plotDiv1,
@@ -1394,6 +1395,7 @@
       }
 
       if (plotDiv2) {
+        chartsAreRendering = true
         plotPromises.push(
           Plotly.react(
             plotDiv2,
@@ -1427,6 +1429,7 @@
       }
 
       if (plotDiv3) {
+        chartsAreRendering = true
         plotPromises.push(
           Plotly.react(
             plotDiv3,
