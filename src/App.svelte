@@ -5227,13 +5227,19 @@
     }
 
     .search-controls {
-      flex-direction: column;
+      flex-wrap: nowrap;
       align-items: stretch;
-      gap: 10px;
+      gap: 8px;
+    }
+
+    .search-controls input[type='text'] {
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
     .search-controls button[type='submit'] {
-      align-self: flex-start;
+      flex: 0 0 auto;
+      align-self: stretch;
     }
 
     .grid.cols-2 {
