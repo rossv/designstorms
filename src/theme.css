@@ -59,6 +59,15 @@
   --processing-border: rgba(110, 231, 255, 0.35);
   --processing-bg: rgba(110, 231, 255, 0.08);
   --processing-shadow: 0 8px 20px rgba(5, 18, 26, 0.35);
+  --stepper-bg: rgba(15, 19, 26, 0.9);
+  --stepper-border: var(--border);
+  --stepper-hover-bg: rgba(21, 27, 36, 0.95);
+  --stepper-hover-border: rgba(110, 231, 255, 0.5);
+  --stepper-focus-ring: rgba(110, 231, 255, 0.25);
+  --stepper-button-bg: rgba(19, 24, 35, 0.95);
+  --stepper-button-hover-bg: rgba(110, 231, 255, 0.2);
+  --stepper-progress-track: rgba(110, 231, 255, 0.08);
+  --stepper-progress-fill: rgba(110, 231, 255, 0.8);
 }
 
 html, body, #app { height: 100%; }
@@ -394,6 +403,15 @@ a:hover { text-decoration: underline; }
   --processing-border: rgba(14, 165, 233, 0.45);
   --processing-bg: rgba(219, 234, 254, 0.75);
   --processing-shadow: 0 6px 18px rgba(15, 23, 42, 0.16);
+  --stepper-bg: rgba(255, 255, 255, 0.92);
+  --stepper-border: rgba(148, 163, 184, 0.65);
+  --stepper-hover-bg: rgba(226, 232, 240, 0.95);
+  --stepper-hover-border: rgba(14, 165, 233, 0.55);
+  --stepper-focus-ring: rgba(14, 165, 233, 0.35);
+  --stepper-button-bg: rgba(219, 234, 254, 0.9);
+  --stepper-button-hover-bg: rgba(14, 165, 233, 0.18);
+  --stepper-progress-track: rgba(14, 165, 233, 0.14);
+  --stepper-progress-fill: rgba(14, 165, 233, 0.6);
 }
 
 [data-theme='light'] input[type='number'],
