@@ -96,7 +96,7 @@
   type Theme = 'light' | 'dark'
   const THEME_STORAGE_KEY = 'designstorms:theme'
   let theme: Theme = 'dark'
-  let designStormIcon = designStormDarkIcon
+  let designStormIcon = designStormLightIcon
   let hasExplicitTheme = false
   let prefersLightMedia: MediaQueryList | null = null
   let prefersLightChangeHandler: ((event: MediaQueryListEvent) => void) | null = null
@@ -105,7 +105,7 @@
     document.documentElement.dataset.theme = theme
   }
 
-  $: designStormIcon = theme === 'light' ? designStormLightIcon : designStormDarkIcon
+  $: designStormIcon = theme === 'light' ? designStormDarkIcon : designStormLightIcon
 
   function applyTheme(value: Theme) {
     theme = value
