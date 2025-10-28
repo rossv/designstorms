@@ -3895,9 +3895,9 @@
       <div class="panel storm-summary-panel">
         <h2 class="section-title">How this storm was built</h2>
         {#if stormSummaryLines.length}
-          <ul class="storm-summary-list" animate:flip>
+          <ul class="storm-summary-list">
             {#each stormSummaryLines as line (line)}
-              <li transition:fade={{ delay: 50 }}>{line}</li>
+              <li animate:flip transition:fade={{ delay: 50 }}>{line}</li>
             {/each}
           </ul>
         {:else}
