@@ -236,10 +236,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: rgba(15, 19, 26, 0.9);
+    background: var(--stepper-bg);
     border-radius: 999px;
     padding: 4px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--stepper-border, var(--border));
     transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
     width: 100%;
     box-sizing: border-box;
@@ -255,13 +255,13 @@
   }
 
   .stepper:hover:not([data-disabled='true']) {
-    border-color: rgba(110, 231, 255, 0.5);
-    background: rgba(21, 27, 36, 0.95);
+    border-color: var(--stepper-hover-border, var(--accent));
+    background: var(--stepper-hover-bg);
   }
 
   .stepper:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(110, 231, 255, 0.25);
+    box-shadow: 0 0 0 2px var(--stepper-focus-ring, rgba(110, 231, 255, 0.25));
   }
 
   .stepper-button {
@@ -269,7 +269,7 @@
     height: 32px;
     border-radius: 50%;
     border: none;
-    background: rgba(19, 24, 35, 0.95);
+    background: var(--stepper-button-bg);
     color: var(--text);
     display: grid;
     place-items: center;
@@ -280,7 +280,7 @@
   }
 
   .stepper-button:hover:not(:disabled) {
-    background: rgba(110, 231, 255, 0.2);
+    background: var(--stepper-button-hover-bg);
   }
 
   .stepper-button:active:not(:disabled) {
@@ -335,7 +335,7 @@
     right: 12px;
     bottom: 6px;
     height: 4px;
-    background: rgba(110, 231, 255, 0.08);
+    background: var(--stepper-progress-track);
     border-radius: 999px;
     overflow: hidden;
     pointer-events: none;
@@ -343,7 +343,7 @@
 
   .progress-fill {
     height: 100%;
-    background: rgba(110, 231, 255, 0.8);
+    background: var(--stepper-progress-fill);
     border-radius: inherit;
     transition: width 120ms ease;
   }
