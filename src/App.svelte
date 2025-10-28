@@ -680,9 +680,11 @@
       Plotly.purge(isoPlotDiv)
       isoPlotReady = false
     } else if (previousNoaaVisual === 'rdi3d' && noaa3dPlotDiv) {
+      detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
       noaa3dPlotReady = false
     } else if (previousNoaaVisual === 'intensity' && noaaIntensityPlotDiv) {
+      detachNoaaIntensityPlotClickHandler()
       Plotly.purge(noaaIntensityPlotDiv)
       noaaIntensityPlotReady = false
       noaaIntensityPlotIsRendering = false
@@ -1802,6 +1804,7 @@
     if (activeNoaaVisual !== 'rdi3d') {
       noaa3dPlotIsRendering = false
       if (noaa3dPlotDiv) {
+        detachNoaa3dPlotClickHandler()
         Plotly.purge(noaa3dPlotDiv)
       }
       return
@@ -1822,6 +1825,7 @@
       !noaaIntensityZ.length
     ) {
       noaa3dPlotIsRendering = false
+      detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
       return
     }
@@ -1832,6 +1836,7 @@
 
     if (!finiteIntensities.length) {
       noaa3dPlotIsRendering = false
+      detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
       return
     }
@@ -1841,6 +1846,7 @@
 
     if (!Number.isFinite(minIntensity) || !Number.isFinite(maxIntensity)) {
       noaa3dPlotIsRendering = false
+      detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
       return
     }
@@ -1911,12 +1917,15 @@
         return null
       }
 
+      const highlightDepthValue = Number(depth)
+      const highlightIntensityValue = Number(intensity)
+
       return {
         type: 'scatter3d',
         mode: 'markers',
         x: [durationEntry.hr],
         y: [ariEntry.value],
-        z: [intensity as number],
+        z: [highlightIntensityValue],
         marker: {
           color: chartTheme.isoHighlight,
           size: 6,
@@ -1925,11 +1934,20 @@
         },
         name: 'Selected NOAA cell',
         showlegend: false,
+        customdata: [
+          [
+            durationEntry.label,
+            durationEntry.hr,
+            ariEntry.key,
+            highlightDepthValue,
+            highlightIntensityValue
+          ]
+        ],
         hovertemplate:
           `Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)` +
           `<br>ARI: ${ariEntry.key}-year` +
-          `<br>Intensity: ${(intensity as number).toFixed(2)} in/hr` +
-          `<br>Depth: ${(depth as number).toFixed(3)} in<extra></extra>`
+          `<br>Intensity: ${highlightIntensityValue.toFixed(2)} in/hr` +
+          `<br>Depth: ${highlightDepthValue.toFixed(3)} in<extra></extra>`
       } satisfies Data
     })()
 
@@ -2015,6 +2033,7 @@
       })
     )
       .then(() => {
+        attachNoaa3dPlotClickHandler()
         noaa3dPlotReady = true
       })
       .catch((error) => {
@@ -2030,6 +2049,7 @@
     if (activeNoaaVisual !== 'intensity') {
       noaaIntensityPlotIsRendering = false
       if (noaaIntensityPlotDiv) {
+        detachNoaaIntensityPlotClickHandler()
         Plotly.purge(noaaIntensityPlotDiv)
       }
       return
@@ -2049,6 +2069,7 @@
       !noaaIntensityZ.length
     ) {
       noaaIntensityPlotIsRendering = false
+      detachNoaaIntensityPlotClickHandler()
       Plotly.purge(noaaIntensityPlotDiv)
       return
     }
@@ -2059,6 +2080,7 @@
 
     if (!finiteIntensities.length) {
       noaaIntensityPlotIsRendering = false
+      detachNoaaIntensityPlotClickHandler()
       Plotly.purge(noaaIntensityPlotDiv)
       return
     }
@@ -2101,6 +2123,15 @@
           depthText
       })
 
+      const customData = durationEntries.map((durationEntry, colIdx) => {
+        const depth = noaaContourZ[rowIdx]?.[colIdx]
+        return [
+          durationEntry.label,
+          ariEntry.key,
+          Number.isFinite(depth as number) ? Number(depth) : null
+        ]
+      })
+
       const color = chartTheme.idfPalette[rowIdx % chartTheme.idfPalette.length]
 
       return {
@@ -2111,6 +2142,7 @@
         text: hoverText,
         hovertemplate: '%{text}<extra></extra>',
         name: `${ariEntry.key}-year`,
+        customdata: customData,
         line: { color, width: 2 },
         marker: { color, size: 6 },
         connectgaps: false
@@ -2137,15 +2169,19 @@
         const durationEntry = durationEntries[durationIndex]
         const ariEntry = ariEntries[ariIndex]
         const highlightDepth = noaaContourZ[ariIndex]?.[durationIndex]
+        const highlightDepthValue = Number.isFinite(highlightDepth as number)
+          ? Number(highlightDepth)
+          : null
         const depthSegment =
           Number.isFinite(highlightDepth as number)
             ? `<br>Depth: ${(highlightDepth as number).toFixed(3)} in`
             : ''
+        const highlightIntensityValue = Number(highlightIntensity)
         highlightTrace = {
           type: 'scatter',
           mode: 'markers',
           x: [durationEntry.hr],
-          y: [highlightIntensity as number],
+          y: [highlightIntensityValue],
           marker: {
             color: chartTheme.isoHighlight,
             size: 12,
@@ -2154,10 +2190,11 @@
           },
           name: 'Selected NOAA cell',
           showlegend: false,
+          customdata: [[durationEntry.label, ariEntry.key, highlightDepthValue]],
           hovertemplate:
             `Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)` +
             `<br>ARI: ${ariEntry.key}-year` +
-            `<br>Intensity: ${(highlightIntensity as number).toFixed(2)} in/hr` +
+            `<br>Intensity: ${highlightIntensityValue.toFixed(2)} in/hr` +
             `${depthSegment}<extra></extra>`
         }
       }
@@ -2275,6 +2312,7 @@
       })
     )
       .then(() => {
+        attachNoaaIntensityPlotClickHandler()
         noaaIntensityPlotReady = true
       })
       .catch((error) => {
@@ -2355,6 +2393,214 @@
       plotElement.removeListener('plotly_click', handleIsoPlotClick)
     } else if (typeof plotElement.off === 'function') {
       plotElement.off('plotly_click', handleIsoPlotClick)
+    }
+  }
+
+  const handleNoaa3dPlotClick = (event: any) => {
+    const table = $tableStore
+    if (!table) return
+    const point = event?.points?.[0]
+    if (!point) return
+
+    const customData = point.customdata
+    if (Array.isArray(customData)) {
+      const [durationLabel, , ariKey, depth] = customData
+      if (
+        typeof durationLabel === 'string' &&
+        typeof ariKey === 'string' &&
+        Number.isFinite(depth as number)
+      ) {
+        pickCell(durationLabel, ariKey)
+        return
+      }
+    }
+
+    const pointDuration = Number(point.x)
+    const pointAri = Number(point.y)
+    if (!Number.isFinite(pointDuration) || !Number.isFinite(pointAri)) {
+      return
+    }
+
+    const ariEntries = noaaAriEntries
+    const durationEntries = noaaDurationEntries
+    if (!ariEntries.length || !durationEntries.length) {
+      return
+    }
+
+    const nearestAri = ariEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.value - pointAri)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: ariEntries[0] }
+    )
+
+    const nearestDuration = durationEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.hr - pointDuration)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
+    )
+
+    if (
+      $durationMode === 'standard' &&
+      !STANDARD_DURATION_HOURS.some(
+        (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
+      )
+    ) {
+      return
+    }
+
+    const selectedRow = nearestDuration.entry.row
+    const ariKey = nearestAri.entry.key
+    const depth = selectedRow.values[ariKey]
+
+    if (!Number.isFinite(depth)) {
+      return
+    }
+
+    pickCell(nearestDuration.entry.label, ariKey)
+  }
+
+  function attachNoaa3dPlotClickHandler() {
+    if (!noaa3dPlotDiv) return
+    const plotElement = noaa3dPlotDiv as any
+    if (typeof plotElement?.on === 'function') {
+      detachNoaa3dPlotClickHandler()
+      plotElement.on('plotly_click', handleNoaa3dPlotClick)
+    }
+  }
+
+  function detachNoaa3dPlotClickHandler() {
+    if (!noaa3dPlotDiv) return
+    const plotElement = noaa3dPlotDiv as any
+    if (typeof plotElement?.removeListener === 'function') {
+      plotElement.removeListener('plotly_click', handleNoaa3dPlotClick)
+    }
+    if (typeof plotElement?.off === 'function') {
+      plotElement.off('plotly_click', handleNoaa3dPlotClick)
+    }
+  }
+
+  const handleNoaaIntensityPlotClick = (event: any) => {
+    const table = $tableStore
+    if (!table) return
+    const point = event?.points?.[0]
+    if (!point) return
+
+    const curveNumber = typeof point.curveNumber === 'number' ? point.curveNumber : null
+    const pointIndex = typeof point.pointIndex === 'number' ? point.pointIndex : null
+
+    if (
+      curveNumber != null &&
+      pointIndex != null &&
+      curveNumber >= 0 &&
+      pointIndex >= 0 &&
+      curveNumber < noaaAriEntries.length &&
+      pointIndex < noaaDurationEntries.length
+    ) {
+      const durationEntry = noaaDurationEntries[pointIndex]
+      const ariEntry = noaaAriEntries[curveNumber]
+      const depth = durationEntry.row.values[ariEntry.key]
+      if (Number.isFinite(depth)) {
+        pickCell(durationEntry.label, ariEntry.key)
+      }
+      return
+    }
+
+    const customData = point.customdata
+    if (Array.isArray(customData)) {
+      const [durationLabel, ariKey, depth] = customData
+      if (
+        typeof durationLabel === 'string' &&
+        typeof ariKey === 'string' &&
+        Number.isFinite(depth as number)
+      ) {
+        pickCell(durationLabel, ariKey)
+        return
+      }
+    }
+
+    const pointDuration = Number(point.x)
+    const pointIntensity = Number(point.y)
+    if (!Number.isFinite(pointDuration) || !Number.isFinite(pointIntensity)) {
+      return
+    }
+
+    const durationEntries = noaaDurationEntries
+    const ariEntries = noaaAriEntries
+    if (!durationEntries.length || !ariEntries.length) {
+      return
+    }
+
+    const nearestDuration = durationEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.hr - pointDuration)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
+    )
+
+    if (
+      $durationMode === 'standard' &&
+      !STANDARD_DURATION_HOURS.some(
+        (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
+      )
+    ) {
+      return
+    }
+
+    const hours = nearestDuration.entry.hr
+    if (!Number.isFinite(hours) || hours <= 0) {
+      return
+    }
+
+    let bestAri: { diff: number; entry: AriEntry } | null = null
+    for (const entry of ariEntries) {
+      const depth = nearestDuration.entry.row.values[entry.key]
+      if (!Number.isFinite(depth)) {
+        continue
+      }
+      const intensity = Number(depth) / hours
+      if (!Number.isFinite(intensity)) {
+        continue
+      }
+      const diff = Math.abs(intensity - pointIntensity)
+      if (!bestAri || diff < bestAri.diff) {
+        bestAri = { diff, entry }
+      }
+    }
+
+    if (!bestAri) {
+      return
+    }
+
+    const depth = nearestDuration.entry.row.values[bestAri.entry.key]
+    if (!Number.isFinite(depth)) {
+      return
+    }
+
+    pickCell(nearestDuration.entry.label, bestAri.entry.key)
+  }
+
+  function attachNoaaIntensityPlotClickHandler() {
+    if (!noaaIntensityPlotDiv) return
+    const plotElement = noaaIntensityPlotDiv as any
+    if (typeof plotElement?.on === 'function') {
+      detachNoaaIntensityPlotClickHandler()
+      plotElement.on('plotly_click', handleNoaaIntensityPlotClick)
+    }
+  }
+
+  function detachNoaaIntensityPlotClickHandler() {
+    if (!noaaIntensityPlotDiv) return
+    const plotElement = noaaIntensityPlotDiv as any
+    if (typeof plotElement?.removeListener === 'function') {
+      plotElement.removeListener('plotly_click', handleNoaaIntensityPlotClick)
+    }
+    if (typeof plotElement?.off === 'function') {
+      plotElement.off('plotly_click', handleNoaaIntensityPlotClick)
     }
   }
 
@@ -3008,11 +3254,13 @@
     plot2Ready = false
     plot3Ready = false
     if (noaa3dPlotDiv) {
+      detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
     }
     noaa3dPlotReady = false
     noaa3dPlotIsRendering = false
     if (noaaIntensityPlotDiv) {
+      detachNoaaIntensityPlotClickHandler()
       Plotly.purge(noaaIntensityPlotDiv)
     }
     noaaIntensityPlotReady = false
