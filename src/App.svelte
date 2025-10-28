@@ -88,6 +88,8 @@
   let previousNoaaVisual: NoaaVisualKey = activeNoaaVisual
 
   const stormRainDrops = Array.from({ length: 8 }, (_, index) => index)
+  let stormProcessingRainVisible = false
+  let stormProcessingRainHideTimer: ReturnType<typeof setTimeout> | null = null
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -430,6 +432,20 @@
     noaaIntensityPlotIsRendering ||
     comparisonCurvesAreComputing ||
     curvePlotIsRendering
+  $: {
+    if (isStormProcessing) {
+      stormProcessingRainVisible = true
+      if (stormProcessingRainHideTimer) {
+        clearTimeout(stormProcessingRainHideTimer)
+        stormProcessingRainHideTimer = null
+      }
+    } else if (!stormProcessingRainHideTimer) {
+      stormProcessingRainHideTimer = setTimeout(() => {
+        stormProcessingRainVisible = false
+        stormProcessingRainHideTimer = null
+      }, 1800)
+    }
+  }
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
     : []
@@ -3250,6 +3266,7 @@
   onDestroy(() => {
     teardownTheme()
     if (fetchTimer) clearTimeout(fetchTimer)
+    if (stormProcessingRainHideTimer) clearTimeout(stormProcessingRainHideTimer)
     if (map) map.remove()
     if (plotDiv1) Plotly.purge(plotDiv1)
     if (plotDiv2) Plotly.purge(plotDiv2)
@@ -3679,6 +3696,8 @@
                 <span class="storm-processing-indicator__spinner" aria-hidden="true"></span>
                 <span class="storm-processing-indicator__text">Processing storm…</span>
               </div>
+            {/if}
+            {#if stormProcessingRainVisible}
               <div class="storm-processing-rain" aria-hidden="true" transition:fade>
                 {#each stormRainDrops as drop}
                   <span
