@@ -17,8 +17,6 @@ plots, and export the results as CSV or PCSWMM-compatible DAT files.
   24-hour durations.
 - Hyetograph, incremental volume, and cumulative mass-curve plots powered by Plotly.js,
   along with a tabular export-ready storm series using minute offsets instead of timestamps.
-- Optional hyetograph smoothing mode that preserves totals and peak intensity while reducing
-  stair-step artifacts in NRCS-based storms.
 - Precise and fast (approximate) computation modes so you can trade fidelity for speed
   on long-duration storms.
 - CSV export with `time_min`, incremental depth, cumulative depth, and intensity columns,

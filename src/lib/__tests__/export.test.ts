@@ -11,7 +11,6 @@ describe('formatPcswmmDat', () => {
       intensityInHr: [1.2345678, 0.5, 0.25],
       effectiveTimestepMin: 5,
       timestepLocked: false,
-      smoothingApplied: false
     }
 
     const txt = formatPcswmmDat(storm, 5, 'Gauge', '2024-01-01T00:00:00-05:00')
@@ -29,7 +28,6 @@ describe('formatPcswmmDat', () => {
       intensityInHr: [1, 1, 1, 1],
       effectiveTimestepMin: 15,
       timestepLocked: false,
-      smoothingApplied: false
     }
 
     const txt = formatPcswmmDat(storm, 15, 'Gauge', '2024-01-01T00:00:00Z')
@@ -47,7 +45,6 @@ describe('formatPcswmmDat', () => {
       intensityInHr: Array(10).fill(1),
       effectiveTimestepMin: 7,
       timestepLocked: false,
-      smoothingApplied: false
     }
 
     const txt = formatPcswmmDat(storm, 7, 'Gauge', '2024-01-01T00:00:00Z')
@@ -65,7 +62,6 @@ describe('formatPcswmmDat', () => {
       intensityInHr: [1, 1],
       effectiveTimestepMin: 30,
       timestepLocked: false,
-      smoothingApplied: false
     }
 
     const getFullYearSpy = vi.spyOn(Date.prototype, 'getFullYear')
@@ -140,7 +136,6 @@ describe('saveCsv', () => {
       intensityInHr: [0, 2.4],
       effectiveTimestepMin: 5,
       timestepLocked: false,
-      smoothingApplied: false
     }
 
     const csv = await captureCsvText(storm)
@@ -159,7 +154,6 @@ describe('saveCsv', () => {
       intensityInHr: [0, 2.4],
       effectiveTimestepMin: 5,
       timestepLocked: false,
-      smoothingApplied: false
     }
 
     const csv = await captureCsvText(storm, '2024-01-01T00:00:00Z')
