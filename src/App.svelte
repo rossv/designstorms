@@ -3869,7 +3869,6 @@
                     </button>
                   </div>
                   <div class="mode-toggle mode-toggle--hyetograph" role="group" aria-label="Hyetograph display mode">
-                    <span class="mode-toggle__label">Hyetograph:</span>
                     <button
                       type="button"
                       class:active={$hyetographMode === 'stepped'}
@@ -4769,15 +4768,6 @@
     border-radius: 999px;
     border: 1px solid var(--toggle-border);
     background: var(--toggle-bg);
-  }
-
-  .mode-toggle__label {
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    font-weight: 600;
-    white-space: nowrap;
   }
 
   .mode-toggle button {
