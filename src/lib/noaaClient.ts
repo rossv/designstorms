@@ -25,7 +25,9 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: Failed to fetch`);
   const txt = await resp.text();
   
-  console.log("Raw NOAA Data:", txt);
+  if (import.meta.env.DEV) {
+    console.log("Raw NOAA Data:", txt);
+  }
 
   return txt;
 }
