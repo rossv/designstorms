@@ -559,11 +559,9 @@ export function generateStorm(params: StormParams): StormResult {
     finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
   }
 
-  const scsTable =
-    durationMode === 'standard'
-      ? (SCS_TABLES as Record<string, number[]>)[finalDistribution]
-      : undefined
+  const scsTable = (SCS_TABLES as Record<string, number[]>)[finalDistribution]
   const hasScsTable = Array.isArray(scsTable) && scsTable.length > 0
+  const canLockToTable = durationMode === 'standard' && hasScsTable
   const smoothingSupported = hasScsTable && (scsTable?.length ?? 0) >= 3
   const smoothingActive =
     Boolean(smoothingEnabled) && smoothingSupported && timestepMin > 0
@@ -596,7 +594,7 @@ export function generateStorm(params: StormParams): StormResult {
   let timeMin: number[] = []
   let timestepLocked = false
 
-  if (hasScsTable && !smoothingActive) {
+  if (canLockToTable && !smoothingActive) {
     sampleCount = scsTable.length
     timestepLocked = true
     const spacing = sampleCount > 1 ? durationMin / (sampleCount - 1) : durationMin

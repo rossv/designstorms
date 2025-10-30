@@ -401,6 +401,29 @@ describe('generateStorm', () => {
     expect(smoothedPeak).toBeCloseTo(baselinePeak, 6)
   })
 
+  it('smooths SCS storms with custom durations when the fallback table is used', () => {
+    const params = {
+      depthIn: 2,
+      durationHr: 36,
+      timestepMin: 15,
+      distribution: 'scs_type_ii' as const,
+      customCurveCsv: '',
+      durationMode: 'custom' as const
+    }
+
+    const baseline = generateStorm(params)
+    const smoothed = generateStorm({ ...params, smoothingEnabled: true })
+
+    expect(baseline.smoothingApplied).toBe(false)
+    expect(smoothed.smoothingApplied).toBe(true)
+    expect(smoothed.timestepLocked).toBe(false)
+    expect(smoothed.cumulativeIn).not.toEqual(baseline.cumulativeIn)
+    expect(smoothed.incrementalIn.reduce((sum, value) => sum + value, 0)).toBeCloseTo(
+      params.depthIn,
+      6
+    )
+  })
+
   it('falls back to linear behavior when smoothing is requested but unsupported', () => {
     const params = {
       depthIn: 2,
