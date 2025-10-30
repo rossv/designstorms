@@ -42,6 +42,167 @@ function clamp01(x: number) {
   return Math.max(0, Math.min(1, x))
 }
 
+function arraysDiffer(a: number[], b: number[], tolerance = 1e-9): boolean {
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i += 1) {
+    if (Math.abs((a[i] ?? 0) - (b[i] ?? 0)) > tolerance) {
+      return true
+    }
+  }
+  return false
+}
+
+function computePchipSlopes(xs: number[], ys: number[]): number[] {
+  const n = xs.length
+  if (n <= 1) return new Array(n).fill(0)
+
+  const h: number[] = new Array(n - 1)
+  const delta: number[] = new Array(n - 1)
+  for (let i = 0; i < n - 1; i += 1) {
+    const dx = xs[i + 1]! - xs[i]!
+    const dy = ys[i + 1]! - ys[i]!
+    h[i] = dx
+    delta[i] = dx !== 0 ? dy / dx : 0
+  }
+
+  const slopes = new Array(n).fill(0)
+  const computeEndpoint = (
+    delta0: number,
+    delta1: number,
+    h0: number,
+    h1: number
+  ): number => {
+    const numerator = (2 * h0 + h1) * delta0 - h0 * delta1
+    const denominator = h0 + h1
+    if (denominator === 0) return 0
+    let value = numerator / denominator
+    if (delta0 === 0) {
+      return 0
+    }
+    if (value * delta0 < 0) {
+      return 0
+    }
+    const limit = 3 * delta0
+    if (delta0 * delta1 < 0 && Math.abs(value) > Math.abs(limit)) {
+      value = limit
+    }
+    return value
+  }
+
+  slopes[0] = computeEndpoint(delta[0]!, delta[1] ?? delta[0]!, h[0]!, h[1] ?? h[0]!)
+  slopes[n - 1] = computeEndpoint(
+    delta[n - 2]!,
+    delta[n - 3] ?? delta[n - 2]!,
+    h[n - 2]!,
+    h[n - 3] ?? h[n - 2]!
+  )
+
+  for (let i = 1; i < n - 1; i += 1) {
+    const deltaPrev = delta[i - 1]!
+    const deltaNext = delta[i]!
+    if (deltaPrev === 0 || deltaNext === 0 || deltaPrev * deltaNext <= 0) {
+      slopes[i] = 0
+    } else {
+      const hPrev = h[i - 1]!
+      const hNext = h[i]!
+      const w1 = 2 * hNext + hPrev
+      const w2 = hNext + 2 * hPrev
+      const denom = w1 / deltaPrev + w2 / deltaNext
+      slopes[i] = denom === 0 ? 0 : (w1 + w2) / denom
+    }
+  }
+
+  return slopes
+}
+
+function pchipInterpolate(xs: number[], ys: number[], xVals: number[]): number[] {
+  if (xs.length !== ys.length || xs.length === 0) {
+    return xVals.map(() => 0)
+  }
+  if (xs.length === 1) {
+    return xVals.map(() => ys[0] ?? 0)
+  }
+
+  const slopes = computePchipSlopes(xs, ys)
+  const result: number[] = []
+
+  for (const x of xVals) {
+    if (!Number.isFinite(x)) {
+      result.push(0)
+      continue
+    }
+    if (x <= xs[0]!) {
+      result.push(ys[0] ?? 0)
+      continue
+    }
+    if (x >= xs[xs.length - 1]!) {
+      result.push(ys[ys.length - 1] ?? 0)
+      continue
+    }
+
+    let interval = 0
+    while (interval < xs.length - 2 && x > xs[interval + 1]!) {
+      interval += 1
+    }
+
+    const x0 = xs[interval]!
+    const x1 = xs[interval + 1]!
+    const y0 = ys[interval] ?? 0
+    const y1 = ys[interval + 1] ?? y0
+    const m0 = slopes[interval] ?? 0
+    const m1 = slopes[interval + 1] ?? 0
+    const h = x1 - x0
+    const t = h !== 0 ? (x - x0) / h : 0
+
+    const t2 = t * t
+    const t3 = t2 * t
+    const h00 = 2 * t3 - 3 * t2 + 1
+    const h10 = t3 - 2 * t2 + t
+    const h01 = -2 * t3 + 3 * t2
+    const h11 = t3 - t2
+
+    const interpolated = h00 * y0 + h10 * h * m0 + h01 * y1 + h11 * h * m1
+    result.push(interpolated)
+  }
+
+  return result
+}
+
+function buildCumulative(values: number[], depthIn: number): number[] {
+  const out: number[] = []
+  let last = 0
+  for (let i = 0; i < values.length; i += 1) {
+    const normalized = clamp01(values[i] ?? 0)
+    const scaled = normalized * depthIn
+    const monotonic = Math.max(last, scaled)
+    const bounded = Math.min(monotonic, depthIn)
+    out.push(bounded)
+    last = bounded
+  }
+  if (out.length > 0) {
+    out[0] = 0
+    out[out.length - 1] = depthIn
+  }
+  return out
+}
+
+function buildIncremental(cumulative: number[]): number[] {
+  return cumulative.map((value, idx) => {
+    if (idx === 0) return 0
+    const prev = cumulative[idx - 1] ?? 0
+    return Math.max(0, value - prev)
+  })
+}
+
+function buildIntensity(incremental: number[], timeMin: number[]): number[] {
+  return incremental.map((depth, idx) => {
+    if (idx === 0) return 0
+    const dt = timeMin[idx]! - timeMin[idx - 1]!
+    if (!Number.isFinite(dt) || dt <= 0) return 0
+    return (depth / dt) * 60
+  })
+}
+
 function expClamp(logValue: number): number {
   if (!Number.isFinite(logValue)) return 0
   if (logValue <= MIN_LOG_EXP) return 0
@@ -388,7 +549,8 @@ export function generateStorm(params: StormParams): StormResult {
     distribution,
     customCurveCsv,
     durationMode,
-    computationMode = 'precise'
+    computationMode = 'precise',
+    smoothingEnabled = false
   } = params
   const durationMin = durationHr * 60
 
@@ -402,6 +564,9 @@ export function generateStorm(params: StormParams): StormResult {
       ? (SCS_TABLES as Record<string, number[]>)[finalDistribution]
       : undefined
   const hasScsTable = Array.isArray(scsTable) && scsTable.length > 0
+  const smoothingSupported = hasScsTable && (scsTable?.length ?? 0) >= 3
+  const smoothingActive =
+    Boolean(smoothingEnabled) && smoothingSupported && timestepMin > 0
 
   if (durationMin <= 0) {
     return {
@@ -410,7 +575,8 @@ export function generateStorm(params: StormParams): StormResult {
       cumulativeIn: [0],
       intensityInHr: [0],
       effectiveTimestepMin: 0,
-      timestepLocked: false
+      timestepLocked: false,
+      smoothingApplied: false
     }
   }
 
@@ -421,7 +587,8 @@ export function generateStorm(params: StormParams): StormResult {
       cumulativeIn: [0],
       intensityInHr: [0],
       effectiveTimestepMin: 0,
-      timestepLocked: false
+      timestepLocked: false,
+      smoothingApplied: false
     }
   }
 
@@ -429,7 +596,7 @@ export function generateStorm(params: StormParams): StormResult {
   let timeMin: number[] = []
   let timestepLocked = false
 
-  if (hasScsTable) {
+  if (hasScsTable && !smoothingActive) {
     sampleCount = scsTable.length
     timestepLocked = true
     const spacing = sampleCount > 1 ? durationMin / (sampleCount - 1) : durationMin
@@ -438,23 +605,25 @@ export function generateStorm(params: StormParams): StormResult {
       return Math.min(i * spacing, durationMin)
     })
   } else {
-    const rawSampleCount = Math.ceil(durationMin / timestepMin) + 1
+    const safeTimestep = timestepMin > 0 ? timestepMin : durationMin
+    const rawSampleCount = safeTimestep > 0 ? Math.ceil(durationMin / safeTimestep) + 1 : 1
     if (
       computationMode === 'fast' &&
       rawSampleCount > MAX_FAST_SAMPLES &&
       MAX_FAST_SAMPLES > 1
     ) {
-      const effectiveTimestep = durationMin / (MAX_FAST_SAMPLES - 1)
-      sampleCount = MAX_FAST_SAMPLES
+      const cappedSamples = Math.max(2, MAX_FAST_SAMPLES)
+      const effectiveTimestep = cappedSamples > 1 ? durationMin / (cappedSamples - 1) : durationMin
+      sampleCount = cappedSamples
       timeMin = Array.from({ length: sampleCount }, (_, i) => {
         if (i === sampleCount - 1) return durationMin
         return Math.min(i * effectiveTimestep, durationMin)
       })
     } else {
-      sampleCount = rawSampleCount
+      sampleCount = Math.max(1, rawSampleCount)
       timeMin = Array.from({ length: sampleCount }, (_, i) => {
         if (i === sampleCount - 1) return durationMin
-        return Math.min(i * timestepMin, durationMin)
+        return Math.min(i * safeTimestep, durationMin)
       })
     }
   }
@@ -466,7 +635,8 @@ export function generateStorm(params: StormParams): StormResult {
       cumulativeIn: [0],
       intensityInHr: [0],
       effectiveTimestepMin: 0,
-      timestepLocked
+      timestepLocked,
+      smoothingApplied: false
     }
   }
 
@@ -496,35 +666,102 @@ export function generateStorm(params: StormParams): StormResult {
     return v0 * (1 - frac) + v1 * frac
   }
 
-  const normalizedCumulative = normalizedTimes.map((nt) => evaluateLinear(nt))
+  const baselineNormalized = normalizedTimes.map((nt) => evaluateLinear(nt))
 
-  const cumulativeIn: number[] = []
-  let lastValue = 0
-  for (let i = 0; i < normalizedCumulative.length; i += 1) {
-    const normalized = clamp01(normalizedCumulative[i] ?? 0)
-    const scaled = normalized * depthIn
-    const monotonic = Math.max(lastValue, scaled)
-    const bounded = Math.min(monotonic, depthIn)
-    cumulativeIn.push(bounded)
-    lastValue = bounded
+  let normalizedCumulative = baselineNormalized
+  let smoothingApplied = false
+
+  if (smoothingActive && hasScsTable && scsTable) {
+    const scsLength = scsTable.length
+    if (scsLength >= 2) {
+      const scsTimes = scsLength > 1
+        ? Array.from({ length: scsLength }, (_, i) => i / (scsLength - 1))
+        : [0]
+      const smoothed = pchipInterpolate(scsTimes, scsTable, normalizedTimes)
+      const clamped = smoothed.map((value) => clamp01(value))
+      if (arraysDiffer(clamped, baselineNormalized, 1e-8)) {
+        normalizedCumulative = clamped
+        smoothingApplied = true
+      }
+    }
   }
 
-  if (cumulativeIn.length > 0) {
-    cumulativeIn[0] = 0
-    cumulativeIn[cumulativeIn.length - 1] = depthIn
+  const baselineCumulativeIn = buildCumulative(baselineNormalized, depthIn)
+
+  let cumulativeIn = buildCumulative(normalizedCumulative, depthIn)
+  let incrementalIn = buildIncremental(cumulativeIn)
+  let intensityInHr = buildIntensity(incrementalIn, timeMin)
+
+  if (smoothingApplied) {
+    const baselineIncremental = buildIncremental(baselineCumulativeIn)
+    const baselineIntensity = buildIntensity(baselineIncremental, timeMin)
+    const baselineMax = baselineIntensity.reduce(
+      (max, value) => (Number.isFinite(value) ? Math.max(max, value) : max),
+      0
+    )
+
+    const peakIndex = baselineIntensity.findIndex(
+      (value, idx) => idx > 0 && Math.abs(value - baselineMax) < 1e-8
+    )
+
+    if (peakIndex > 0 && baselineMax > 0) {
+      const desiredIncrement = baselineIncremental[peakIndex] ?? 0
+      const currentIncrement = incrementalIn[peakIndex] ?? 0
+      if (Math.abs(desiredIncrement - currentIncrement) > 1e-8) {
+        const totalDepth = depthIn
+        const othersCurrent = incrementalIn.reduce((sum, value, idx) => {
+          if (idx === peakIndex) return sum
+          return sum + (value ?? 0)
+        }, 0)
+        const targetOthers = Math.max(0, totalDepth - desiredIncrement)
+        const scale = othersCurrent > 0 ? targetOthers / othersCurrent : 0
+
+        incrementalIn = incrementalIn.map((value, idx) => {
+          if (idx === 0) return 0
+          if (idx === peakIndex) {
+            return Math.max(0, desiredIncrement)
+          }
+          const scaled = (value ?? 0) * scale
+          return Math.max(0, scaled)
+        })
+
+        const adjustedTotal = incrementalIn.reduce((sum, value) => sum + value, 0)
+        const error = totalDepth - adjustedTotal
+        if (Math.abs(error) > 1e-6) {
+          let adjustIndex = incrementalIn.length - 1
+          if (adjustIndex === peakIndex && adjustIndex > 1) {
+            adjustIndex -= 1
+          }
+          if (adjustIndex >= 0) {
+            incrementalIn[adjustIndex] = Math.max(
+              0,
+              (incrementalIn[adjustIndex] ?? 0) + error
+            )
+          }
+        }
+
+        // rebuild cumulative directly from increments to avoid drift
+        const rebuiltCumulative: number[] = []
+        let running = 0
+        for (let i = 0; i < incrementalIn.length; i += 1) {
+          if (i === 0) {
+            rebuiltCumulative.push(0)
+          } else {
+            running += incrementalIn[i] ?? 0
+            rebuiltCumulative.push(Math.min(depthIn, Math.max(running, rebuiltCumulative[i - 1] ?? 0)))
+          }
+        }
+        if (rebuiltCumulative.length > 0) {
+          rebuiltCumulative[rebuiltCumulative.length - 1] = depthIn
+        }
+        cumulativeIn = rebuiltCumulative
+        intensityInHr = buildIntensity(incrementalIn, timeMin)
+      }
+    }
   }
 
-  const incrementalIn = cumulativeIn.map((value, idx) => {
-    const prev = idx > 0 ? cumulativeIn[idx - 1] : 0
-    return Math.max(0, value - prev)
-  })
-
-  const intensityInHr = incrementalIn.map((depth, idx) => {
-    if (idx === 0) return 0
-    const dt = timeMin[idx] - timeMin[idx - 1]
-    if (dt <= 0) return 0
-    return (depth / dt) * 60
-  })
+  const smoothingDifference = arraysDiffer(cumulativeIn, baselineCumulativeIn, 1e-8)
+  const finalSmoothingApplied = smoothingActive && smoothingDifference
 
   return {
     timeMin,
@@ -532,6 +769,7 @@ export function generateStorm(params: StormParams): StormResult {
     cumulativeIn,
     intensityInHr,
     effectiveTimestepMin,
-    timestepLocked
+    timestepLocked,
+    smoothingApplied: finalSmoothingApplied
   }
 }

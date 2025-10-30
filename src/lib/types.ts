@@ -12,6 +12,7 @@ export interface StormResult {
   intensityInHr: number[]
   effectiveTimestepMin: number
   timestepLocked: boolean
+  smoothingApplied: boolean
 }
 
 export interface StormParams {
@@ -23,4 +24,5 @@ export interface StormParams {
   customCurveCsv?: string
   durationMode?: 'standard' | 'custom'
   computationMode?: 'precise' | 'fast'
+  smoothingEnabled?: boolean
 }
