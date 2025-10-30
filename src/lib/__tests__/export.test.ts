@@ -8,7 +8,10 @@ describe('formatPcswmmDat', () => {
       timeMin: [0, 5, 10],
       incrementalIn: [0.1, 0.2, 0.3],
       cumulativeIn: [0.1, 0.3, 0.6],
-      intensityInHr: [1.2345678, 0.5, 0.25]
+      intensityInHr: [1.2345678, 0.5, 0.25],
+      effectiveTimestepMin: 5,
+      timestepLocked: false,
+      smoothingApplied: false
     }
 
     const txt = formatPcswmmDat(storm, 5, 'Gauge', '2024-01-01T00:00:00-05:00')
@@ -23,7 +26,10 @@ describe('formatPcswmmDat', () => {
       timeMin: [0, 15, 30, 37],
       incrementalIn: [0.1, 0.1, 0.1, 0.1],
       cumulativeIn: [0.1, 0.2, 0.3, 0.4],
-      intensityInHr: [1, 1, 1, 1]
+      intensityInHr: [1, 1, 1, 1],
+      effectiveTimestepMin: 15,
+      timestepLocked: false,
+      smoothingApplied: false
     }
 
     const txt = formatPcswmmDat(storm, 15, 'Gauge', '2024-01-01T00:00:00Z')
@@ -38,7 +44,10 @@ describe('formatPcswmmDat', () => {
       timeMin: [0, 7, 14, 21, 28, 35, 42, 49, 56, 60],
       incrementalIn: Array(10).fill(0.1),
       cumulativeIn: Array.from({ length: 10 }, (_, i) => (i + 1) * 0.1),
-      intensityInHr: Array(10).fill(1)
+      intensityInHr: Array(10).fill(1),
+      effectiveTimestepMin: 7,
+      timestepLocked: false,
+      smoothingApplied: false
     }
 
     const txt = formatPcswmmDat(storm, 7, 'Gauge', '2024-01-01T00:00:00Z')
@@ -53,7 +62,10 @@ describe('formatPcswmmDat', () => {
       timeMin: [0, 30],
       incrementalIn: [0.5, 0.5],
       cumulativeIn: [0.5, 1],
-      intensityInHr: [1, 1]
+      intensityInHr: [1, 1],
+      effectiveTimestepMin: 30,
+      timestepLocked: false,
+      smoothingApplied: false
     }
 
     const getFullYearSpy = vi.spyOn(Date.prototype, 'getFullYear')
@@ -127,7 +139,8 @@ describe('saveCsv', () => {
       cumulativeIn: [0.1, 0.3],
       intensityInHr: [0, 2.4],
       effectiveTimestepMin: 5,
-      timestepLocked: false
+      timestepLocked: false,
+      smoothingApplied: false
     }
 
     const csv = await captureCsvText(storm)
@@ -145,7 +158,8 @@ describe('saveCsv', () => {
       cumulativeIn: [0.1, 0.3],
       intensityInHr: [0, 2.4],
       effectiveTimestepMin: 5,
-      timestepLocked: false
+      timestepLocked: false,
+      smoothingApplied: false
     }
 
     const csv = await captureCsvText(storm, '2024-01-01T00:00:00Z')
