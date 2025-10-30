@@ -17,6 +17,8 @@ plots, and export the results as CSV or PCSWMM-compatible DAT files.
   24-hour durations.
 - Hyetograph, incremental volume, and cumulative mass-curve plots powered by Plotly.js,
   along with a tabular export-ready storm series using minute offsets instead of timestamps.
+- Hyetograph smoothing toggle that replaces stepped bars with a smooth curve while
+  preserving total rainfall depth and peak intensity for downstream calculations.
 - Precise and fast (approximate) computation modes so you can trade fidelity for speed
   on long-duration storms.
 - CSV export with `time_min`, incremental depth, cumulative depth, and intensity columns,
@@ -65,9 +67,10 @@ npx svelte-check
 3. Choose a distribution, toggle between **Standard** or **Custom** duration entry, and pick
    **Precise** or **Fast (approx.)** computation modes. Add a custom CSV curve or open the
    comparison modal to inspect normalized cumulative distributions by duration.
-4. Adjust timestep and optional start time to control chart labels. CSV exports always include
-   minute offsets and add ISO timestamps when the start time is valid. Charts and the storm table
-   refresh automatically; export the CSV or DAT file once satisfied.
+4. Adjust timestep and optional start time to control chart labels. Use **Hyetograph: Stepped / Smooth**
+   to toggle between bar and smoothed intensity plots—the smooth option keeps totals and peak intensity
+   intact. CSV exports always include minute offsets and add ISO timestamps when the start time is valid.
+   Charts and the storm table refresh automatically; export the CSV or DAT file once satisfied.
 
 ## Data Sources & Exports
 

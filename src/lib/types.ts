@@ -5,6 +5,8 @@ export type DistributionName =
   'scs_type_iii_6hr' | 'scs_type_iii_12hr' | 'scs_type_iii_24hr' |
   'huff_q1' | 'huff_q2' | 'huff_q3' | 'huff_q4' | 'user'
 
+export type HyetographMode = 'stepped' | 'smooth'
+
 export interface StormResult {
   timeMin: number[]
   incrementalIn: number[]
@@ -12,6 +14,8 @@ export interface StormResult {
   intensityInHr: number[]
   effectiveTimestepMin: number
   timestepLocked: boolean
+  hyetographMode: HyetographMode
+  smoothingApplied: boolean
 }
 
 export interface StormParams {
@@ -23,4 +27,5 @@ export interface StormParams {
   customCurveCsv?: string
   durationMode?: 'standard' | 'custom'
   computationMode?: 'precise' | 'fast'
+  hyetographMode?: HyetographMode
 }

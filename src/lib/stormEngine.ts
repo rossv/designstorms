@@ -1,7 +1,7 @@
 import { BETA_PRESETS, SCS_TABLES } from './distributions'
-import type { StormParams, StormResult, DistributionName } from './types'
+import type { StormParams, StormResult, DistributionName, HyetographMode } from './types'
 
-export type { StormParams, StormResult, DistributionName } from './types'
+export type { StormParams, StormResult, DistributionName, HyetographMode } from './types'
 
 export const MAX_FAST_SAMPLES = 1000
 
@@ -388,8 +388,10 @@ export function generateStorm(params: StormParams): StormResult {
     distribution,
     customCurveCsv,
     durationMode,
-    computationMode = 'precise'
+    computationMode = 'precise',
+    hyetographMode: hyetographModeInput
   } = params
+  const hyetographMode: HyetographMode = hyetographModeInput ?? 'stepped'
   const durationMin = durationHr * 60
 
   let finalDistribution = distribution
@@ -410,7 +412,9 @@ export function generateStorm(params: StormParams): StormResult {
       cumulativeIn: [0],
       intensityInHr: [0],
       effectiveTimestepMin: 0,
-      timestepLocked: false
+      timestepLocked: false,
+      hyetographMode,
+      smoothingApplied: false
     }
   }
 
@@ -421,7 +425,9 @@ export function generateStorm(params: StormParams): StormResult {
       cumulativeIn: [0],
       intensityInHr: [0],
       effectiveTimestepMin: 0,
-      timestepLocked: false
+      timestepLocked: false,
+      hyetographMode,
+      smoothingApplied: false
     }
   }
 
@@ -466,7 +472,9 @@ export function generateStorm(params: StormParams): StormResult {
       cumulativeIn: [0],
       intensityInHr: [0],
       effectiveTimestepMin: 0,
-      timestepLocked
+      timestepLocked,
+      hyetographMode,
+      smoothingApplied: false
     }
   }
 
@@ -526,12 +534,17 @@ export function generateStorm(params: StormParams): StormResult {
     return (depth / dt) * 60
   })
 
+  const smoothingApplied =
+    hyetographMode === 'smooth' && depthIn > 0 && timeMin.length >= 3
+
   return {
     timeMin,
     incrementalIn,
     cumulativeIn,
     intensityInHr,
     effectiveTimestepMin,
-    timestepLocked
+    timestepLocked,
+    hyetographMode,
+    smoothingApplied
   }
 }

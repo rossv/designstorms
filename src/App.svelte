@@ -38,6 +38,7 @@
     table as tableStore,
     timestepMin,
     timestepIsLocked,
+    hyetographMode,
     type StormResult
   } from './lib/stores'
 
@@ -62,6 +63,7 @@
   let comparisonCurvesAreComputing = false
   let curvePlotIsRendering = false
   let activeRenderToken = 0
+  let hyetographStatusText = ''
 
   let map: L.Map
   let marker: L.Marker
@@ -1308,12 +1310,16 @@
 
   $: {
     const storm = $stormResult
+    const requestedSmooth = $hyetographMode === 'smooth'
     lastStorm = storm
     plot1Ready = false
     plot2Ready = false
     plot3Ready = false
 
     if (!storm) {
+      hyetographStatusText = requestedSmooth
+        ? 'Smooth hyetograph selected. Generate a storm to view the softened curve.'
+        : 'Hyetograph will display as stepped bars once a storm is generated.'
       peakIntensity = 0
       totalDepth = 0
       timeAxis = []
@@ -1327,6 +1333,12 @@
       if (plotDiv2) Plotly.purge(plotDiv2)
       if (plotDiv3) Plotly.purge(plotDiv3)
     } else {
+      const smoothingApplied = requestedSmooth && storm.smoothingApplied
+      hyetographStatusText = smoothingApplied
+        ? 'Smooth hyetograph active — curve softened while totals and peak intensity remain unchanged.'
+        : requestedSmooth
+          ? 'Smooth hyetograph requested, but data are too coarse for smoothing. Displaying stepped bars.'
+          : 'Hyetograph displayed with stepped bars.'
       totalDepth = storm.cumulativeIn[storm.cumulativeIn.length - 1] ?? 0
       peakIntensity = storm.intensityInHr.length
         ? Math.max(...storm.intensityInHr)
@@ -1373,35 +1385,47 @@
 
       if (plotDiv1) {
         chartsAreRendering = true
+        const hyetographTrace = smoothingApplied
+          ? {
+              x: timeAxis,
+              y: storm.intensityInHr,
+              type: 'scatter',
+              mode: 'lines',
+              name: 'Intensity (in/hr)',
+              line: { color: chartTheme.hyetographBar, shape: 'spline', smoothing: 0.6, width: 3 },
+              fill: 'tozeroy',
+              opacity: 0.85,
+              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`
+            }
+          : {
+              x: timeAxis,
+              y: storm.intensityInHr,
+              type: 'bar',
+              name: 'Intensity (in/hr)',
+              marker: { color: chartTheme.hyetographBar },
+              hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
+              width: barWidth
+            }
+        const hyetographLayout = {
+          ...plotLayoutBase,
+          title: { text: 'Hyetograph (Intensity)', font: { color: chartTheme.text } },
+          xaxis: {
+            ...plotLayoutBase.xaxis,
+            title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
+          },
+          yaxis: {
+            ...plotLayoutBase.yaxis,
+            title: {
+              ...(plotLayoutBase.yaxis?.title ?? {}),
+              text: 'Intensity (in/hr)'
+            }
+          }
+        }
         plotPromises.push(
           Plotly.react(
             plotDiv1,
-            [
-              {
-                x: timeAxis,
-                y: storm.intensityInHr,
-                type: 'bar',
-                name: 'Intensity (in/hr)',
-                marker: { color: chartTheme.hyetographBar },
-                hovertemplate: `${hoverTimeLabel}: %{x:.2f}<br>Intensity: %{y:.2f} in/hr<extra></extra>`,
-                width: barWidth
-              }
-            ],
-            {
-              ...plotLayoutBase,
-              title: { text: 'Hyetograph (Intensity)', font: { color: chartTheme.text } },
-              xaxis: {
-                ...plotLayoutBase.xaxis,
-                title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
-              },
-              yaxis: {
-                ...plotLayoutBase.yaxis,
-                title: {
-                  ...(plotLayoutBase.yaxis?.title ?? {}),
-                  text: 'Intensity (in/hr)'
-                }
-              }
-            },
+            [hyetographTrace],
+            hyetographLayout,
             plotConfig
           )
         )
@@ -3816,6 +3840,22 @@
                       Fast (approx.)
                     </button>
                   </div>
+                  <div class="mode-toggle" role="group" aria-label="Hyetograph rendering">
+                    <button
+                      type="button"
+                      class:active={$hyetographMode === 'stepped'}
+                      on:click={() => ($hyetographMode = 'stepped')}
+                    >
+                      Stepped
+                    </button>
+                    <button
+                      type="button"
+                      class:active={$hyetographMode === 'smooth'}
+                      on:click={() => ($hyetographMode = 'smooth')}
+                    >
+                      Smooth
+                    </button>
+                  </div>
                 </div>
               </div>
               {#if $durationMode === 'custom'}
@@ -3832,6 +3872,11 @@
                   Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
                 {/if}
               </p>
+              {#if $hyetographMode === 'smooth'}
+                <p class="mode-note">
+                  Smooth hyetographs soften the stair-step appearance while keeping the total rainfall depth and peak intensity identical to the stepped view.
+                </p>
+              {/if}
             </div>
           </div>
 
@@ -3956,6 +4001,10 @@
 
     <section class="column column--visuals">
       <div class="panel plot">
+        <div class="plot-heading">
+          <h2 class="section-title plot-title">Hyetograph (Intensity)</h2>
+          <p class="plot-status" role="status" aria-live="polite">{hyetographStatusText}</p>
+        </div>
         <button
           type="button"
           class="plot-download"
@@ -3972,6 +4021,9 @@
         <div bind:this={plotDiv1} class="plot-area"></div>
       </div>
       <div class="panel plot">
+        <div class="plot-heading">
+          <h2 class="section-title plot-title">Incremental Volume</h2>
+        </div>
         <button
           type="button"
           class="plot-download"
@@ -3988,6 +4040,9 @@
         <div bind:this={plotDiv2} class="plot-area"></div>
       </div>
       <div class="panel plot">
+        <div class="plot-heading">
+          <h2 class="section-title plot-title">Cumulative Mass Curve</h2>
+        </div>
         <button
           type="button"
           class="plot-download"
@@ -4140,6 +4195,12 @@
           <em>Precise</em> traces every timestep for maximum fidelity. <em>Fast (approx.)</em> downsamples the storm to
           {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps so long events stay responsive; switch back to
           Precise if results need to be exact.
+        </p>
+        <h3>Hyetograph Display</h3>
+        <p>
+          Toggle <em>Hyetograph: Stepped / Smooth</em> to switch the intensity chart between bars and a smoothed curve.
+          The smooth view softens stair-step artifacts while keeping both total rainfall depth and peak intensity
+          unchanged so downstream calculations remain consistent.
         </p>
         <h3>Interpolation</h3>
         <p>
@@ -5298,6 +5359,26 @@
 
   .panel.plot {
     position: relative;
+  }
+
+  .plot-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .plot-title {
+    margin: 0;
+  }
+
+  .plot-status {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 420px;
   }
 
   .plot-area {

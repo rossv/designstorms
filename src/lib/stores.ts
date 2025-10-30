@@ -1,11 +1,12 @@
 import { derived, get, writable } from 'svelte/store'
 import type { NoaaTable } from './noaaClient'
-import { generateStorm, type StormParams, type DistributionName } from './stormEngine'
+import { generateStorm, type StormParams, type DistributionName, type HyetographMode } from './stormEngine'
 
 export type StormResult = ReturnType<typeof generateStorm>
 
 type DurationMode = 'standard' | 'custom'
 type ComputationMode = 'precise' | 'fast'
+type HyetographStoreMode = HyetographMode
 
 export const lat = writable(39.8283)
 export const lon = writable(-98.5795)
@@ -22,6 +23,7 @@ export const startISO = writable('2003-01-01T00:00')
 export const customCurveCsv = writable('')
 export const durationMode = writable<DurationMode>('standard')
 export const computationMode = writable<ComputationMode>('precise')
+export const hyetographMode = writable<HyetographStoreMode>('stepped')
 
 export const stormParams = derived(
   [
@@ -32,7 +34,8 @@ export const stormParams = derived(
     startISO,
     customCurveCsv,
     durationMode,
-    computationMode
+    computationMode,
+    hyetographMode
   ],
   ([
     depthIn,
@@ -42,7 +45,8 @@ export const stormParams = derived(
     start,
     curveCsv,
     mode,
-    computeMode
+    computeMode,
+    hyetoMode
   ]) => {
     if (!Number.isFinite(durationHr) || durationHr <= 0) {
       return null
@@ -62,7 +66,8 @@ export const stormParams = derived(
       startISO: start,
       customCurveCsv: curveCsv.trim() || undefined,
       durationMode: mode,
-      computationMode: computeMode
+      computationMode: computeMode,
+      hyetographMode: hyetoMode
     }
 
     return params
