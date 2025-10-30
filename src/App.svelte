@@ -3860,8 +3860,8 @@
                 </div>
               </div>
               {#if $durationMode === 'custom'}
-                <div class="mode-note field-hint field-hint--warning">
-                  <strong>Note:</strong> Custom durations interpolate from the nearest available NRCS curve (Types II &amp; III include 6-, 12-, and 24-hr tables), which may still differ from true short-duration storm patterns.
+                <div class="mode-note field-hint field-hint--danger mode-warning" role="alert">
+                  <strong>Warning:</strong> Custom durations stretch NRCS curves beyond NOAA's validated 6-, 12-, and 24-hour patterns. Expect smoother peaks than real short storms and muted multi-day variability—verify with local IDF/Huff data or your own hyetograph before relying on results, and review Help → Atlas 14 Distribution Limits for guidance.
                 </div>
               {:else}
                 <p class="mode-note">Quickly select 6-, 12-, or 24-hour durations using the presets below.</p>
@@ -4187,6 +4187,32 @@
             (intensities only, in/hr) when ready.
           </li>
         </ol>
+        <h3>Atlas 14 Distribution Limits</h3>
+        <div class="help-warning field-hint field-hint--danger" role="alert">
+          <strong>Stay within NOAA's published 6-, 12-, and 24-hour tables.</strong>
+          <ul>
+            <li>
+              Temporal ratios were validated only for those durations—using them elsewhere assumes storm behavior that was
+              never analyzed.
+            </li>
+            <li>
+              Sub-6-hour convective storms have sharper peaks; slicing a 6-hour pattern smooths intensities unrealistically and
+              understates cloudburst rainfall rates.
+            </li>
+            <li>
+              Multi-day events rarely follow a single 24-hour shape; stretching the curve can mask multiple peaks and skew
+              runoff totals.
+            </li>
+          </ul>
+          <p>
+            Atlas 14 depths are statistical totals, not intra-storm patterns. If you need other durations, pair the correct
+            depth with a different temporal pattern (Huff quartiles, SCS distributions, observed hyetographs, or a vetted CSV)
+            instead of interpolating the nested ratios.
+          </p>
+          <p class="help-warning__bottom-line">
+            Document assumptions for reviews—regulators expect recognized distributions and may reject homemade patterns.
+          </p>
+        </div>
         <h3>Computation Modes</h3>
         <p>
           <em>Precise</em> traces every timestep for maximum fidelity. <em>Fast (approx.)</em> downsamples the storm to
@@ -4804,6 +4830,18 @@
     line-height: 1.4;
   }
 
+  .field-hint--danger {
+    padding: 10px 12px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.42);
+    border-radius: 8px;
+    color: #fca5a5;
+  }
+
+  .field-hint--danger strong {
+    color: inherit;
+  }
+
   .field-hint--warning {
     padding: 8px 10px;
     background: rgba(234, 179, 8, 0.1);
@@ -4816,6 +4854,30 @@
     background: var(--info-bg);
     border: 1px solid var(--info-border);
     border-radius: 8px;
+  }
+
+  .mode-warning {
+    margin: 0;
+  }
+
+  .help-warning {
+    margin: 18px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .help-warning ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .help-warning__bottom-line {
+    margin: 0;
+    font-weight: 600;
   }
 
   .plot-note {
