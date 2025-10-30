@@ -6,7 +6,6 @@ export type StormResult = ReturnType<typeof generateStorm>
 
 type DurationMode = 'standard' | 'custom'
 type ComputationMode = 'precise' | 'fast'
-type HyetographMode = 'stepped' | 'smooth'
 
 export const lat = writable(39.8283)
 export const lon = writable(-98.5795)
@@ -23,8 +22,6 @@ export const startISO = writable('2003-01-01T00:00')
 export const customCurveCsv = writable('')
 export const durationMode = writable<DurationMode>('standard')
 export const computationMode = writable<ComputationMode>('precise')
-export const hyetographMode = writable<HyetographMode>('stepped')
-
 let lastUnlockedTimestepMin = get(timestepMin)
 let lastEnforcedTimestepMin: number | null = null
 let wasTimestepLocked = false
@@ -38,8 +35,7 @@ export const stormParams = derived(
     startISO,
     customCurveCsv,
     durationMode,
-    computationMode,
-    hyetographMode
+    computationMode
   ],
   ([
     depthIn,
@@ -49,8 +45,7 @@ export const stormParams = derived(
     start,
     curveCsv,
     mode,
-    computeMode,
-    hMode
+    computeMode
   ]) => {
     if (!Number.isFinite(durationHr) || durationHr <= 0) {
       return null
@@ -70,8 +65,7 @@ export const stormParams = derived(
       startISO: start,
       customCurveCsv: curveCsv.trim() || undefined,
       durationMode: mode,
-      computationMode: computeMode,
-      smoothingEnabled: hMode === 'smooth'
+      computationMode: computeMode
     }
 
     return params

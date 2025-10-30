@@ -38,7 +38,6 @@
     table as tableStore,
     timestepMin,
     timestepIsLocked,
-    hyetographMode,
     type StormResult
   } from './lib/stores'
 
@@ -113,16 +112,6 @@
   }
 
   $: designStormIcon = theme === 'light' ? designStormDarkIcon : designStormLightIcon
-  $:
-    hyetographStatusText =
-      $hyetographMode === 'smooth'
-        ? lastStorm
-          ? lastStorm.smoothingApplied
-            ? 'Hyetograph smoothing enabled — NRCS curve smoothing applied.'
-            : 'Hyetograph smoothing enabled — using stepped intensities where smoothing is unavailable.'
-          : 'Hyetograph smoothing enabled — smoothing will apply when supported.'
-        : 'Hyetograph displayed as stepped bars.'
-
   function applyTheme(value: Theme) {
     theme = value
     if (typeof document !== 'undefined') {
@@ -3868,22 +3857,6 @@
                       Fast (approx.)
                     </button>
                   </div>
-                  <div class="mode-toggle mode-toggle--hyetograph" role="group" aria-label="Hyetograph display mode">
-                    <button
-                      type="button"
-                      class:active={$hyetographMode === 'stepped'}
-                      on:click={() => ($hyetographMode = 'stepped')}
-                    >
-                      Stepped
-                    </button>
-                    <button
-                      type="button"
-                      class:active={$hyetographMode === 'smooth'}
-                      on:click={() => ($hyetographMode = 'smooth')}
-                    >
-                      Smooth
-                    </button>
-                  </div>
                 </div>
               </div>
               {#if $durationMode === 'custom'}
@@ -3900,12 +3873,6 @@
                   Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
                 {/if}
               </p>
-              {#if $hyetographMode === 'smooth'}
-                <p class="mode-note mode-note--hyetograph">
-                  Smooth hyetographs preserve the total depth and peak intensity while reducing stair-step artifacts using NRCS
-                  cumulative curves. Other distributions remain stepped when smoothing is unavailable.
-                </p>
-              {/if}
             </div>
           </div>
 
@@ -4229,9 +4196,8 @@
         </p>
         <h3>Hyetograph Display</h3>
         <p>
-          Choose <em>Stepped</em> for traditional blocky intensities or <em>Smooth</em> to apply monotonic NRCS curve
-          interpolation. Smoothing preserves the total depth and peak intensity while reducing stair-step artifacts;
-          non-NRCS patterns will remain stepped.
+          Hyetographs are rendered as stepped intensity bars that align with the computed timestep. Fast (approx.) mode may
+          condense long storms to coarser bars to stay responsive; switch back to Precise if you need the requested timestep.
         </p>
         <h3>Interpolation</h3>
         <p>
