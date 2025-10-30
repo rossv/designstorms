@@ -25,6 +25,10 @@ export const durationMode = writable<DurationMode>('standard')
 export const computationMode = writable<ComputationMode>('precise')
 export const hyetographMode = writable<HyetographMode>('stepped')
 
+let lastUnlockedTimestepMin = get(timestepMin)
+let lastEnforcedTimestepMin: number | null = null
+let wasTimestepLocked = false
+
 export const stormParams = derived(
   [
     selectedDepth,
@@ -106,13 +110,45 @@ export const stormResult = derived(
       if (locked) {
         enforcedTimestepMin.set(effective)
         timestepIsLocked.set(true)
+
+        if (!wasTimestepLocked) {
+          const currentUnlocked = get(timestepMin)
+          if (Number.isFinite(currentUnlocked) && currentUnlocked > 0) {
+            lastUnlockedTimestepMin = currentUnlocked
+          }
+        }
+
         const current = get(timestepMin)
+        lastEnforcedTimestepMin = effective
+
         if (!Number.isFinite(current) || Math.abs(current - effective) > 1e-6) {
           timestepMin.set(effective)
         }
+
+        wasTimestepLocked = true
       } else {
+        if (wasTimestepLocked) {
+          const current = get(timestepMin)
+          if (
+            Number.isFinite(current) &&
+            lastEnforcedTimestepMin !== null &&
+            Math.abs(current - lastEnforcedTimestepMin) < 1e-6 &&
+            Number.isFinite(lastUnlockedTimestepMin) &&
+            lastUnlockedTimestepMin > 0
+          ) {
+            timestepMin.set(lastUnlockedTimestepMin)
+          }
+        }
+
         enforcedTimestepMin.set(null)
         timestepIsLocked.set(false)
+
+        wasTimestepLocked = false
+        lastEnforcedTimestepMin = null
+
+        if (Number.isFinite($stormParams.timestepMin) && $stormParams.timestepMin > 0) {
+          lastUnlockedTimestepMin = $stormParams.timestepMin
+        }
       }
 
       finalizeHandle = setTimeout(() => {
