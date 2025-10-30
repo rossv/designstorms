@@ -731,8 +731,12 @@
     })
   }
 
+  const SMOOTHING_TOLERANCE_MIN = 1e-3
   let peakIntensity = 0
   let totalDepth = 0
+  let hyetographSmoothingActive = false
+  let hyetographSmoothingStepLabel = ''
+  let hyetographRequestedStepLabel = ''
   let timeAxis: number[] = []
   let timeColumnLabel = 'Time (hr)'
   let tableRows: {
@@ -939,6 +943,25 @@
     const hour = String(date.getHours()).padStart(2, '0')
     const minute = String(date.getMinutes()).padStart(2, '0')
     return `${month}-${day}-${year} ${hour}:${minute}`
+  }
+
+  function formatMinutesLabel(value: number) {
+    if (!Number.isFinite(value)) {
+      return '0'
+    }
+    if (value >= 10) {
+      return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+    }
+    if (value >= 1) {
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      })
+    }
+    return value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
   }
 
   function attachTableScrollObserver() {
@@ -1312,6 +1335,9 @@
     plot1Ready = false
     plot2Ready = false
     plot3Ready = false
+    hyetographSmoothingActive = false
+    hyetographSmoothingStepLabel = ''
+    hyetographRequestedStepLabel = ''
 
     if (!storm) {
       peakIntensity = 0
@@ -1345,6 +1371,21 @@
       const barWidth = stepMinutes * timeFactor
       timeAxis = storm.timeMin.map((t) => t * timeFactor)
       timeColumnLabel = columnLabel
+
+      const effectiveStepMin = Number(storm.effectiveTimestepMin ?? NaN)
+      const requestedStepMin = Number($timestepMin ?? NaN)
+      const smoothingTriggered =
+        $computationMode === 'fast' &&
+        !storm.timestepLocked &&
+        Number.isFinite(effectiveStepMin) &&
+        Number.isFinite(requestedStepMin) &&
+        effectiveStepMin - requestedStepMin > SMOOTHING_TOLERANCE_MIN
+
+      if (smoothingTriggered) {
+        hyetographSmoothingActive = true
+        hyetographSmoothingStepLabel = formatMinutesLabel(effectiveStepMin)
+        hyetographRequestedStepLabel = formatMinutesLabel(requestedStepMin)
+      }
 
       const startDate = $startISO ? new Date($startISO) : null
       hasTimestamp = Boolean(startDate && !Number.isNaN(startDate.getTime()))
@@ -3970,6 +4011,13 @@
           </svg>
         </button>
         <div bind:this={plotDiv1} class="plot-area"></div>
+        {#if hyetographSmoothingActive}
+          <p class="plot-note field-hint field-hint--info" role="status">
+            Fast (approx.) mode hit the {MAX_FAST_SAMPLES.toLocaleString()} sample cap, smoothing the hyetograph to
+            ~{hyetographSmoothingStepLabel}-minute bars. Switch to Precise to restore the requested
+            {(hyetographRequestedStepLabel || formatMinutesLabel($timestepMin))}-minute timestep.
+          </p>
+        {/if}
       </div>
       <div class="panel plot">
         <button
@@ -4138,8 +4186,9 @@
         <h3>Computation Modes</h3>
         <p>
           <em>Precise</em> traces every timestep for maximum fidelity. <em>Fast (approx.)</em> downsamples the storm to
-          {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps so long events stay responsive; switch back to
-          Precise if results need to be exact.
+          {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps so long events stay responsive. When that cap
+          triggers you'll see a hyetograph note with the smoothed timestep so it's clear intensities are aggregated;
+          switch back to Precise if results need to be exact.
         </p>
         <h3>Interpolation</h3>
         <p>
@@ -4729,6 +4778,17 @@
     background: rgba(234, 179, 8, 0.1);
     border: 1px solid rgba(234, 179, 8, 0.3);
     border-radius: 8px;
+  }
+
+  .field-hint--info {
+    padding: 10px 12px;
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
+    border-radius: 8px;
+  }
+
+  .plot-note {
+    margin-top: 12px;
   }
 
   .storm-form__extrapolation-note {
