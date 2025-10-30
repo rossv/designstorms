@@ -38,6 +38,7 @@
     table as tableStore,
     timestepMin,
     timestepIsLocked,
+    hyetographMode,
     type StormResult
   } from './lib/stores'
 
@@ -112,6 +113,15 @@
   }
 
   $: designStormIcon = theme === 'light' ? designStormDarkIcon : designStormLightIcon
+  $:
+    hyetographStatusText =
+      $hyetographMode === 'smooth'
+        ? lastStorm
+          ? lastStorm.smoothingApplied
+            ? 'Hyetograph smoothing enabled — NRCS curve smoothing applied.'
+            : 'Hyetograph smoothing enabled — using stepped intensities where smoothing is unavailable.'
+          : 'Hyetograph smoothing enabled — smoothing will apply when supported.'
+        : 'Hyetograph displayed as stepped bars.'
 
   function applyTheme(value: Theme) {
     theme = value
@@ -736,6 +746,7 @@
   let totalDepth = 0
   let hyetographSmoothingActive = false
   let hyetographSmoothingStepLabel = ''
+  let hyetographStatusText = 'Hyetograph displayed as stepped bars.'
   let hyetographRequestedStepLabel = ''
   let timeAxis: number[] = []
   let timeColumnLabel = 'Time (hr)'
@@ -3857,6 +3868,23 @@
                       Fast (approx.)
                     </button>
                   </div>
+                  <div class="mode-toggle mode-toggle--hyetograph" role="group" aria-label="Hyetograph display mode">
+                    <span class="mode-toggle__label">Hyetograph:</span>
+                    <button
+                      type="button"
+                      class:active={$hyetographMode === 'stepped'}
+                      on:click={() => ($hyetographMode = 'stepped')}
+                    >
+                      Stepped
+                    </button>
+                    <button
+                      type="button"
+                      class:active={$hyetographMode === 'smooth'}
+                      on:click={() => ($hyetographMode = 'smooth')}
+                    >
+                      Smooth
+                    </button>
+                  </div>
                 </div>
               </div>
               {#if $durationMode === 'custom'}
@@ -3873,6 +3901,12 @@
                   Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
                 {/if}
               </p>
+              {#if $hyetographMode === 'smooth'}
+                <p class="mode-note mode-note--hyetograph">
+                  Smooth hyetographs preserve the total depth and peak intensity while reducing stair-step artifacts using NRCS
+                  cumulative curves. Other distributions remain stepped when smoothing is unavailable.
+                </p>
+              {/if}
             </div>
           </div>
 
@@ -3996,6 +4030,10 @@
     </section>
 
     <section class="column column--visuals">
+      <div class="visuals-heading">
+        <h2 class="section-title">Hyetograph &amp; Charts</h2>
+        <p class="hyetograph-status" role="status" aria-live="polite">{hyetographStatusText}</p>
+      </div>
       <div class="panel plot">
         <button
           type="button"
@@ -4189,6 +4227,12 @@
           {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps so long events stay responsive. When that cap
           triggers you'll see a hyetograph note with the smoothed timestep so it's clear intensities are aggregated;
           switch back to Precise if results need to be exact.
+        </p>
+        <h3>Hyetograph Display</h3>
+        <p>
+          Choose <em>Stepped</em> for traditional blocky intensities or <em>Smooth</em> to apply monotonic NRCS curve
+          interpolation. Smoothing preserves the total depth and peak intensity while reducing stair-step artifacts;
+          non-NRCS patterns will remain stepped.
         </p>
         <h3>Interpolation</h3>
         <p>
@@ -4533,6 +4577,24 @@
     color: var(--muted);
   }
 
+  .visuals-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .visuals-heading .section-title {
+    margin-bottom: 0;
+  }
+
+  .hyetograph-status {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 0;
+  }
+
   .location-search {
     display: flex;
     flex-direction: column;
@@ -4709,6 +4771,15 @@
     background: var(--toggle-bg);
   }
 
+  .mode-toggle__label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
   .mode-toggle button {
     background: transparent;
     border: none;
@@ -4740,6 +4811,10 @@
 
   .mode-note--computation {
     margin-top: 10px;
+  }
+
+  .mode-note--hyetograph {
+    margin-top: 6px;
   }
 
   .storm-form__inputs {

@@ -17,6 +17,8 @@ plots, and export the results as CSV or PCSWMM-compatible DAT files.
   24-hour durations.
 - Hyetograph, incremental volume, and cumulative mass-curve plots powered by Plotly.js,
   along with a tabular export-ready storm series using minute offsets instead of timestamps.
+- Optional hyetograph smoothing mode that preserves totals and peak intensity while reducing
+  stair-step artifacts in NRCS-based storms.
 - Precise and fast (approximate) computation modes so you can trade fidelity for speed
   on long-duration storms.
 - CSV export with `time_min`, incremental depth, cumulative depth, and intensity columns,
@@ -62,8 +64,9 @@ npx svelte-check
    on demand.
 2. Review the Atlas 14 table and accompanying iso-line chart. Click a table cell to apply that
    duration, depth, and Average Recurrence Interval to the storm inputs.
-3. Choose a distribution, toggle between **Standard** or **Custom** duration entry, and pick
-   **Precise** or **Fast (approx.)** computation modes. Add a custom CSV curve or open the
+3. Choose a distribution, toggle between **Standard** or **Custom** duration entry, set the
+   hyetograph mode (**Stepped** or **Smooth**), and pick **Precise** or **Fast (approx.)**
+   computation modes. Add a custom CSV curve or open the
    comparison modal to inspect normalized cumulative distributions by duration.
 4. Adjust timestep and optional start time to control chart labels. CSV exports always include
    minute offsets and add ISO timestamps when the start time is valid. Charts and the storm table
