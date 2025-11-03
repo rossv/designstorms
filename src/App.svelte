@@ -735,7 +735,7 @@
   let totalDepth = 0
   let hyetographSmoothingActive = false
   let hyetographSmoothingStepLabel = ''
-  let hyetographStatusText = 'Hyetograph displayed as stepped bars.'
+  let hyetographStatusText = ''
   let hyetographRequestedStepLabel = ''
   let timeAxis: number[] = []
   let timeColumnLabel = 'Time (hr)'
@@ -3998,7 +3998,11 @@
     <section class="column column--visuals">
       <div class="visuals-heading">
         <h2 class="section-title">Hyetograph &amp; Charts</h2>
-        <p class="hyetograph-status" role="status" aria-live="polite">{hyetographStatusText}</p>
+        {#if hyetographStatusText}
+          <p class="hyetograph-status" role="status" aria-live="polite">
+            {hyetographStatusText}
+          </p>
+        {/if}
       </div>
       <div class="panel plot">
         <button
