@@ -1922,7 +1922,9 @@
           durationEntry.hr,
           ariEntry.key,
           Number.isFinite(depth as number) ? depth : null,
-          Number.isFinite(intensity as number) ? intensity : null
+          Number.isFinite(intensity as number) ? intensity : null,
+          rowIdx,
+          colIdx
         ]
       })
     )
@@ -2002,7 +2004,9 @@
             durationEntry.hr,
             ariEntry.key,
             highlightDepthValue,
-            highlightIntensityValue
+            highlightIntensityValue,
+            ariIndex,
+            durationIndex
           ]
         ],
         hovertemplate:
@@ -2466,63 +2470,63 @@
 
     const customData = point.customdata
     if (Array.isArray(customData)) {
-      const [durationLabel, , ariKey, depth] = customData
+      const [durationLabel, durationHr, ariKey, , , rowIdxRaw, colIdxRaw] = customData
+
+      const rowIdx = Number.isInteger(rowIdxRaw) ? rowIdxRaw : null
+      const colIdx = Number.isInteger(colIdxRaw) ? colIdxRaw : null
+
       if (
-        typeof durationLabel === 'string' &&
-        typeof ariKey === 'string' &&
-        Number.isFinite(depth as number)
+        rowIdx != null &&
+        colIdx != null &&
+        rowIdx >= 0 &&
+        colIdx >= 0 &&
+        rowIdx < noaaAriEntries.length &&
+        colIdx < noaaDurationEntries.length
       ) {
-        pickCell(durationLabel, ariKey)
-        return
+        const durationEntry = noaaDurationEntries[colIdx]
+        const ariEntry = noaaAriEntries[rowIdx]
+
+        if (
+          $durationMode === 'standard' &&
+          !STANDARD_DURATION_HOURS.some(
+            (allowed) => Math.abs(durationEntry.hr - allowed) < 1e-3
+          )
+        ) {
+          return
+        }
+
+        const depth = durationEntry.row.values[ariEntry.key]
+
+        if (Number.isFinite(depth)) {
+          pickCell(durationEntry.label, ariEntry.key)
+          return
+        }
+      }
+
+      if (typeof durationLabel === 'string' && typeof ariKey === 'string') {
+        const durationEntry = noaaDurationEntries.find(
+          (entry) => entry.label === durationLabel
+        )
+        const ariEntry = noaaAriEntries.find((entry) => entry.key === ariKey)
+
+        if (durationEntry && ariEntry) {
+          if (
+            $durationMode === 'standard' &&
+            !STANDARD_DURATION_HOURS.some(
+              (allowed) => Math.abs(durationEntry.hr - allowed) < 1e-3
+            )
+          ) {
+            return
+          }
+
+          const depth = durationEntry.row.values[ariEntry.key]
+
+          if (Number.isFinite(depth)) {
+            pickCell(durationEntry.label, ariEntry.key)
+          }
+        }
       }
     }
-
-    const pointDuration = Number(point.x)
-    const pointAri = Number(point.y)
-    if (!Number.isFinite(pointDuration) || !Number.isFinite(pointAri)) {
-      return
-    }
-
-    const ariEntries = noaaAriEntries
-    const durationEntries = noaaDurationEntries
-    if (!ariEntries.length || !durationEntries.length) {
-      return
-    }
-
-    const nearestAri = ariEntries.reduce(
-      (best, entry) => {
-        const diff = Math.abs(entry.value - pointAri)
-        return diff < best.diff ? { diff, entry } : best
-      },
-      { diff: Number.POSITIVE_INFINITY, entry: ariEntries[0] }
-    )
-
-    const nearestDuration = durationEntries.reduce(
-      (best, entry) => {
-        const diff = Math.abs(entry.hr - pointDuration)
-        return diff < best.diff ? { diff, entry } : best
-      },
-      { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
-    )
-
-    if (
-      $durationMode === 'standard' &&
-      !STANDARD_DURATION_HOURS.some(
-        (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
-      )
-    ) {
-      return
-    }
-
-    const selectedRow = nearestDuration.entry.row
-    const ariKey = nearestAri.entry.key
-    const depth = selectedRow.values[ariKey]
-
-    if (!Number.isFinite(depth)) {
-      return
-    }
-
-    pickCell(nearestDuration.entry.label, ariKey)
   }
 
   function attachNoaa3dPlotClickHandler() {
