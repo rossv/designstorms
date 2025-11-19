@@ -1922,7 +1922,9 @@
           durationEntry.hr,
           ariEntry.key,
           Number.isFinite(depth as number) ? depth : null,
-          Number.isFinite(intensity as number) ? intensity : null
+          Number.isFinite(intensity as number) ? intensity : null,
+          rowIdx,
+          colIdx
         ]
       })
     )
@@ -2002,7 +2004,9 @@
             durationEntry.hr,
             ariEntry.key,
             highlightDepthValue,
-            highlightIntensityValue
+            highlightIntensityValue,
+            ariIndex,
+            durationIndex
           ]
         ],
         hovertemplate:
@@ -2464,65 +2468,76 @@
     const point = event?.points?.[0]
     if (!point) return
 
-    const customData = point.customdata
-    if (Array.isArray(customData)) {
-      const [durationLabel, , ariKey, depth] = customData
+    const pickFromEntries = (
+      durationEntry: typeof noaaDurationEntries[number],
+      ariEntry: typeof noaaAriEntries[number]
+    ) => {
       if (
-        typeof durationLabel === 'string' &&
-        typeof ariKey === 'string' &&
-        Number.isFinite(depth as number)
+        $durationMode === 'standard' &&
+        !STANDARD_DURATION_HOURS.some((allowed) =>
+          Math.abs(durationEntry.hr - allowed) < 1e-3
+        )
       ) {
-        pickCell(durationLabel, ariKey)
+        return true
+      }
+
+      const depth = durationEntry.row.values[ariEntry.key]
+
+      if (Number.isFinite(depth)) {
+        pickCell(durationEntry.label, ariEntry.key)
+        return true
+      }
+
+      return false
+    }
+
+    const pointRow = Number.isInteger(point.i) ? point.i : null
+    const pointCol = Number.isInteger(point.j) ? point.j : null
+
+    if (
+      pointRow != null &&
+      pointCol != null &&
+      pointRow >= 0 &&
+      pointCol >= 0 &&
+      pointRow < noaaAriEntries.length &&
+      pointCol < noaaDurationEntries.length
+    ) {
+      if (pickFromEntries(noaaDurationEntries[pointCol], noaaAriEntries[pointRow])) {
         return
       }
     }
 
-    const pointDuration = Number(point.x)
-    const pointAri = Number(point.y)
-    if (!Number.isFinite(pointDuration) || !Number.isFinite(pointAri)) {
-      return
+    const customData = point.customdata
+    if (Array.isArray(customData)) {
+      const [durationLabel, durationHr, ariKey, , , rowIdxRaw, colIdxRaw] = customData
+
+      const rowIdx = Number.isInteger(rowIdxRaw) ? rowIdxRaw : null
+      const colIdx = Number.isInteger(colIdxRaw) ? colIdxRaw : null
+
+      if (
+        rowIdx != null &&
+        colIdx != null &&
+        rowIdx >= 0 &&
+        colIdx >= 0 &&
+        rowIdx < noaaAriEntries.length &&
+        colIdx < noaaDurationEntries.length
+      ) {
+        if (pickFromEntries(noaaDurationEntries[colIdx], noaaAriEntries[rowIdx])) {
+          return
+        }
+      }
+
+      if (typeof durationLabel === 'string' && typeof ariKey === 'string') {
+        const durationEntry = noaaDurationEntries.find(
+          (entry) => entry.label === durationLabel
+        )
+        const ariEntry = noaaAriEntries.find((entry) => entry.key === ariKey)
+
+        if (durationEntry && ariEntry) {
+          pickFromEntries(durationEntry, ariEntry)
+        }
+      }
     }
-
-    const ariEntries = noaaAriEntries
-    const durationEntries = noaaDurationEntries
-    if (!ariEntries.length || !durationEntries.length) {
-      return
-    }
-
-    const nearestAri = ariEntries.reduce(
-      (best, entry) => {
-        const diff = Math.abs(entry.value - pointAri)
-        return diff < best.diff ? { diff, entry } : best
-      },
-      { diff: Number.POSITIVE_INFINITY, entry: ariEntries[0] }
-    )
-
-    const nearestDuration = durationEntries.reduce(
-      (best, entry) => {
-        const diff = Math.abs(entry.hr - pointDuration)
-        return diff < best.diff ? { diff, entry } : best
-      },
-      { diff: Number.POSITIVE_INFINITY, entry: durationEntries[0] }
-    )
-
-    if (
-      $durationMode === 'standard' &&
-      !STANDARD_DURATION_HOURS.some(
-        (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
-      )
-    ) {
-      return
-    }
-
-    const selectedRow = nearestDuration.entry.row
-    const ariKey = nearestAri.entry.key
-    const depth = selectedRow.values[ariKey]
-
-    if (!Number.isFinite(depth)) {
-      return
-    }
-
-    pickCell(nearestDuration.entry.label, ariKey)
   }
 
   function attachNoaa3dPlotClickHandler() {
