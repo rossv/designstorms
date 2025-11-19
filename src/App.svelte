@@ -2744,6 +2744,31 @@
     }
   }
 
+  function findHighlightBetweenAris(row: NoaaRow, aris: string[], targetAri: number) {
+    const parsedAris = aris
+      .map((key) => ({ key, value: Number(key) }))
+      .filter((entry) => Number.isFinite(entry.value))
+      .sort((a, b) => a.value - b.value)
+
+    for (let index = 0; index < parsedAris.length - 1; index += 1) {
+      const lower = parsedAris[index]
+      const upper = parsedAris[index + 1]
+
+      if (
+        targetAri > lower.value &&
+        targetAri < upper.value &&
+        lower.key !== upper.key
+      ) {
+        return [
+          { duration: row.label, ari: lower.key },
+          { duration: row.label, ari: upper.key }
+        ]
+      }
+    }
+
+    return null
+  }
+
   function recalcFromAri() {
     const durationHr = ensureNumericDuration()
     if (!Number.isFinite($selectedAri) || !Number.isFinite(durationHr)) {
@@ -2775,7 +2800,8 @@
       if ($selectedDepth !== newDepth) {
         $selectedDepth = newDepth
       }
-      interpolatedCells = result.highlight ?? []
+      interpolatedCells =
+        result.highlight ?? findHighlightBetweenAris(row, table.aris, $selectedAri) ?? []
       isExtrapolating = result.extrapolated
     } else {
       interpolatedCells = []

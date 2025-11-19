@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest --environment jsdom"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -16,8 +16,10 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "@testing-library/svelte": "^5.2.7",
     "@types/leaflet": "^1.9.21",
     "@types/plotly.js": "^3.0.7",
+    "jsdom": "^24.1.1",
     "svelte-check": "^3.8.6",
     "svelte-preprocess": "^5.1.4",
     "tslib": "^2.7.0",

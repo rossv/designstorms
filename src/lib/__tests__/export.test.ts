@@ -101,6 +101,32 @@ describe('saveCsv', () => {
     } as unknown as Document
     ;(globalThis as unknown as { document: Document }).document = mockDocument
 
+    const originalCreateObjectUrl = URL.createObjectURL
+    const originalRevokeObjectUrl = URL.revokeObjectURL
+    const originalBlob = globalThis.Blob
+    let capturedBlobText = ''
+
+    class MockBlob {
+      private content: string
+
+      constructor(parts: unknown[]) {
+        this.content = String(parts?.[0] ?? '')
+      }
+
+      text() {
+        return Promise.resolve(this.content)
+      }
+    }
+
+    ;(globalThis as unknown as { Blob: typeof Blob }).Blob = MockBlob as unknown as typeof Blob
+
+    if (!originalCreateObjectUrl) {
+      ;(URL as unknown as { createObjectURL: () => string }).createObjectURL = () => 'blob:mock'
+    }
+    if (!originalRevokeObjectUrl) {
+      ;(URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {}
+    }
+
     const createUrlSpy = vi
       .spyOn(URL, 'createObjectURL')
       .mockImplementation(() => 'blob:mock')
@@ -113,19 +139,26 @@ describe('saveCsv', () => {
     if (!(blob instanceof Blob)) {
       throw new Error('CSV export did not create a Blob')
     }
-    const text = await blob.text()
+    capturedBlobText = await (blob as unknown as MockBlob).text()
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     createUrlSpy.mockRestore()
     revokeUrlSpy.mockRestore()
+    ;(globalThis as unknown as { Blob: typeof Blob }).Blob = originalBlob
+    if (!originalCreateObjectUrl) {
+      delete (URL as { createObjectURL?: typeof URL.createObjectURL }).createObjectURL
+    }
+    if (!originalRevokeObjectUrl) {
+      delete (URL as { revokeObjectURL?: typeof URL.revokeObjectURL }).revokeObjectURL
+    }
     if (originalDocument) {
       ;(globalThis as unknown as { document: Document }).document = originalDocument
     } else {
       delete (globalThis as { document?: Document }).document
     }
 
-    return text
+    return capturedBlobText
   }
 
   it('exports CSV without timestamps when no start time is provided', async () => {
