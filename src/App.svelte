@@ -2468,64 +2468,41 @@
     const point = event?.points?.[0]
     if (!point) return
 
-    const customData = point.customdata
-    if (Array.isArray(customData)) {
-      const [durationLabel, durationHr, ariKey, , , rowIdxRaw, colIdxRaw] = customData
+    const x = point.x
+    const y = point.y
 
-      const rowIdx = Number.isInteger(rowIdxRaw) ? rowIdxRaw : null
-      const colIdx = Number.isInteger(colIdxRaw) ? colIdxRaw : null
+    if (typeof x !== 'number' || typeof y !== 'number') return
 
-      if (
-        rowIdx != null &&
-        colIdx != null &&
-        rowIdx >= 0 &&
-        colIdx >= 0 &&
-        rowIdx < noaaAriEntries.length &&
-        colIdx < noaaDurationEntries.length
-      ) {
-        const durationEntry = noaaDurationEntries[colIdx]
-        const ariEntry = noaaAriEntries[rowIdx]
+    const nearestDuration = noaaDurationEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.hr - x)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: noaaDurationEntries[0] }
+    )
 
-        if (
-          $durationMode === 'standard' &&
-          !STANDARD_DURATION_HOURS.some(
-            (allowed) => Math.abs(durationEntry.hr - allowed) < 1e-3
-          )
-        ) {
-          return
-        }
+    const nearestAri = noaaAriEntries.reduce(
+      (best, entry) => {
+        const diff = Math.abs(entry.value - y)
+        return diff < best.diff ? { diff, entry } : best
+      },
+      { diff: Number.POSITIVE_INFINITY, entry: noaaAriEntries[0] }
+    )
 
-        const depth = durationEntry.row.values[ariEntry.key]
+    if (!nearestDuration.entry || !nearestAri.entry) return
 
-        if (Number.isFinite(depth)) {
-          pickCell(durationEntry.label, ariEntry.key)
-          return
-        }
-      }
+    if (
+      $durationMode === 'standard' &&
+      !STANDARD_DURATION_HOURS.some(
+        (allowed) => Math.abs(nearestDuration.entry.hr - allowed) < 1e-3
+      )
+    ) {
+      return
+    }
 
-      if (typeof durationLabel === 'string' && typeof ariKey === 'string') {
-        const durationEntry = noaaDurationEntries.find(
-          (entry) => entry.label === durationLabel
-        )
-        const ariEntry = noaaAriEntries.find((entry) => entry.key === ariKey)
-
-        if (durationEntry && ariEntry) {
-          if (
-            $durationMode === 'standard' &&
-            !STANDARD_DURATION_HOURS.some(
-              (allowed) => Math.abs(durationEntry.hr - allowed) < 1e-3
-            )
-          ) {
-            return
-          }
-
-          const depth = durationEntry.row.values[ariEntry.key]
-
-          if (Number.isFinite(depth)) {
-            pickCell(durationEntry.label, ariEntry.key)
-          }
-        }
-      }
+    const depth = nearestDuration.entry.row.values[nearestAri.entry.key]
+    if (Number.isFinite(depth)) {
+      pickCell(nearestDuration.entry.label, nearestAri.entry.key)
     }
   }
 
