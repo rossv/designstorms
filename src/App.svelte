@@ -2468,45 +2468,6 @@
     const point = event?.points?.[0]
     if (!point) return
 
-    const pickFromEntries = (
-      durationEntry: typeof noaaDurationEntries[number],
-      ariEntry: typeof noaaAriEntries[number]
-    ) => {
-      if (
-        $durationMode === 'standard' &&
-        !STANDARD_DURATION_HOURS.some((allowed) =>
-          Math.abs(durationEntry.hr - allowed) < 1e-3
-        )
-      ) {
-        return true
-      }
-
-      const depth = durationEntry.row.values[ariEntry.key]
-
-      if (Number.isFinite(depth)) {
-        pickCell(durationEntry.label, ariEntry.key)
-        return true
-      }
-
-      return false
-    }
-
-    const pointRow = Number.isInteger(point.i) ? point.i : null
-    const pointCol = Number.isInteger(point.j) ? point.j : null
-
-    if (
-      pointRow != null &&
-      pointCol != null &&
-      pointRow >= 0 &&
-      pointCol >= 0 &&
-      pointRow < noaaAriEntries.length &&
-      pointCol < noaaDurationEntries.length
-    ) {
-      if (pickFromEntries(noaaDurationEntries[pointCol], noaaAriEntries[pointRow])) {
-        return
-      }
-    }
-
     const customData = point.customdata
     if (Array.isArray(customData)) {
       const [durationLabel, durationHr, ariKey, , , rowIdxRaw, colIdxRaw] = customData
@@ -2522,7 +2483,22 @@
         rowIdx < noaaAriEntries.length &&
         colIdx < noaaDurationEntries.length
       ) {
-        if (pickFromEntries(noaaDurationEntries[colIdx], noaaAriEntries[rowIdx])) {
+        const durationEntry = noaaDurationEntries[colIdx]
+        const ariEntry = noaaAriEntries[rowIdx]
+
+        if (
+          $durationMode === 'standard' &&
+          !STANDARD_DURATION_HOURS.some(
+            (allowed) => Math.abs(durationEntry.hr - allowed) < 1e-3
+          )
+        ) {
+          return
+        }
+
+        const depth = durationEntry.row.values[ariEntry.key]
+
+        if (Number.isFinite(depth)) {
+          pickCell(durationEntry.label, ariEntry.key)
           return
         }
       }
@@ -2534,7 +2510,20 @@
         const ariEntry = noaaAriEntries.find((entry) => entry.key === ariKey)
 
         if (durationEntry && ariEntry) {
-          pickFromEntries(durationEntry, ariEntry)
+          if (
+            $durationMode === 'standard' &&
+            !STANDARD_DURATION_HOURS.some(
+              (allowed) => Math.abs(durationEntry.hr - allowed) < 1e-3
+            )
+          ) {
+            return
+          }
+
+          const depth = durationEntry.row.values[ariEntry.key]
+
+          if (Number.isFinite(depth)) {
+            pickCell(durationEntry.label, ariEntry.key)
+          }
         }
       }
     }
