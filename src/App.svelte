@@ -2666,13 +2666,10 @@
     }
   }
 
+  let interpolatedCellKeys: Set<string> = new Set()
   $: interpolatedCellKeys = new Set(
     interpolatedCells.map((cell) => `${cell.duration}::${cell.ari}`)
   )
-
-  function cellIsInterpolated(durationLabel: string, ari: string) {
-    return interpolatedCellKeys.has(`${durationLabel}::${ari}`)
-  }
 
   function ensureNumericDuration() {
     const parsed = Number($selectedDurationHr)
@@ -3614,7 +3611,7 @@
                         class="table-button cell"
                         class:selected={selectedDurationLabel === entry.label && String($selectedAri) === ariKey}
                         class:column-active={selectedDurationLabel === entry.label}
-                        class:interpolated={cellIsInterpolated(entry.label, ariKey)}
+                        class:interpolated={interpolatedCellKeys.has(`${entry.label}::${ariKey}`)}
                         disabled={!isSelectable}
                         data-ari={ariKey}
                         aria-label={`${entry.label} duration, ${ariKey}-year Average Recurrence Interval depth ${depthText ? `${depthText} in` : 'not available'}`}
