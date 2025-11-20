@@ -1906,20 +1906,23 @@
     const minIntensity = Math.min(...finiteIntensities)
     const maxIntensity = Math.max(...finiteIntensities)
 
-    // Construct customdata matching the Z-matrix dimensions (Rows=ARI, Cols=Duration)
-    // Each cell contains: [DurationLabel, DurationHr, ARIKey, Depth, Intensity]
-    const customData = noaaAriEntries.map((ariEntry, rowIdx) =>
+    // Build a text matrix matching the Z-matrix dimensions (Rows=ARI, Cols=Duration)
+    // to avoid interpolated hover tokens from Plotly.
+    const textMatrix = noaaAriEntries.map((ariEntry, rowIdx) =>
       noaaDurationEntries.map((durationEntry, colIdx) => {
         const depth = noaaContourZ[rowIdx]?.[colIdx]
         const intensity = noaaIntensityZ[rowIdx]?.[colIdx]
 
+        const depthText = Number.isFinite(depth as number) ? `${(depth as number).toFixed(2)} in` : '—'
+        const intensityText =
+          Number.isFinite(intensity as number) ? `${(intensity as number).toFixed(2)} in/hr` : '—'
+
         return [
-          durationEntry.label, // 0
-          durationEntry.hr, // 1
-          ariEntry.key, // 2
-          Number.isFinite(depth as number) ? depth : 0, // 3
-          Number.isFinite(intensity as number) ? intensity : 0 // 4
-        ]
+          `Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)`,
+          `ARI: ${ariEntry.key}-year`,
+          `Depth: ${depthText}`,
+          `Intensity: ${intensityText}`
+        ].join('<br>')
       })
     )
 
@@ -1935,19 +1938,13 @@
       x: noaaDurationEntries.map((entry) => entry.hr),
       y: noaaAriEntries.map((entry) => entry.value),
       z: noaaIntensityZ,
-      customdata: customData,
+      text: textMatrix,
       colorscale: 'Viridis',
       colorbar,
       cmin: minIntensity,
       cmax: maxIntensity,
       opacity: 0.95,
-      // Explicitly map customdata indices.
-      // Note: %{x} and %{y} give the coordinate values, customdata gives the metadata.
-      hovertemplate:
-        'Duration: %{customdata[0]} (%{x:.2f} hr)<br>' +
-        'ARI: %{customdata[2]}-year<br>' +
-        'Depth: %{customdata[3]:.2f} in<br>' +
-        'Intensity: %{z:.2f} in/hr<extra></extra>'
+      hovertemplate: '%{text}<extra></extra>'
     }
 
     const dataTraces: Data[] = [surfaceTrace]
