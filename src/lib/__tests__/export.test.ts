@@ -196,4 +196,22 @@ describe('saveCsv', () => {
     expect(lines[1]).toBe('2024-01-01T00:00:00.000Z,0.00000,0.10000,0.10000,0.00000')
     expect(lines[2]).toBe('2024-01-01T00:05:00.000Z,5.00000,0.20000,0.30000,2.40000')
   })
+
+  it('omits timestamps when an invalid start time is provided', async () => {
+    const storm: StormResult = {
+      timeMin: [0, 5],
+      incrementalIn: [0.1, 0.2],
+      cumulativeIn: [0.1, 0.3],
+      intensityInHr: [0, 2.4],
+      effectiveTimestepMin: 5,
+      timestepLocked: false,
+    }
+
+    const csv = await captureCsvText(storm, 'not-a-valid-date')
+    const lines = csv.trim().split('\n')
+
+    expect(lines[0]).toBe('time_min,incremental_in,cumulative_in,intensity_in_hr')
+    expect(lines[1]).toBe('0.00000,0.10000,0.10000,0.00000')
+    expect(lines[2]).toBe('5.00000,0.20000,0.30000,2.40000')
+  })
 })
