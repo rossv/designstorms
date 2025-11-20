@@ -1,6 +1,6 @@
-# Design Storm Web (TypeScript + Svelte)
+# Design Storm Generator (TypeScript + Svelte)
 
-Design Storm Web is a GitHub Pages–ready, client-only tool for hydrologists and stormwater
+Design Storm Generator is a GitHub Pages–ready, client-only tool for hydrologists and stormwater
 modelers. It combines live NOAA Atlas 14 precipitation tables with a library of temporal
 patterns so you can generate design-storm hyetographs, visualize cumulative and intensity
 plots, and export the results as CSV or PCSWMM-compatible DAT files.

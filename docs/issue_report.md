@@ -1,6 +1,6 @@
 # Issue Reporting & Maintenance Notes
 
-This document captures the current maintenance status of Design Storm Web and serves as a checklist for
+This document captures the current maintenance status of Design Storm Generator and serves as a checklist for
 future debugging sessions.
 
 ## How to Report an Issue
