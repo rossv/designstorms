@@ -77,7 +77,7 @@
   }
 
   const noaaVisualTabs = [
-    { id: 'isoLines', label: 'Depth Iso-Lines' },
+    { id: 'isoLines', label: 'Depth Isolines' },
     { id: 'rdi3d', label: '3D RDI Surface' },
     { id: 'intensity', label: 'Intensity Chart' }
   ] as const
@@ -1754,7 +1754,7 @@
 
     const layout: Partial<Layout> = {
       ...plotLayoutBase,
-      title: { text: 'NOAA Depth Iso-Lines', font: { color: chartTheme.text } },
+      title: { text: 'NOAA Depth Isolines', font: { color: chartTheme.text } },
       margin: isCompact
         ? { l: 64, r: 26, t: 48, b: 96 }
         : { l: 72, r: 70, t: 40, b: 88 },
