@@ -1906,25 +1906,19 @@
     const minIntensity = Math.min(...finiteIntensities)
     const maxIntensity = Math.max(...finiteIntensities)
 
-    if (!Number.isFinite(minIntensity) || !Number.isFinite(maxIntensity)) {
-      noaa3dPlotIsRendering = false
-      detachNoaa3dPlotClickHandler()
-      Plotly.purge(noaa3dPlotDiv)
-      return
-    }
-
+    // Construct customdata matching the Z-matrix dimensions (Rows=ARI, Cols=Duration)
+    // Each cell contains: [DurationLabel, DurationHr, ARIKey, Depth, Intensity]
     const customData = noaaAriEntries.map((ariEntry, rowIdx) =>
       noaaDurationEntries.map((durationEntry, colIdx) => {
-        const depth = noaaContourZ[rowIdx]?.[colIdx] ?? null
-        const intensity = noaaIntensityZ[rowIdx]?.[colIdx] ?? null
+        const depth = noaaContourZ[rowIdx]?.[colIdx]
+        const intensity = noaaIntensityZ[rowIdx]?.[colIdx]
+
         return [
-          durationEntry.label,
-          durationEntry.hr,
-          ariEntry.key,
-          Number.isFinite(depth as number) ? depth : null,
-          Number.isFinite(intensity as number) ? intensity : null,
-          rowIdx,
-          colIdx
+          durationEntry.label, // 0
+          durationEntry.hr, // 1
+          ariEntry.key, // 2
+          Number.isFinite(depth as number) ? depth : 0, // 3
+          Number.isFinite(intensity as number) ? intensity : 0 // 4
         ]
       })
     )
@@ -1947,49 +1941,41 @@
       cmin: minIntensity,
       cmax: maxIntensity,
       opacity: 0.95,
+      // Explicitly map customdata indices.
+      // Note: %{x} and %{y} give the coordinate values, customdata gives the metadata.
       hovertemplate:
-        'Duration: %{customdata[0]} (%{customdata[1]:.2f} hr)<br>' +
+        'Duration: %{customdata[0]} (%{x:.2f} hr)<br>' +
         'ARI: %{customdata[2]}-year<br>' +
         'Depth: %{customdata[3]:.2f} in<br>' +
-        'Intensity: %{customdata[4]:.2f} in/hr<extra></extra>'
+        'Intensity: %{z:.2f} in/hr<extra></extra>'
     }
 
     const dataTraces: Data[] = [surfaceTrace]
 
     const selectedNoaaTrace = (() => {
-      if (!table || !selectedDurationLabel) {
-        return null
-      }
+      if (!table || !selectedDurationLabel) return null
 
-      const durationIndex = noaaDurationEntries.findIndex(
-        (entry) => entry.label === selectedDurationLabel
-      )
-      const ariIndex = noaaAriEntries.findIndex(
-        (entry) => entry.key === String($selectedAri)
-      )
+      const durationEntry = noaaDurationEntries.find((entry) => entry.label === selectedDurationLabel)
+      const ariEntry = noaaAriEntries.find((entry) => entry.key === String($selectedAri))
 
-      if (durationIndex < 0 || ariIndex < 0) {
-        return null
-      }
+      if (!durationEntry || !ariEntry) return null
 
-      const durationEntry = noaaDurationEntries[durationIndex]
-      const ariEntry = noaaAriEntries[ariIndex]
-      const depth = noaaContourZ[ariIndex]?.[durationIndex]
-      const intensity = noaaIntensityZ[ariIndex]?.[durationIndex]
+      const rowIdx = noaaAriEntries.indexOf(ariEntry)
+      const colIdx = noaaDurationEntries.indexOf(durationEntry)
 
-      if (!Number.isFinite(intensity as number) || !Number.isFinite(depth as number)) {
-        return null
-      }
+      if (rowIdx === -1 || colIdx === -1) return null
 
-      const highlightDepthValue = Number(depth)
-      const highlightIntensityValue = Number(intensity)
+      const intensity = noaaIntensityZ[rowIdx]?.[colIdx]
+      const depth = noaaContourZ[rowIdx]?.[colIdx]
+
+      if (!Number.isFinite(intensity as number) || !Number.isFinite(depth as number)) return null
 
       return {
         type: 'scatter3d',
         mode: 'markers',
         x: [durationEntry.hr],
         y: [ariEntry.value],
-        z: [highlightIntensityValue],
+        z: [Number(intensity)],
         marker: {
           color: chartTheme.isoHighlight,
           size: 6,
@@ -1998,22 +1984,19 @@
         },
         name: 'Selected NOAA cell',
         showlegend: false,
-        customdata: [
-          [
-            durationEntry.label,
-            durationEntry.hr,
-            ariEntry.key,
-            highlightDepthValue,
-            highlightIntensityValue,
-            ariIndex,
-            durationIndex
-          ]
-        ],
+        // For scatter3d, customdata is a simple array of items for the points
+        customdata: [[
+          durationEntry.label,
+          durationEntry.hr,
+          ariEntry.key,
+          depth,
+          intensity
+        ]],
         hovertemplate:
-          `Duration: ${durationEntry.label} (${durationEntry.hr.toFixed(2)} hr)` +
-          `<br>ARI: ${ariEntry.key}-year` +
-          `<br>Intensity: ${highlightIntensityValue.toFixed(2)} in/hr` +
-          `<br>Depth: ${highlightDepthValue.toFixed(3)} in<extra></extra>`
+          'Duration: %{customdata[0]} (%{x:.2f} hr)<br>' +
+          'ARI: %{customdata[2]}-year<br>' +
+          'Depth: %{customdata[3]:.3f} in<br>' +
+          'Intensity: %{z:.2f} in/hr<extra></extra>'
       } satisfies Data
     })()
 
@@ -2087,6 +2070,10 @@
           zerolinecolor: chartTheme.sceneZero,
           linecolor: chartTheme.sceneLine,
           tickfont: { color: chartTheme.sceneText }
+        },
+        // Lock camera to a reasonable default view
+        camera: {
+          eye: { x: 1.5, y: 1.5, z: 1.5 }
         }
       }
     }
@@ -2468,11 +2455,14 @@
     const point = event?.points?.[0]
     if (!point) return
 
+    // Use coordinate matching (x=Duration, y=ARI) instead of customdata indices.
+    // This prevents mapping errors if the 3D surface data is transposed or interpolated.
     const x = point.x
     const y = point.y
 
     if (typeof x !== 'number' || typeof y !== 'number') return
 
+    // Find nearest Duration
     const nearestDuration = noaaDurationEntries.reduce(
       (best, entry) => {
         const diff = Math.abs(entry.hr - x)
@@ -2481,6 +2471,7 @@
       { diff: Number.POSITIVE_INFINITY, entry: noaaDurationEntries[0] }
     )
 
+    // Find nearest ARI
     const nearestAri = noaaAriEntries.reduce(
       (best, entry) => {
         const diff = Math.abs(entry.value - y)
@@ -2491,6 +2482,7 @@
 
     if (!nearestDuration.entry || !nearestAri.entry) return
 
+    // Enforce standard durations if the mode is active
     if (
       $durationMode === 'standard' &&
       !STANDARD_DURATION_HOURS.some(
@@ -2500,6 +2492,7 @@
       return
     }
 
+    // Verify data exists at this intersection before selecting
     const depth = nearestDuration.entry.row.values[nearestAri.entry.key]
     if (Number.isFinite(depth)) {
       pickCell(nearestDuration.entry.label, nearestAri.entry.key)
