@@ -44,5 +44,5 @@ scale as expected.
 ## Development Reminders
 
 - Run `npm test` and `npx svelte-check` before opening a pull request.
-- Update the README and help modal whenever distribution presets, exports, or NOAA integration behaviour
+- Update the README and help modal whenever distribution presets, exports, or NOAA integration behavior
   changes so end-user documentation stays accurate.
