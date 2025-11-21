@@ -45,4 +45,23 @@ Duration Header: ARI (years) 2 10
     it('fails if scientific notation is used weirdly', () => {
         // NOAA data is usually simple floats.
     })
+
+    it('handles leading commas in data rows (repro missing 1-year)', () => {
+        const sample = `
+Station: Example
+Duration Header: ARI (years) 1 2 5
+5-min:, 0.374,0.437,0.540
+`
+        const result = parseNoaaTable(sample)
+        expect(result).not.toBeNull()
+        const row = result?.rows.find(r => r.label === '5-min')
+
+        // The bug is that the leading comma causes the first value to be parsed as NaN or empty
+        // and the values shift or are just wrong.
+        // With the bug, row?.values['1'] might be NaN or undefined
+
+        expect(row?.values['1']).toBe(0.374)
+        expect(row?.values['2']).toBe(0.437)
+        expect(row?.values['5']).toBe(0.540)
+    })
 })

@@ -53,13 +53,13 @@ export function parseNoaaTable(txt: string): NoaaTable | null {
     const label = match[1].trim().replace(/:+$/, '');
     if (!DURATION_RE.test(label)) continue;
 
-    const parts = match[2].split(',');
+    const parts = match[2].split(',').map(p => p.trim()).filter(p => p !== '');
     const values: Record<string, number> = {};
 
     // We expect the number of comma-separated values to match the number of ARIs.
     // If there are trailing empty fields, we ignore them.
     for (let i = 0; i < aris.length; i += 1) {
-      const raw = parts[i]?.trim();
+      const raw = parts[i];
       const val = raw ? Number(raw) : Number.NaN;
       values[aris[i]] = Number.isFinite(val) ? val : Number.NaN;
     }
