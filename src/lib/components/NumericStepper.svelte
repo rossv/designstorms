@@ -136,7 +136,7 @@
       inputValue = formatValue(value)
       return
     }
-    updateValue(parsed, { snap: false })
+    updateValue(parsed, { snap: true })
   }
 
   function getButtonStepValue() {

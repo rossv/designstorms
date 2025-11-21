@@ -20,11 +20,11 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
     // In production (GitHub Pages), use a public CORS proxy.
     fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(noaaApiUrl)}`;
   }
-  
+
   const resp = await fetch(fetchUrl);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: Failed to fetch`);
   const txt = await resp.text();
-  
+
   if (import.meta.env.DEV) {
     console.log("Raw NOAA Data:", txt);
   }
@@ -53,10 +53,14 @@ export function parseNoaaTable(txt: string): NoaaTable | null {
     const label = match[1].trim().replace(/:+$/, '');
     if (!DURATION_RE.test(label)) continue;
 
-    const nums = (match[2].match(/[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g) ?? []).map(Number);
+    const parts = match[2].split(',');
     const values: Record<string, number> = {};
+
+    // We expect the number of comma-separated values to match the number of ARIs.
+    // If there are trailing empty fields, we ignore them.
     for (let i = 0; i < aris.length; i += 1) {
-      const val = nums[i];
+      const raw = parts[i]?.trim();
+      const val = raw ? Number(raw) : Number.NaN;
       values[aris[i]] = Number.isFinite(val) ? val : Number.NaN;
     }
     rows.push({ label, values });
