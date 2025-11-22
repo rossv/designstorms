@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
   import { fade, fly, scale } from 'svelte/transition'
+  import { tweened } from 'svelte/motion'
   import { flip } from 'svelte/animate'
   import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
@@ -90,6 +91,9 @@
   const stormRainDrops = Array.from({ length: 8 }, (_, index) => index)
   let stormProcessingRainVisible = false
   let stormProcessingRainHideTimer: ReturnType<typeof setTimeout> | null = null
+
+  const totalDepthTween = tweened(0, { duration: 200 })
+  const peakIntensityTween = tweened(0, { duration: 200 })
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -777,6 +781,9 @@
     timestamp?: string
   }[] = []
   let hasTimestamp = false
+
+  $: totalDepthTween.set(totalDepth)
+  $: peakIntensityTween.set(peakIntensity)
 
   let tableScrollEl: HTMLDivElement | null = null
   let tableScrollObserver: ResizeObserver | null = null
@@ -4136,15 +4143,33 @@
         <div class="stats grid cols-3">
           <div class="stat-box">
             <div class="stat-title">Total Depth</div>
-            <div class="stat-value">{totalDepth.toFixed(3)} in</div>
+            <div class="stat-value">
+              {#key totalDepth}
+                <span in:fade={{ duration: 120 }} out:fade={{ duration: 100 }}>
+                  {$totalDepthTween.toFixed(3)} in
+                </span>
+              {/key}
+            </div>
           </div>
           <div class="stat-box">
             <div class="stat-title">Peak Intensity</div>
-            <div class="stat-value">{peakIntensity.toFixed(2)} in/hr</div>
+            <div class="stat-value">
+              {#key peakIntensity}
+                <span in:fade={{ duration: 120 }} out:fade={{ duration: 100 }}>
+                  {$peakIntensityTween.toFixed(2)} in/hr
+                </span>
+              {/key}
+            </div>
           </div>
           <div class="stat-box">
             <div class="stat-title">Selected Average Recurrence Interval</div>
-            <div class="stat-value">{$selectedAri} {formatYearLabel($selectedAri)}</div>
+            <div class="stat-value">
+              {#key $selectedAri}
+                <span in:fade={{ duration: 120 }} out:fade={{ duration: 100 }}>
+                  {$selectedAri} {formatYearLabel($selectedAri)}
+                </span>
+              {/key}
+            </div>
           </div>
         </div>
       </div>
