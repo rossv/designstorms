@@ -4352,7 +4352,7 @@
     tabindex="-1"
     on:click={handleCustomCurveBackdropClick}
     on:keydown={handleKeydown}
-    transition:fade
+    transition:fade={{ duration: MODAL_TRANSITION_DURATION }}
   >
     <div
       class="modal custom-curve-modal"
@@ -4397,7 +4397,7 @@
     tabindex="-1"
     on:click={handleBackdropClick}
     on:keydown={handleKeydown}
-    transition:fade
+    transition:fade={{ duration: MODAL_TRANSITION_DURATION }}
   >
     <div
       class="modal"
@@ -4505,7 +4505,7 @@
     tabindex="-1"
     on:click={handleCurveBackdropClick}
     on:keydown={handleKeydown}
-    transition:fade
+    transition:fade={{ duration: MODAL_TRANSITION_DURATION }}
   >
     <div
       class="modal curve-modal"
