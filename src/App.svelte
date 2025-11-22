@@ -3689,22 +3689,27 @@
         </div>
 
         <div class="options-row">
-          <label class="checkbox">
-            <input type="checkbox" bind:checked={autoFetch} />
-            Auto refresh when location changes
-          </label>
-          <button
-            class="primary noaa-refresh-button"
-            on:click={() => void loadNoaa()}
-            disabled={isLoadingNoaa}
-          >
-            {#if isLoadingNoaa}
-              <span class="noaa-refresh-button__spinner" aria-hidden="true"></span>
-              <span class="noaa-refresh-button__text">Refreshing…</span>
-            {:else}
-              <span class="noaa-refresh-button__text">Refresh NOAA Data</span>
-            {/if}
-          </button>
+          <div class="options-row__controls">
+            <label class="checkbox options-row__checkbox">
+              <input type="checkbox" bind:checked={autoFetch} />
+              <span class="options-row__checkbox-text">
+                <span>Auto refresh when location changes</span>
+                <span class="options-row__helper">Keep NOAA data in sync after adjusting the marker.</span>
+              </span>
+            </label>
+            <button
+              class="primary noaa-refresh-button"
+              on:click={() => void loadNoaa()}
+              disabled={isLoadingNoaa}
+            >
+              {#if isLoadingNoaa}
+                <span class="noaa-refresh-button__spinner" aria-hidden="true"></span>
+                <span class="noaa-refresh-button__text">Refreshing…</span>
+              {:else}
+                <span class="noaa-refresh-button__text">Refresh NOAA Data</span>
+              {/if}
+            </button>
+          </div>
         </div>
         <div class="noaa-status" role="status" aria-live="polite">
           <div class="noaa-status__content">
@@ -4968,12 +4973,30 @@
   }
 
   .options-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
     margin-top: 12px;
+  }
+
+  .options-row__controls {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
     flex-wrap: wrap;
+  }
+
+  .options-row__checkbox {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .options-row__checkbox-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .options-row__helper {
+    font-size: 12px;
+    color: var(--muted);
   }
 
   .storm-panel-heading {
@@ -6264,14 +6287,10 @@
       gap: 10px;
     }
 
-    .options-row {
+    .options-row__controls {
       flex-direction: column;
       align-items: flex-start;
       gap: 10px;
-    }
-
-    .options-row button {
-      align-self: flex-start;
     }
 
     .map {
