@@ -4055,6 +4055,50 @@
       </div>
       <div class="panel results">
         <h2 class="section-title">Storm Table</h2>
+        {#if tableIsRendering}
+          <div
+            class="table-scroll table-skeleton"
+            style:max-height={`${tableScrollMaxHeight}px`}
+            transition:fade
+          >
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="left">{timeColumnLabel}</th>
+                  <th>Intensity (in/hr)</th>
+                  <th>Incremental (in)</th>
+                  <th>Cumulative (in)</th>
+                  {#if hasTimestamp}
+                    <th class="left">Datetime</th>
+                  {/if}
+                </tr>
+              </thead>
+              <tbody>
+                {#each Array(8) as _, index (index)}
+                  <tr>
+                    <td class="left" data-label={timeColumnLabel}>
+                      <span class="skeleton-block short"></span>
+                    </td>
+                    <td data-label="Intensity (in/hr)">
+                      <span class="skeleton-block"></span>
+                    </td>
+                    <td data-label="Incremental (in)">
+                      <span class="skeleton-block"></span>
+                    </td>
+                    <td data-label="Cumulative (in)">
+                      <span class="skeleton-block"></span>
+                    </td>
+                    {#if hasTimestamp}
+                      <td class="left" data-label="Datetime">
+                        <span class="skeleton-block long"></span>
+                      </td>
+                    {/if}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
         {#if tableRows.length}
           <div
             class="table-scroll"
@@ -4088,7 +4132,7 @@
               </tbody>
             </table>
           </div>
-        {:else}
+        {:else if !tableIsRendering}
           <p class="empty">Adjust the parameters to see the time series table.</p>
         {/if}
       </div>
@@ -5516,6 +5560,11 @@
     border-radius: 10px;
   }
 
+  .table-skeleton {
+    position: relative;
+    overflow: hidden;
+  }
+
   .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -5545,6 +5594,33 @@
 
   .data-table .left {
     text-align: left;
+  }
+
+  .skeleton-block {
+    display: block;
+    height: 12px;
+    background: linear-gradient(90deg, var(--panel) 0%, var(--skeleton-highlight) 50%, var(--panel) 100%);
+    background-size: 200% 100%;
+    border-radius: 999px;
+    animation: skeleton-shimmer 1.2s ease-in-out infinite;
+    min-width: 48px;
+  }
+
+  .skeleton-block.short {
+    width: 56px;
+  }
+
+  .skeleton-block.long {
+    width: 160px;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
 
   .empty {
