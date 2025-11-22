@@ -5975,6 +5975,10 @@
     margin-top: 12px;
   }
 
+  .stats.grid {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+
   .stat-box {
     background: var(--stat-bg);
     border-radius: 12px;
@@ -6002,6 +6006,10 @@
       padding: 0;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+    }
+
+    .stats.grid {
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     }
 
     .data-table th,
