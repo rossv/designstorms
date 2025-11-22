@@ -211,6 +211,8 @@
   let pendingNoaaScrollIndex: number | null = null
   let durations: string[] = []
   let aris: string[] = []
+  let skeletonDurationLabels: string[] = []
+  let skeletonAriLabels: string[] = []
   let durationEntriesForTable: { label: string; row: NoaaRow; index: number }[] = []
   let selectedDurationLabel: string | null = null
   const DEFAULT_DURATION_HOURS = 24
@@ -446,6 +448,11 @@
   $: durationEntriesForTable = $tableStore
     ? $tableStore.rows.map((row, index) => ({ label: row.label, row, index }))
     : []
+  $: skeletonDurationLabels =
+    durationEntriesForTable.length > 0
+      ? durationEntriesForTable.map((entry) => entry.label)
+      : STANDARD_DURATION_PRESETS.map((preset) => preset.label)
+  $: skeletonAriLabels = aris.length ? aris : ['2', '5', '10', '25', '50', '100']
   let showHelp = false
   let showCurveModal = false
   let helpDialog: HTMLDivElement | null = null
@@ -3584,7 +3591,44 @@
           {/if}
         </div>
 
-        {#if $tableStore}
+        {#if isLoadingNoaa}
+          <div class="noaa-table-scroll">
+            <div class="noaa-table panel noaa-table--skeleton">
+              <div
+                class="table-header"
+                style={`grid-template-columns: minmax(0, var(--ari-column-width, 150px)) repeat(${skeletonDurationLabels.length}, minmax(80px, 1fr));`}
+              >
+                <div class="table-header__ari">
+                  <div class="skeleton-line skeleton-line--label" aria-hidden="true"></div>
+                </div>
+                {#each skeletonDurationLabels as label}
+                  <div class="table-header__duration" aria-label={`Loading ${label} column`}>
+                    <div class="skeleton-line skeleton-line--duration" aria-hidden="true"></div>
+                  </div>
+                {/each}
+              </div>
+              <div class="table-body">
+                {#each skeletonAriLabels as ari}
+                  <div
+                    class="table-row"
+                    aria-label={`${ari}-year Average Recurrence Interval loading row`}
+                    style={`grid-template-columns: minmax(0, var(--ari-column-width, 150px)) repeat(${skeletonDurationLabels.length}, minmax(80px, 1fr));`}
+                  >
+                    <div class="ari-cell">
+                      <div class="skeleton-line skeleton-line--ari-value" aria-hidden="true"></div>
+                      <div class="skeleton-line skeleton-line--ari-caption" aria-hidden="true"></div>
+                    </div>
+                    {#each skeletonDurationLabels as durationLabel}
+                      <div class="table-skeleton-cell" aria-label={`Loading ${durationLabel} depth`} aria-hidden="true">
+                        <div class="skeleton-block"></div>
+                      </div>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          </div>
+        {:else if $tableStore}
           <div class="noaa-table-scroll" bind:this={noaaTableScrollEl}>
             <div class="noaa-table panel">
               <div
@@ -3602,7 +3646,7 @@
                       class="table-button duration-btn"
                       class:active={selectedDurationLabel === entry.label}
                       data-column-index={entry.index}
-                      disabled={!isSelectable}
+                      disabled={isLoadingNoaa || !isSelectable}
                       on:click={() => pickCell(entry.label, String($selectedAri))}
                     >
                       {entry.label}
@@ -3634,7 +3678,7 @@
                         class:selected={selectedDurationLabel === entry.label && String($selectedAri) === ariKey}
                         class:column-active={selectedDurationLabel === entry.label}
                         class:interpolated={interpolatedCellKeys.has(`${entry.label}::${ariKey}`)}
-                        disabled={!isSelectable}
+                        disabled={isLoadingNoaa || !isSelectable}
                         data-ari={ariKey}
                         aria-label={`${entry.label} duration, ${ariKey}-year Average Recurrence Interval depth ${depthText ? `${depthText} in` : 'not available'}`}
                         on:click={() => pickCell(entry.label, ariKey)}
@@ -5279,6 +5323,86 @@
   .table-button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  .noaa-table--skeleton .table-body {
+    overflow: hidden;
+  }
+
+  .noaa-table--skeleton .table-row:hover {
+    background: transparent;
+  }
+
+  .table-skeleton-cell {
+    padding: 10px 12px;
+    border-left: 1px solid var(--table-header-divider);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .skeleton-line,
+  .skeleton-block {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton-base, rgba(255, 255, 255, 0.06));
+  }
+
+  .skeleton-line::after,
+  .skeleton-block::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--skeleton-highlight, rgba(255, 255, 255, 0.16)),
+      transparent
+    );
+    animation: skeleton-shimmer 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-line {
+    height: 12px;
+    border-radius: 999px;
+  }
+
+  .skeleton-line--label {
+    width: 80%;
+    height: 14px;
+    margin: 0 auto;
+  }
+
+  .skeleton-line--duration {
+    width: 60%;
+    margin: 0 auto;
+    height: 14px;
+  }
+
+  .skeleton-line--ari-value {
+    width: 48%;
+    height: 14px;
+  }
+
+  .skeleton-line--ari-caption {
+    width: 70%;
+    margin-top: 6px;
+  }
+
+  .table-skeleton-cell .skeleton-block {
+    width: 100%;
+    height: 18px;
+    border-radius: 8px;
+  }
+
+  @keyframes skeleton-shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
   }
 
   .duration-btn {
