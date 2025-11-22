@@ -3592,7 +3592,6 @@
               step={0.0001}
               buttonStep={0.1}
               bind:value={$lat}
-              showProgress
               on:change={() => {
                 lastFetchKey = ''
               }}
@@ -3608,7 +3607,6 @@
               step={0.0001}
               buttonStep={0.1}
               bind:value={$lon}
-              showProgress
               on:change={() => {
                 lastFetchKey = ''
               }}
