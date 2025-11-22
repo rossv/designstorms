@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
   import { fade, fly } from 'svelte/transition'
+  import { tweened } from 'svelte/motion'
+  import { cubicOut } from 'svelte/easing'
   import { flip } from 'svelte/animate'
   import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
@@ -743,6 +745,8 @@
   const SMOOTHING_TOLERANCE_MIN = 1e-3
   let peakIntensity = 0
   let totalDepth = 0
+  const totalDepthTween = tweened(totalDepth, { duration: 200, easing: cubicOut })
+  const peakIntensityTween = tweened(peakIntensity, { duration: 200, easing: cubicOut })
   let hyetographSmoothingActive = false
   let hyetographSmoothingStepLabel = ''
   let hyetographStatusText = ''
@@ -787,6 +791,9 @@
   let noaa3dPlotReady = false
   let noaaIntensityPlotReady = false
   let curvePlotReady = false
+
+  $: totalDepthTween.set(totalDepth)
+  $: peakIntensityTween.set(peakIntensity)
 
   type DurationEntry = ReturnType<typeof getSortedDurationRows>[number]
   type AriEntry = { key: string; value: number }
@@ -4116,15 +4123,21 @@
         <div class="stats grid cols-3">
           <div class="stat-box">
             <div class="stat-title">Total Depth</div>
-            <div class="stat-value">{totalDepth.toFixed(3)} in</div>
+            <div class="stat-value" transition:fade={{ duration: 150 }}>
+              {$totalDepthTween.toFixed(3)} in
+            </div>
           </div>
           <div class="stat-box">
             <div class="stat-title">Peak Intensity</div>
-            <div class="stat-value">{peakIntensity.toFixed(2)} in/hr</div>
+            <div class="stat-value" transition:fade={{ duration: 150 }}>
+              {$peakIntensityTween.toFixed(2)} in/hr
+            </div>
           </div>
           <div class="stat-box">
             <div class="stat-title">Selected Average Recurrence Interval</div>
-            <div class="stat-value">{$selectedAri} {formatYearLabel($selectedAri)}</div>
+            <div class="stat-value" transition:fade={{ duration: 150 }}>
+              {$selectedAri} {formatYearLabel($selectedAri)}
+            </div>
           </div>
         </div>
       </div>
