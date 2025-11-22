@@ -68,6 +68,7 @@
   --stepper-button-hover-bg: rgba(110, 231, 255, 0.2);
   --stepper-progress-track: rgba(110, 231, 255, 0.08);
   --stepper-progress-fill: rgba(110, 231, 255, 0.8);
+  --skeleton-highlight: rgba(255, 255, 255, 0.08);
 }
 
 html, body, #app { height: 100%; }
@@ -448,6 +449,7 @@ a:hover { text-decoration: underline; }
   --stepper-button-hover-bg: rgba(14, 165, 233, 0.18);
   --stepper-progress-track: rgba(14, 165, 233, 0.14);
   --stepper-progress-fill: rgba(14, 165, 233, 0.6);
+  --skeleton-highlight: rgba(148, 163, 184, 0.4);
 }
 
 [data-theme='light'] input[type='number'],
