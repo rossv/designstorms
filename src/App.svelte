@@ -94,6 +94,7 @@
 
   const totalDepthTween = tweened(0, { duration: 200 })
   const peakIntensityTween = tweened(0, { duration: 200 })
+  const peakOneHourIntensityTween = tweened(0, { duration: 200 })
 
   const defaultMarkerIcons: Partial<L.IconOptions> = {
     iconRetinaUrl: markerIcon2xUrl,
@@ -766,6 +767,7 @@
 
   const SMOOTHING_TOLERANCE_MIN = 1e-3
   let peakIntensity = 0
+  let peakOneHourIntensity = 0
   let totalDepth = 0
   let hyetographSmoothingActive = false
   let hyetographSmoothingStepLabel = ''
@@ -784,6 +786,7 @@
 
   $: totalDepthTween.set(totalDepth)
   $: peakIntensityTween.set(peakIntensity)
+  $: peakOneHourIntensityTween.set(peakOneHourIntensity)
 
   let tableScrollEl: HTMLDivElement | null = null
   let tableScrollObserver: ResizeObserver | null = null
@@ -1391,6 +1394,75 @@
     isExtrapolating = false
   }
 
+  function interpolateCumulativeAt(
+    timeMin: number[],
+    cumulativeIn: number[],
+    targetMin: number,
+    startIndex = 0
+  ): { value: number; index: number } {
+    if (!timeMin.length || !cumulativeIn.length) {
+      return { value: 0, index: 0 }
+    }
+
+    if (targetMin <= (timeMin[0] ?? 0)) {
+      return { value: cumulativeIn[0] ?? 0, index: 0 }
+    }
+
+    const lastIndex = Math.min(timeMin.length, cumulativeIn.length) - 1
+    if (targetMin >= timeMin[lastIndex]!) {
+      return { value: cumulativeIn[lastIndex] ?? 0, index: lastIndex }
+    }
+
+    let index = Math.max(0, Math.min(startIndex, lastIndex - 1))
+    while (index < lastIndex - 1 && timeMin[index + 1]! < targetMin) {
+      index += 1
+    }
+    while (index > 0 && timeMin[index]! > targetMin) {
+      index -= 1
+    }
+
+    const t0 = timeMin[index] ?? 0
+    const t1 = timeMin[index + 1] ?? t0
+    const c0 = cumulativeIn[index] ?? 0
+    const c1 = cumulativeIn[index + 1] ?? c0
+    const span = t1 - t0
+    if (!Number.isFinite(span) || span <= 0) {
+      return { value: c0, index }
+    }
+    const frac = (targetMin - t0) / span
+    const value = c0 + (c1 - c0) * frac
+    return { value, index }
+  }
+
+  function calculatePeakOneHourIntensity(storm: StormResult): number {
+    const { timeMin, cumulativeIn } = storm
+    if (!timeMin.length || !cumulativeIn.length) return 0
+
+    const windowMinutes = 60
+    const windowHours = windowMinutes / 60
+    let peakDepth = 0
+    let searchIndex = 0
+
+    for (let i = 0; i < timeMin.length; i += 1) {
+      const endTime = timeMin[i] ?? 0
+      const startTime = endTime - windowMinutes
+      const { value: startCumulative, index } = interpolateCumulativeAt(
+        timeMin,
+        cumulativeIn,
+        startTime,
+        searchIndex
+      )
+      searchIndex = index
+      const endCumulative = cumulativeIn[i] ?? 0
+      const depth = endCumulative - startCumulative
+      if (Number.isFinite(depth)) {
+        peakDepth = Math.max(peakDepth, depth)
+      }
+    }
+
+    return windowHours > 0 ? peakDepth / windowHours : 0
+  }
+
   $: {
     const storm = $stormResult
     lastStorm = storm
@@ -1403,6 +1475,7 @@
 
     if (!storm) {
       peakIntensity = 0
+      peakOneHourIntensity = 0
       totalDepth = 0
       timeAxis = []
       timeColumnLabel = 'Time (hr)'
@@ -1419,6 +1492,7 @@
       peakIntensity = storm.intensityInHr.length
         ? Math.max(...storm.intensityInHr)
         : 0
+      peakOneHourIntensity = calculatePeakOneHourIntensity(storm)
 
       const totalMinutes = storm.timeMin[storm.timeMin.length - 1] ?? 0
       const useHours = totalMinutes >= 120
@@ -4138,7 +4212,7 @@
           <button class="ghost help-button" type="button" on:click={openHelp}>Help / Docs</button>
         </div>
 
-        <div class="stats grid cols-3">
+        <div class="stats grid cols-4">
           <div class="stat-box">
             <div class="stat-title">Total Depth</div>
             <div class="stat-value">
@@ -4155,6 +4229,16 @@
               {#key peakIntensity}
                 <span in:fade={{ duration: 120 }} out:fade={{ duration: 100 }}>
                   {$peakIntensityTween.toFixed(2)} in/hr
+                </span>
+              {/key}
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">Peak 1-hr Intensity</div>
+            <div class="stat-value">
+              {#key peakOneHourIntensity}
+                <span in:fade={{ duration: 120 }} out:fade={{ duration: 100 }}>
+                  {$peakOneHourIntensityTween.toFixed(2)} in/hr
                 </span>
               {/key}
             </div>
