@@ -452,6 +452,9 @@
 
   let isLoadingNoaa = false
   let noaaError = ''
+  let lastNoaaAttemptedAt: Date | null = null
+  let lastNoaaAttemptResult: 'success' | 'error' | null = null
+  let lastNoaaAttemptLabel = ''
 
   let lastStorm: StormResult | null = null
   
@@ -1146,6 +1149,7 @@
       noaaError = ''
       return
     }
+    lastNoaaAttemptedAt = new Date()
     isLoadingNoaa = true
     noaaError = ''
     try {
@@ -1196,20 +1200,44 @@
         applyNoaaSelection()
       }
       lastFetchKey = key
+      lastNoaaAttemptResult = 'success'
     } catch (e: any) {
-      noaaError = e?.message ?? 'Unable to fetch NOAA data.'
-      $tableStore = null
-      durations = []
-      aris = []
-      selectedDurationLabel = null
+      const fallbackMessage = 'NOAA service unreachable—check connection or try again.'
+      const rawMessage = (e?.message ?? '').trim()
+      const extraDetails = rawMessage && rawMessage !== 'Failed to fetch' ? rawMessage : ''
+      noaaError = extraDetails ? `${fallbackMessage} (${extraDetails})` : fallbackMessage
+      lastNoaaAttemptResult = 'error'
       lastFetchKey = ''
-      drawIsoPlot()
-      drawNoaa3dPlot()
-      drawNoaaIntensityPlot()
+      if (!hadTable) {
+        $tableStore = null
+        durations = []
+        aris = []
+        selectedDurationLabel = null
+        drawIsoPlot()
+        drawNoaa3dPlot()
+        drawNoaaIntensityPlot()
+      }
     } finally {
       isLoadingNoaa = false
     }
   }
+
+  function formatAttemptTime(date: Date) {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(date)
+  }
+
+  $: lastNoaaAttemptLabel = lastNoaaAttemptedAt
+    ? `${
+        lastNoaaAttemptResult === 'error'
+          ? 'Last attempt (failed)'
+          : lastNoaaAttemptResult === 'success'
+            ? 'Last attempt (succeeded)'
+            : 'Last attempt'
+      }: ${formatAttemptTime(lastNoaaAttemptedAt)}`
+    : ''
 
   function matchesStandardDurationHours(hours: number) {
     return STANDARD_DURATION_HOURS.some((standard) => Math.abs(hours - standard) < 1e-6)
@@ -3521,16 +3549,53 @@
             {/if}
           </button>
         </div>
-        <div class="noaa-status">
-          {#if isLoadingNoaa}
-            <span>Fetching rainfall frequencies from NOAA Atlas 14…</span>
-          {:else if noaaError}
-            <span class="error">{noaaError}</span>
-          {:else if $tableStore}
-            <span>Depths pulled for Atlas 14 (Partial Duration Series).</span>
-          {:else}
-            <span>NOAA data not loaded yet.</span>
-          {/if}
+        <div class="noaa-status" role="status" aria-live="polite">
+          <div class="noaa-status__content">
+            {#if isLoadingNoaa}
+              <div class="noaa-status__text">
+                <span class="noaa-status__primary">Fetching rainfall frequencies from NOAA Atlas 14…</span>
+                {#if lastNoaaAttemptLabel}
+                  <span class="noaa-status__meta">{lastNoaaAttemptLabel}</span>
+                {/if}
+              </div>
+            {:else if noaaError}
+              <div class="noaa-status__text">
+                <span class="noaa-status__primary error">{noaaError}</span>
+                {#if $tableStore}
+                  <span class="noaa-status__meta">
+                    Showing the last NOAA table while you retry.
+                  </span>
+                {/if}
+                {#if lastNoaaAttemptLabel}
+                  <span class="noaa-status__meta">{lastNoaaAttemptLabel}</span>
+                {/if}
+              </div>
+              <button
+                type="button"
+                class="noaa-status__retry"
+                on:click={() => void loadNoaa()}
+                disabled={isLoadingNoaa}
+              >
+                Retry NOAA Fetch
+              </button>
+            {:else if $tableStore}
+              <div class="noaa-status__text">
+                <span class="noaa-status__primary">
+                  Depths pulled for Atlas 14 (Partial Duration Series).
+                </span>
+                {#if lastNoaaAttemptLabel}
+                  <span class="noaa-status__meta">{lastNoaaAttemptLabel}</span>
+                {/if}
+              </div>
+            {:else}
+              <div class="noaa-status__text">
+                <span class="noaa-status__primary">NOAA data not loaded yet.</span>
+                {#if lastNoaaAttemptLabel}
+                  <span class="noaa-status__meta">{lastNoaaAttemptLabel}</span>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
 
         {#if $tableStore}
@@ -5040,8 +5105,61 @@
 
   .noaa-status {
     margin-top: 8px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+
+  .noaa-status__content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .noaa-status__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+
+  .noaa-status__primary {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .noaa-status__meta {
     font-size: 12px;
     color: var(--muted);
+  }
+
+  .noaa-status__retry {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--accent);
+    background: rgba(110, 231, 255, 0.1);
+    color: var(--accent);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 150ms ease, transform 120ms ease;
+  }
+
+  .noaa-status__retry:hover {
+    background: rgba(110, 231, 255, 0.18);
+    transform: translateY(-1px);
+  }
+
+  .noaa-status__retry:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
   }
 
   .noaa-status .error {
