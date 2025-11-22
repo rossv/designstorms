@@ -1906,8 +1906,8 @@
     const minIntensity = Math.min(...finiteIntensities)
     const maxIntensity = Math.max(...finiteIntensities)
 
-    // Build a text matrix matching the Z-matrix dimensions (Rows=ARI, Cols=Duration)
-    // to avoid interpolated hover tokens from Plotly.
+    // Build text and customdata matrices matching the Z-matrix dimensions (Rows=ARI, Cols=Duration)
+    // to avoid interpolated hover tokens from Plotly and to provide reliable click metadata.
     const textMatrix = noaaAriEntries.map((ariEntry, rowIdx) =>
       noaaDurationEntries.map((durationEntry, colIdx) => {
         const depth = noaaContourZ[rowIdx]?.[colIdx]
@@ -1926,6 +1926,17 @@
       })
     )
 
+    const customdataMatrix = noaaAriEntries.map((ariEntry, rowIdx) =>
+      noaaDurationEntries.map((durationEntry, colIdx) => {
+        const depthValue = noaaContourZ[rowIdx]?.[colIdx]
+        const depth = Number.isFinite(depthValue as number)
+          ? (depthValue as number).toFixed(3)
+          : '—'
+
+        return [durationEntry.label, durationEntry.hr, ariEntry.key, depth]
+      })
+    )
+
     const colorbar: Partial<ColorBar> = {
       title: { text: 'Intensity (in/hr)', font: { color: chartTheme.isoColorbarText } },
       tickcolor: chartTheme.isoColorbarTick,
@@ -1939,12 +1950,17 @@
       y: noaaAriEntries.map((entry) => entry.value),
       z: noaaIntensityZ,
       text: textMatrix,
+      customdata: customdataMatrix,
       colorscale: 'Viridis',
       colorbar,
       cmin: minIntensity,
       cmax: maxIntensity,
       opacity: 0.95,
-      hovertemplate: '%{text}<extra></extra>'
+      hovertemplate:
+        'Duration: %{customdata[0]} (%{customdata[1]:.2f} hr)<br>' +
+        'ARI: %{customdata[2]}-year<br>' +
+        'Depth: %{customdata[3]} in<br>' +
+        'Intensity: %{z:.2f} in/hr<extra></extra>'
     }
 
     const dataTraces: Data[] = [surfaceTrace]
@@ -2451,6 +2467,41 @@
     if (!table) return
     const point = event?.points?.[0]
     if (!point) return
+
+    const customData = point.customdata
+    if (Array.isArray(customData)) {
+      const [durationLabel, durationHr, ariKey] = customData
+      const durationHoursNumeric = Number(durationHr)
+
+      if (typeof durationLabel === 'string' && typeof ariKey === 'string') {
+        const durationEntry = noaaDurationEntries.find((entry) => entry.label === durationLabel)
+        const ariEntry = noaaAriEntries.find((entry) => entry.key === String(ariKey))
+        const durationHours =
+          typeof durationHr === 'number' && Number.isFinite(durationHr) && durationHr > 0
+            ? durationHr
+            : durationHoursNumeric
+
+        if (
+          durationEntry &&
+          ariEntry &&
+          Number.isFinite(durationHours) &&
+          durationHours > 0
+        ) {
+          if (
+            $durationMode === 'standard' &&
+            !STANDARD_DURATION_HOURS.some((allowed) => Math.abs(durationHours - allowed) < 1e-3)
+          ) {
+            return
+          }
+
+          const depth = durationEntry.row.values[ariEntry.key]
+          if (Number.isFinite(depth)) {
+            pickCell(durationEntry.label, ariEntry.key)
+            return
+          }
+        }
+      }
+    }
 
     // Use coordinate matching (x=Duration, y=ARI) instead of customdata indices.
     // This prevents mapping errors if the 3D surface data is transposed or interpolated.
