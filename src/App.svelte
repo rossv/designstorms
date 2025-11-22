@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, afterUpdate } from 'svelte'
-  import { fade, fly } from 'svelte/transition'
+  import { fade, fly, scale } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import L from 'leaflet'
   import markerIcon2xUrl from 'leaflet/dist/images/marker-icon-2x.png'
@@ -417,6 +417,26 @@
   let customCurveDraft = ''
   let showCustomCurveModal = false
   let customCurveLines: string[] = []
+
+  const MODAL_TRANSITION_DURATION = 150
+  function modalMotion(node: Element) {
+    const flyTransition = fly(node, { y: 12, duration: MODAL_TRANSITION_DURATION })
+    const scaleTransition = scale(node, { start: 0.98, duration: MODAL_TRANSITION_DURATION })
+
+    return {
+      delay: Math.min(flyTransition.delay ?? 0, scaleTransition.delay ?? 0),
+      duration: Math.max(
+        flyTransition.duration ?? MODAL_TRANSITION_DURATION,
+        scaleTransition.duration ?? MODAL_TRANSITION_DURATION
+      ),
+      easing: flyTransition.easing ?? scaleTransition.easing,
+      css: (t: number, u: number) => {
+        const flyCss = flyTransition.css ? flyTransition.css(t, u) : ''
+        const scaleCss = scaleTransition.css ? scaleTransition.css(t, u) : ''
+        return `${flyCss}${scaleCss}`
+      }
+    }
+  }
 
   $: customCurveLines = $customCurveCsv.trim()
     ? $customCurveCsv
@@ -4307,6 +4327,7 @@
     tabindex="-1"
     on:click={handleCustomCurveBackdropClick}
     on:keydown={handleKeydown}
+    transition:fade
   >
     <div
       class="modal custom-curve-modal"
@@ -4315,6 +4336,7 @@
       aria-labelledby="custom-curve-title"
       tabindex="-1"
       bind:this={customCurveModalDialog}
+      transition:modalMotion
     >
       <div class="modal-content">
         <h2 id="custom-curve-title">Custom Curve CSV</h2>
@@ -4350,6 +4372,7 @@
     tabindex="-1"
     on:click={handleBackdropClick}
     on:keydown={handleKeydown}
+    transition:fade
   >
     <div
       class="modal"
@@ -4358,6 +4381,7 @@
       aria-labelledby="help-title"
       tabindex="-1"
       bind:this={helpDialog}
+      transition:modalMotion
     >
       <div class="modal-content">
         <h2 id="help-title">Design Storm Generator</h2>
@@ -4456,6 +4480,7 @@
     tabindex="-1"
     on:click={handleCurveBackdropClick}
     on:keydown={handleKeydown}
+    transition:fade
   >
     <div
       class="modal curve-modal"
@@ -4464,6 +4489,7 @@
       aria-labelledby="curve-modal-title"
       tabindex="-1"
       bind:this={curveModalDialog}
+      transition:modalMotion
     >
       <div class="modal-content">
         <h2 id="curve-modal-title">Distribution Comparison Curves</h2>
