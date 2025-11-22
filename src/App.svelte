@@ -6183,7 +6183,7 @@
     }
 
     .map {
-      height: clamp(260px, 48vh, 420px);
+      height: clamp(130px, 24vh, 210px);
     }
   }
 
