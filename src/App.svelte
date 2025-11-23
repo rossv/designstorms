@@ -4149,15 +4149,13 @@
                 </div>
               </div>
               {#if $durationMode === 'custom'}
-                <div class="mode-note field-hint field-hint--danger mode-warning" role="alert">
-                  <strong>Warning:</strong> Custom durations stretch NRCS curves beyond NOAA's validated 6-, 12-, and 24-hour patterns. Expect smoother peaks than real short storms and muted multi-day variability—verify with local IDF/Huff data or your own hyetograph before relying on results, and review Help → Atlas 14 Distribution Limits for guidance.
-                </div>
+                <p class="mode-note">Set any storm duration with the stepper to match your scenario.</p>
               {:else}
                 <p class="mode-note">Quickly select 6-, 12-, or 24-hour durations using the presets below.</p>
               {/if}
               <p class="mode-note mode-note--computation">
                 {#if $computationMode === 'fast'}
-                  Fast mode downsamples the storm to {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps for quicker updates. Switch back to Precise for the full-resolution dataset.
+                  Fast (approx.) trims the timestep count for quicker updates—swap to Precise when you need every interval.
                 {:else}
                   Precise mode follows every timestep for maximum fidelity. Use Fast (approx.) if storms take too long to compute.
                 {/if}
@@ -4293,6 +4291,11 @@
       </div>
       <div class="panel storm-summary-panel">
         <h2 class="section-title">How this storm was built</h2>
+        {#if $durationMode === 'custom'}
+          <div class="mode-note field-hint field-hint--danger mode-warning" role="alert">
+            <strong>Warning:</strong> Custom durations stretch NRCS curves beyond NOAA's validated 6-, 12-, and 24-hour patterns. Expect smoother peaks than real short storms and muted multi-day variability—verify with local IDF/Huff data or your own hyetograph before relying on results, and review Help → Atlas 14 Distribution Limits for guidance.
+          </div>
+        {/if}
         {#if stormSummaryLines.length}
           <ul class="storm-summary-list">
             {#each stormSummaryLines as line (line)}
