@@ -1573,6 +1573,9 @@
 
       const plotPromises: Promise<PlotlyHTMLElement>[] = []
       const stormPlotConfig = isMobileLayout ? staticPlotConfig : plotConfig
+      const stormPlotLayoutBase: Partial<Layout> = isMobileLayout
+        ? { ...plotLayoutBase, hovermode: false }
+        : plotLayoutBase
 
       if (plotDiv1) {
         chartsAreRendering = true
@@ -1591,14 +1594,14 @@
               }
             ],
             {
-              ...plotLayoutBase,
+              ...stormPlotLayoutBase,
               title: { text: 'Hyetograph (Intensity)', font: { color: chartTheme.text } },
               xaxis: {
-                ...plotLayoutBase.xaxis,
+                ...stormPlotLayoutBase.xaxis,
                 title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
               },
               yaxis: {
-                ...plotLayoutBase.yaxis,
+                ...stormPlotLayoutBase.yaxis,
                 title: {
                   ...(plotLayoutBase.yaxis?.title ?? {}),
                   text: 'Intensity (in/hr)'
@@ -1628,14 +1631,14 @@
               }
             ],
             {
-              ...plotLayoutBase,
+              ...stormPlotLayoutBase,
               title: { text: 'Incremental Volume', font: { color: chartTheme.text } },
               xaxis: {
-                ...plotLayoutBase.xaxis,
+                ...stormPlotLayoutBase.xaxis,
                 title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
               },
               yaxis: {
-                ...plotLayoutBase.yaxis,
+                ...stormPlotLayoutBase.yaxis,
                 title: { ...(plotLayoutBase.yaxis?.title ?? {}), text: 'Volume (in)' }
               }
             },
@@ -1662,14 +1665,14 @@
               }
             ],
             {
-              ...plotLayoutBase,
+              ...stormPlotLayoutBase,
               title: { text: 'Cumulative Mass Curve', font: { color: chartTheme.text } },
               xaxis: {
-                ...plotLayoutBase.xaxis,
+                ...stormPlotLayoutBase.xaxis,
                 title: { ...(plotLayoutBase.xaxis?.title ?? {}), text: axisTitle }
               },
               yaxis: {
-                ...plotLayoutBase.yaxis,
+                ...stormPlotLayoutBase.yaxis,
                 title: {
                   ...(plotLayoutBase.yaxis?.title ?? {}),
                   text: 'Cumulative Depth (in)'
