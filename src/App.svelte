@@ -63,6 +63,13 @@
   let comparisonCurvesAreComputing = false
   let curvePlotIsRendering = false
   let activeRenderToken = 0
+  let stormRenderInFlight = false
+  let activeStormRenderToken: number | null = null
+  let stormRenderTokenCounter = 0
+  let noaaRenderInFlight = false
+  let activeNoaaRenderToken: number | null = null
+  let noaaRenderTokenCounter = 0
+  let lastNoaaTable: NoaaTable | null = null
 
   let map: L.Map
   let marker: L.Marker
@@ -423,6 +430,14 @@
   let showCustomCurveModal = false
   let customCurveLines: string[] = []
 
+  let isLoadingNoaa = false
+  let noaaError = ''
+  let lastNoaaAttemptedAt: Date | null = null
+  let lastNoaaAttemptResult: 'success' | 'error' | null = null
+  let lastNoaaAttemptLabel = ''
+
+  let lastStorm: StormResult | null = null
+
   const MODAL_TRANSITION_DURATION = 150
   function modalMotion(node: Element) {
     const flyTransition = fly(node, { y: 12, duration: MODAL_TRANSITION_DURATION })
@@ -451,13 +466,10 @@
 
   $: isStormProcessing =
     $stormIsComputing ||
-    chartsAreRendering ||
-    tableIsRendering ||
-    isoPlotIsRendering ||
-    noaa3dPlotIsRendering ||
-    noaaIntensityPlotIsRendering ||
-    comparisonCurvesAreComputing ||
-    curvePlotIsRendering
+    stormRenderInFlight ||
+    isLoadingNoaa ||
+    noaaRenderInFlight ||
+    comparisonCurvesAreComputing
   $: if (isStormProcessing) {
     stormProcessingRainVisible = true
     if (stormProcessingRainHideTimer) {
@@ -482,14 +494,6 @@
   let showCurveModal = false
   let helpDialog: HTMLDivElement | null = null
 
-  let isLoadingNoaa = false
-  let noaaError = ''
-  let lastNoaaAttemptedAt: Date | null = null
-  let lastNoaaAttemptResult: 'success' | 'error' | null = null
-  let lastNoaaAttemptLabel = ''
-
-  let lastStorm: StormResult | null = null
-  
   let lastChangedBy: 'user' | 'duration' = 'user';
   let recentlyRecalculated: 'ari' | 'depth' | 'duration' | null = null;
   let recalculationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -931,12 +935,22 @@
 
   $: {
     const table = $tableStore
+    const tableChanged = table !== lastNoaaTable
+    if (tableChanged) {
+      lastNoaaTable = table
+      activeNoaaRenderToken = table ? ++noaaRenderTokenCounter : null
+      noaaRenderInFlight = Boolean(table)
+    }
 
     if (!table || !aris.length) {
       noaaDurationEntries = []
       noaaAriEntries = []
       noaaContourZ = []
       noaaIntensityZ = []
+      if (tableChanged) {
+        noaaRenderInFlight = false
+        activeNoaaRenderToken = null
+      }
     } else {
       const durationEntries = getSortedDurationRows(table)
       const ariEntries = aris
@@ -949,6 +963,10 @@
         noaaAriEntries = []
         noaaContourZ = []
         noaaIntensityZ = []
+        if (tableChanged) {
+          noaaRenderInFlight = false
+          activeNoaaRenderToken = null
+        }
       } else {
         const contour = ariEntries.map((ariEntry) =>
           durationEntries.map(({ row }) => {
@@ -973,6 +991,13 @@
         noaaContourZ = contour
         noaaIntensityZ = intensity
       }
+    }
+  }
+
+  function concludeNoaaRender(renderToken: number | null) {
+    if (renderToken != null && activeNoaaRenderToken === renderToken) {
+      noaaRenderInFlight = false
+      activeNoaaRenderToken = null
     }
   }
 
@@ -1465,7 +1490,19 @@
 
   $: {
     const storm = $stormResult
-    lastStorm = storm
+    const stormUpdated = storm !== lastStorm
+    if (stormUpdated) {
+      activeStormRenderToken = storm ? ++stormRenderTokenCounter : null
+      stormRenderInFlight = Boolean(storm)
+      lastStorm = storm
+    }
+    const stormRenderToken = activeStormRenderToken
+    const settleStormRender = () => {
+      if (!stormUpdated || stormRenderToken == null) return
+      if (activeStormRenderToken !== stormRenderToken) return
+      if (chartsAreRendering || tableIsRendering) return
+      stormRenderInFlight = false
+    }
     plot1Ready = false
     plot2Ready = false
     plot3Ready = false
@@ -1487,6 +1524,7 @@
       if (plotDiv1) Plotly.purge(plotDiv1)
       if (plotDiv2) Plotly.purge(plotDiv2)
       if (plotDiv3) Plotly.purge(plotDiv3)
+      settleStormRender()
     } else {
       totalDepth = storm.cumulativeIn[storm.cumulativeIn.length - 1] ?? 0
       peakIntensity = storm.intensityInHr.length
@@ -1543,6 +1581,7 @@
       void tick().then(() => {
         if (currentRenderToken === activeRenderToken) {
           tableIsRendering = false
+          settleStormRender()
         }
       })
 
@@ -1665,10 +1704,12 @@
           .finally(() => {
             if (currentRenderToken === activeRenderToken) {
               chartsAreRendering = false
+              settleStormRender()
             }
           })
       } else if (currentRenderToken === activeRenderToken) {
         chartsAreRendering = false
+        settleStormRender()
       }
     }
 
@@ -1677,6 +1718,8 @@
     drawNoaaIntensityPlot()
   }
   function drawIsoPlot() {
+    const renderToken = activeNoaaRenderToken
+    const trackNoaaRender = renderToken != null && activeNoaaVisual === 'isoLines'
     isoPlotReady = false
     if (activeNoaaVisual !== 'isoLines') {
       isoPlotIsRendering = false
@@ -1684,10 +1727,16 @@
         detachIsoPlotClickHandler()
         Plotly.purge(isoPlotDiv)
       }
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
     if (!isoPlotDiv) {
       isoPlotIsRendering = false
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -1697,6 +1746,9 @@
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -1705,6 +1757,9 @@
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -1713,6 +1768,9 @@
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -1730,6 +1788,9 @@
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -1740,6 +1801,9 @@
       isoPlotIsRendering = false
       Plotly.purge(isoPlotDiv)
       detachIsoPlotClickHandler()
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -1994,10 +2058,15 @@
       })
       .finally(() => {
         isoPlotIsRendering = false
+        if (trackNoaaRender) {
+          concludeNoaaRender(renderToken)
+        }
       })
   }
 
   function drawNoaa3dPlot() {
+    const renderToken = activeNoaaRenderToken
+    const trackNoaaRender = renderToken != null && activeNoaaVisual === 'rdi3d'
     noaa3dPlotReady = false
     if (activeNoaaVisual !== 'rdi3d') {
       noaa3dPlotIsRendering = false
@@ -2005,11 +2074,17 @@
         detachNoaa3dPlotClickHandler()
         Plotly.purge(noaa3dPlotDiv)
       }
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
     if (!noaa3dPlotDiv) {
       noaa3dPlotIsRendering = false
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -2025,6 +2100,9 @@
       noaa3dPlotIsRendering = false
       detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -2036,6 +2114,9 @@
       noaa3dPlotIsRendering = false
       detachNoaa3dPlotClickHandler()
       Plotly.purge(noaa3dPlotDiv)
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -2243,10 +2324,15 @@
       })
       .finally(() => {
         noaa3dPlotIsRendering = false
+        if (trackNoaaRender) {
+          concludeNoaaRender(renderToken)
+        }
       })
   }
 
   function drawNoaaIntensityPlot() {
+    const renderToken = activeNoaaRenderToken
+    const trackNoaaRender = renderToken != null && activeNoaaVisual === 'intensity'
     noaaIntensityPlotReady = false
     if (activeNoaaVisual !== 'intensity') {
       noaaIntensityPlotIsRendering = false
@@ -2254,11 +2340,17 @@
         detachNoaaIntensityPlotClickHandler()
         Plotly.purge(noaaIntensityPlotDiv)
       }
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
     if (!noaaIntensityPlotDiv) {
       noaaIntensityPlotIsRendering = false
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -2273,6 +2365,9 @@
       noaaIntensityPlotIsRendering = false
       detachNoaaIntensityPlotClickHandler()
       Plotly.purge(noaaIntensityPlotDiv)
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -2284,6 +2379,9 @@
       noaaIntensityPlotIsRendering = false
       detachNoaaIntensityPlotClickHandler()
       Plotly.purge(noaaIntensityPlotDiv)
+      if (trackNoaaRender) {
+        concludeNoaaRender(renderToken)
+      }
       return
     }
 
@@ -2522,6 +2620,9 @@
       })
       .finally(() => {
         noaaIntensityPlotIsRendering = false
+        if (trackNoaaRender) {
+          concludeNoaaRender(renderToken)
+        }
       })
   }
 
