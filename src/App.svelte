@@ -496,6 +496,31 @@
 
 
   const plotConfig: Partial<Config> = { responsive: true, displaylogo: false, displayModeBar: false }
+  const staticPlotConfig: Partial<Config> = { ...plotConfig, staticPlot: true }
+
+  const MOBILE_LAYOUT_QUERY = '(max-width: 720px)'
+  let isMobileLayout = false
+  let mobileLayoutMedia: MediaQueryList | null = null
+  let mobileLayoutChangeHandler: ((event: MediaQueryListEvent) => void) | null = null
+
+  function initializeLayoutWatcher() {
+    if (typeof window === 'undefined') return
+
+    mobileLayoutMedia = window.matchMedia(MOBILE_LAYOUT_QUERY)
+    isMobileLayout = mobileLayoutMedia.matches
+    mobileLayoutChangeHandler = (event: MediaQueryListEvent) => {
+      isMobileLayout = event.matches
+    }
+    addMediaQueryListener(mobileLayoutMedia, mobileLayoutChangeHandler)
+  }
+
+  function teardownLayoutWatcher() {
+    if (mobileLayoutMedia && mobileLayoutChangeHandler) {
+      removeMediaQueryListener(mobileLayoutMedia, mobileLayoutChangeHandler)
+    }
+    mobileLayoutMedia = null
+    mobileLayoutChangeHandler = null
+  }
 
   function downloadPlot(div: HTMLDivElement | null, filename: string) {
     if (!div) return
@@ -1547,6 +1572,7 @@
       })
 
       const plotPromises: Promise<PlotlyHTMLElement>[] = []
+      const stormPlotConfig = isMobileLayout ? staticPlotConfig : plotConfig
 
       if (plotDiv1) {
         chartsAreRendering = true
@@ -1579,7 +1605,7 @@
                 }
               }
             },
-            plotConfig
+            stormPlotConfig
           )
         )
         plot1Ready = true
@@ -1613,7 +1639,7 @@
                 title: { ...(plotLayoutBase.yaxis?.title ?? {}), text: 'Volume (in)' }
               }
             },
-            plotConfig
+            stormPlotConfig
           )
         )
         plot2Ready = true
@@ -1650,7 +1676,7 @@
                 }
               }
             },
-            plotConfig
+            stormPlotConfig
           )
         )
         plot3Ready = true
@@ -3441,6 +3467,7 @@
 
   onMount(() => {
     initializeTheme()
+    initializeLayoutWatcher()
 
     map = L.map(mapDiv, { attributionControl: false, zoomControl: true })
     setMapViewToContinentalUs()
@@ -3488,6 +3515,7 @@
 
   onDestroy(() => {
     teardownTheme()
+    teardownLayoutWatcher()
     if (fetchTimer) clearTimeout(fetchTimer)
     if (map) map.remove()
     if (plotDiv1) Plotly.purge(plotDiv1)
