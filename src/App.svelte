@@ -207,7 +207,7 @@
   let searchFeedback = ''
   let searchHasError = false
 
-  let autoFetch = true
+  let autoFetch = false
   let fetchTimer: ReturnType<typeof setTimeout> | null = null
   let lastFetchKey = ''
 
@@ -3697,17 +3697,18 @@
                 <span class="options-row__helper">Keep NOAA data in sync after adjusting the marker.</span>
               </span>
             </label>
+            {#if isLoadingNoaa}
+              <div class="options-row__activity" role="status" aria-live="polite">
+                <span class="noaa-refresh-button__spinner" aria-hidden="true"></span>
+                <span class="sr-only">Refreshing NOAA data…</span>
+              </div>
+            {/if}
             <button
               class="primary noaa-refresh-button"
               on:click={() => void loadNoaa()}
               disabled={isLoadingNoaa}
             >
-              {#if isLoadingNoaa}
-                <span class="noaa-refresh-button__spinner" aria-hidden="true"></span>
-                <span class="noaa-refresh-button__text">Refreshing…</span>
-              {:else}
-                <span class="noaa-refresh-button__text">Refresh NOAA Data</span>
-              {/if}
+              <span class="noaa-refresh-button__text">Refresh NOAA Data</span>
             </button>
           </div>
         </div>
@@ -4986,6 +4987,13 @@
   .options-row__checkbox {
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .options-row__activity {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
   }
 
   .options-row__checkbox-text {
