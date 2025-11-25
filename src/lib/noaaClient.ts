@@ -71,6 +71,7 @@ export async function fetchNoaaTable(lat: number, lon: number): Promise<string> 
   try {
     txt = await fetchWithBackoff(fetchUrl, proxyLabel, retries, baseDelayMs)
   } catch (proxyError) {
+    // Docs: issue_report.md notes that we retry the proxy before falling back to the direct NOAA endpoint.
     proxyErrorMessage = formatError(proxyError)
     console.warn(
       `${proxyLabel} failed after retries. Falling back to direct NOAA URL. Reason: ${proxyErrorMessage}`
