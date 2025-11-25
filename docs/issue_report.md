@@ -34,8 +34,8 @@ scale as expected.
 
 ## Known Limitations
 
-- Atlas 14 requests depend on the public AllOrigins proxy when deployed statically. If the proxy is down
-  there is currently no automatic fallback.
+- Atlas 14 requests first retry the public AllOrigins proxy; if the proxy remains unavailable, fetches fall
+  back to the direct NOAA endpoint (which can still fail if NOAA rate-limits or blocks the request).
 - Temporal distributions are not circularly shifted. Rotating a curve must be done manually before
   importing a custom CSV.
 - The project does not yet include automated regression tests for cumulative depth scaling—additions are
