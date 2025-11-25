@@ -427,14 +427,6 @@ export function generateStorm(params: StormParams): StormResult {
   } = params
   const durationMin = durationHr * 60
 
-  let finalDistribution = distribution
-  if (distribution.startsWith('scs_')) {
-    finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
-  }
-
-  const scsTable = (SCS_TABLES as Record<string, number[]>)[finalDistribution]
-  const hasScsTable = Array.isArray(scsTable) && scsTable.length > 0
-  const canLockToTable = durationMode === 'standard' && hasScsTable
   if (durationMin <= 0) {
     return {
       timeMin: [0],
@@ -445,6 +437,15 @@ export function generateStorm(params: StormParams): StormResult {
       timestepLocked: false
     }
   }
+
+  let finalDistribution = distribution
+  if (distribution.startsWith('scs_')) {
+    finalDistribution = getBestScsDistribution(distribution, durationHr, durationMode || 'custom')
+  }
+
+  const scsTable = (SCS_TABLES as Record<string, number[]>)[finalDistribution]
+  const hasScsTable = Array.isArray(scsTable) && scsTable.length > 0
+  const canLockToTable = durationMode === 'standard' && hasScsTable
 
   if (timestepMin <= 0 && !hasScsTable) {
     return {
@@ -507,7 +508,12 @@ export function generateStorm(params: StormParams): StormResult {
   const effectiveTimestepMin =
     timeMin.length > 1 ? Math.max(0, timeMin[1] - timeMin[0]) : durationMin
 
-  const normalizedTimes = timeMin.map((t) => clamp01(t / durationMin))
+  const MIN_NORMALIZATION_DURATION = 1e-9
+  const denominator = durationMin > MIN_NORMALIZATION_DURATION ? durationMin : undefined
+  const normalizedTimes =
+    denominator && denominator > 0
+      ? timeMin.map((t) => clamp01(t / denominator))
+      : timeMin.map((_, idx) => (sampleCount > 1 ? idx / (sampleCount - 1) : 0))
   const baseSamples = cumulativeFromDistribution(
     finalDistribution,
     sampleCount,
