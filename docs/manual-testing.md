@@ -10,7 +10,8 @@ This confirms the regression where the plots previously failed to refresh when t
 ## Distribution comparison modal lists normalized curves
 1. Load the app and choose each SCS and Huff preset.
 2. Click **Compare Distributions**.
-3. Confirm the modal plots cumulative rain fraction curves for the selected group and that switching the duration buttons (6-, 12-, 24-hr) updates both the plot and the table values beneath it.
+3. Confirm the modal plots cumulative rain fraction curves for the selected group and that switching the duration buttons
+   (6-, 12-, 24-hr) updates both the plot and the table values beneath it.
 
 ## Custom curve import resamples to match duration
 1. Click **Add Custom Curve** and paste a short normalized CSV (e.g., `0,0`, `0.5,0.3`, `1,1`).
