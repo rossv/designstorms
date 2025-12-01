@@ -5990,6 +5990,7 @@
     margin-top: 6px;
     font-size: 20px;
     font-weight: 600;
+    white-space: nowrap;
   }
 
   @media (max-width: 720px) {
