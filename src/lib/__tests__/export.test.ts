@@ -13,7 +13,7 @@ describe('formatPcswmmDat', () => {
       timestepLocked: false,
     }
 
-    const txt = formatPcswmmDat(storm, 5, 'Gauge', '2024-01-01T00:00:00-05:00')
+    const txt = formatPcswmmDat(storm, 'Gauge', '2024-01-01T00:00:00-05:00')
     const lines = txt.trim().split('\n')
     const dataLine = lines[3]
     const [, year, month, day, hour, minute] = dataLine.split('\t')
@@ -30,7 +30,7 @@ describe('formatPcswmmDat', () => {
       timestepLocked: false,
     }
 
-    const txt = formatPcswmmDat(storm, 15, 'Gauge', '2024-01-01T00:00:00Z')
+    const txt = formatPcswmmDat(storm, 'Gauge', '2024-01-01T00:00:00Z')
     const lines = txt.trim().split('\n').slice(2)
     const lastLine = lines[lines.length - 1]
     const [, year, month, day, hour, minute] = lastLine.split('\t')
@@ -47,7 +47,7 @@ describe('formatPcswmmDat', () => {
       timestepLocked: false,
     }
 
-    const txt = formatPcswmmDat(storm, 7, 'Gauge', '2024-01-01T00:00:00Z')
+    const txt = formatPcswmmDat(storm, 'Gauge', '2024-01-01T00:00:00Z')
     const lines = txt.trim().split('\n').slice(2)
     const lastLine = lines[lines.length - 1]
     const [, year, month, day, hour, minute] = lastLine.split('\t')
@@ -71,7 +71,7 @@ describe('formatPcswmmDat', () => {
     getUTCFullYearSpy.mockClear()
 
     try {
-      const txt = formatPcswmmDat(storm, 30, 'Gauge', '2024-01-01T00:00:00z')
+      const txt = formatPcswmmDat(storm, 'Gauge', '2024-01-01T00:00:00z')
       const lines = txt.trim().split('\n')
       const dataLine = lines[3]
       const [, year, month, day, hour, minute] = dataLine.split('\t')

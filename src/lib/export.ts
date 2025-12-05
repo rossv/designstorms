@@ -63,7 +63,6 @@ function parseTimezoneOffsetMinutes(value: string): number | null {
 
 export function formatPcswmmDat(
   storm: StormResult,
-  timestepMin: number,
   gauge = 'System',
   startISO = '2003-01-01T00:00'
 ): string {
@@ -108,12 +107,11 @@ export function formatPcswmmDat(
 
 export function savePcswmmDat(
   storm: StormResult,
-  timestepMin: number,
   filename = 'design_storm.dat',
   gauge = 'System',
   startISO = '2003-01-01T00:00'
 ) {
-  const txt = formatPcswmmDat(storm, timestepMin, gauge, startISO)
+  const txt = formatPcswmmDat(storm, gauge, startISO)
   downloadText(txt, filename)
 }
 
