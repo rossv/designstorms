@@ -3095,7 +3095,7 @@
       startDate && !Number.isNaN(startDate.getTime())
         ? $startISO
         : "2003-01-01T00:00";
-    savePcswmmDat(lastStorm, $timestepMin, "design_storm.dat", "System", start);
+    savePcswmmDat(lastStorm, "design_storm.dat", "System", start);
   }
 
   async function openCustomCurveModal() {
