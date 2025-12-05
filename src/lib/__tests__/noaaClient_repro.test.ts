@@ -64,4 +64,20 @@ Duration Header: ARI (years) 1 2 5
         expect(row?.values['2']).toBe(0.437)
         expect(row?.values['5']).toBe(0.540)
     })
+
+    it('keeps ARI alignment when middle values are missing', () => {
+        const sample = `
+Station: Example
+Duration Header: ARI (years) 1 2 5
+5-min: 0.374,,0.540
+`
+
+        const result = parseNoaaTable(sample)
+        expect(result).not.toBeNull()
+        const row = result?.rows.find(r => r.label === '5-min')
+
+        expect(row?.values['1']).toBe(0.374)
+        expect(row?.values['2']).toBeNaN()
+        expect(row?.values['5']).toBe(0.540)
+    })
 })
