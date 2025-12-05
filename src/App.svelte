@@ -395,7 +395,7 @@
     }
     if ((hours ?? 0) >= 1) {
       const fractionDigits = hours && hours < 10 ? 2 : 1;
-      return `${hours.toLocaleString(undefined, { maximumFractionDigits: fractionDigits })} hr`;
+      return `${hours!.toLocaleString(undefined, { maximumFractionDigits: fractionDigits })} hr`;
     }
     const minutes = (hours ?? 0) * 60;
     const fractionDigits = minutes < 10 ? 1 : 0;
@@ -506,7 +506,7 @@
 
   function downloadPlot(div: HTMLDivElement | null, filename: string) {
     if (!div) return;
-    void Plotly.downloadImage(div, { format: "png", filename });
+    void Plotly.downloadImage(div, { format: "png", filename } as any);
   }
 
   function downloadActiveNoaaVisual() {
@@ -2064,12 +2064,12 @@
       outlinecolor: chartTheme.isoColorbarOutline,
     };
 
-    const surfaceTrace: Data = {
+    const surfaceTrace: any = {
       type: "surface",
       x: noaaDurationEntries.map((entry) => entry.hr),
       y: noaaAriEntries.map((entry) => entry.value),
       z: noaaIntensityZ,
-      text: textMatrix,
+      text: textMatrix as any,
       colorscale: "Viridis",
       colorbar,
       cmin: minIntensity,
@@ -3692,7 +3692,6 @@
               step={0.0001}
               buttonStep={0.1}
               bind:value={$lat}
-              showProgress
               on:change={() => {
                 lastFetchKey = "";
               }}
@@ -3708,7 +3707,6 @@
               step={0.0001}
               buttonStep={0.1}
               bind:value={$lon}
-              showProgress
               on:change={() => {
                 lastFetchKey = "";
               }}
