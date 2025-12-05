@@ -53,11 +53,11 @@ export function parseNoaaTable(txt: string): NoaaTable | null {
     const label = match[1].trim().replace(/:+$/, '');
     if (!DURATION_RE.test(label)) continue;
 
-    const parts = match[2].split(',').map(p => p.trim()).filter(p => p !== '');
+    const parts = match[2].split(',').map((p) => p.trim());
     const values: Record<string, number> = {};
 
     // We expect the number of comma-separated values to match the number of ARIs.
-    // If there are trailing empty fields, we ignore them.
+    // Missing or empty entries are treated as NaN without shifting columns.
     for (let i = 0; i < aris.length; i += 1) {
       const raw = parts[i];
       const val = raw ? Number(raw) : Number.NaN;
