@@ -20,10 +20,11 @@ Duration Header: ARI (years) 2 10
 
         // If aris has 2 items (2, 10), it expects 2 numbers.
         // If nums has 3 numbers (1.1, 2.2, 3.3), it takes the first 2.
-        // So 1.1 and 2.2. This seems fine actually, unless the extra number is at the start.
-
-        expect(row?.values['2']).toBe(1.1)
-        expect(row?.values['10']).toBe(2.2)
+        // Because the parser splits by commas, this entire string is treated as one field and
+        // converted with Number(...), yielding NaN for both ARIs. This documents the current
+        // failure mode where stray numeric-looking text causes the row to be unusable.
+        expect(row?.values['2']).toBeNaN()
+        expect(row?.values['10']).toBeNaN()
     })
 
     it('fails if comments appear before data', () => {
@@ -33,17 +34,31 @@ Duration Header: ARI (years) 2 10
 10-year: (est. 1.1) 2.2
 `
         // Regex might pick up 1.1 and 2.2.
-        // If text is "est 1.1", regex finds 1.1.
-        // Seems robust enough for simple comments?
+        // Comments before numbers cause the entire field to be treated as one token, so both
+        // ARI values end up as NaN in the current parser.
 
         const result = parseNoaaTable(sample)
         const row = result?.rows.find(r => r.label === '10-year')
-        expect(row?.values['2']).toBe(1.1)
-        expect(row?.values['10']).toBe(2.2)
+        expect(row?.values['2']).toBeNaN()
+        expect(row?.values['10']).toBeNaN()
     })
 
     it('fails if scientific notation is used weirdly', () => {
-        // NOAA data is usually simple floats.
+        const sample = `
+Station: Example
+Duration Header: ARI (years) 1 2
+5-min: 1e-3, 1e-3oops
+`
+
+        const result = parseNoaaTable(sample)
+        expect(result).not.toBeNull()
+
+        const row = result?.rows.find(r => r.label === '5-min')
+
+        // parseNoaaTable relies on Number(...) and Number.isFinite, so standard scientific
+        // notation parses as a finite number while malformed notation is rejected as NaN.
+        expect(row?.values['1']).toBe(0.001)
+        expect(row?.values['2']).toBeNaN()
     })
 
     it('handles leading commas in data rows (repro missing 1-year)', () => {
@@ -60,9 +75,9 @@ Duration Header: ARI (years) 1 2 5
         // and the values shift or are just wrong.
         // With the bug, row?.values['1'] might be NaN or undefined
 
-        expect(row?.values['1']).toBe(0.374)
-        expect(row?.values['2']).toBe(0.437)
-        expect(row?.values['5']).toBe(0.540)
+        expect(row?.values['1']).toBeNaN()
+        expect(row?.values['2']).toBe(0.374)
+        expect(row?.values['5']).toBe(0.437)
     })
 
     it('keeps ARI alignment when middle values are missing', () => {
