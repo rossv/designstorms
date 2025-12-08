@@ -15,5 +15,6 @@ This confirms the regression where the plots previously failed to refresh when t
 ## Custom curve import resamples to match duration
 1. Click **Add Custom Curve** and paste a short normalized CSV (e.g., `0,0`, `0.5,0.3`, `1,1`).
 2. Save the curve and switch between Standard and Custom duration modes.
-3. Verify that the preview reflects the uploaded CSV and that the hyetograph updates when the duration changes, confirming the curve is being normalized and resampled.
+3. Verify that the preview reflects the uploaded CSV and that the hyetograph updates when the duration changes, confirming the
+   curve is being normalized and resampled.
 
