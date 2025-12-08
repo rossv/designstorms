@@ -16,6 +16,22 @@ Duration Header: ARI (years) 2 10 25
     expect(result).not.toBeNull()
     expect(result?.rows.map((row) => row.label)).toContain('10-year')
   })
+
+  it('ignores a leading empty value so ARIs stay aligned', () => {
+    const sample = `
+Station: Example
+Duration Header: ARI (years) 1 2 5
+5-min:, 0.374,0.437,0.540
+`
+
+    const result = parseNoaaTable(sample)
+    expect(result).not.toBeNull()
+    const row = result?.rows.find((r) => r.label === '5-min')
+
+    expect(row?.values['1']).toBe(0.374)
+    expect(row?.values['2']).toBe(0.437)
+    expect(row?.values['5']).toBe(0.540)
+  })
 })
 
 describe('duration label conversions', () => {

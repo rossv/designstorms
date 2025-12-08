@@ -53,7 +53,23 @@ export function parseNoaaTable(txt: string): NoaaTable | null {
     const label = match[1].trim().replace(/:+$/, '');
     if (!DURATION_RE.test(label)) continue;
 
-    const parts = match[2].split(',').map((p) => p.trim());
+    const rawValues = match[2];
+    const usesComma = rawValues.includes(',');
+
+    let parts = rawValues.split(',').map((p) => p.trim());
+
+    if (usesComma) {
+      // Some rows include a leading comma (e.g., "5-min:, 0.374,0.437,0.540"),
+      // which would otherwise shift the ARI alignment and produce NaN for the
+      // first value. Drop the leading empty entry so the numeric depths align.
+      if (parts.length > aris.length && parts[0] === '') {
+        parts = parts.slice(1);
+      }
+    } else {
+      // When values are space-separated (or mixed with comments), extract the
+      // numeric tokens directly without letting extra text shift the columns.
+      parts = rawValues.match(/-?\d+(?:\.\d+)?/g) ?? [];
+    }
     const values: Record<string, number> = {};
 
     // We expect the number of comma-separated values to match the number of ARIs.
