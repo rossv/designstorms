@@ -44,9 +44,9 @@ npm install
 npm run dev
 ```
 
-By default Vite serves the app at http://localhost:5173. The dev server automatically proxies
-requests from `/noaa-api/fe_text_mean.csv` to NOAA's Atlas 14 service, so live precipitation
-tables are available without additional setup.
+By default Vite serves the app at http://localhost:5179 with a strict port. The dev server
+automatically proxies requests from `/noaa-api/fe_text_mean.csv` to NOAA's Atlas 14 service,
+so live precipitation tables are available without additional setup.
 
 ### Run Tests and Type Checks
 
