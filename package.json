@@ -1,6 +1,7 @@
 {
   "name": "design-storm-web",
   "version": "0.1.0",
+  "author": "Ross Volkwein",
   "private": true,
   "type": "module",
   "scripts": {

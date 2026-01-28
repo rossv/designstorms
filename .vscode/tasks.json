@@ -3,9 +3,14 @@
     "tasks": [
         {
             "label": "npm: dev",
-            "type": "npm",
-            "script": "dev",
+            "type": "shell",
+            "command": "C:\\GitRepos\\node-v24.12.0-win-x64\\npm.cmd run dev",
             "isBackground": true,
+            "options": {
+                "env": {
+                    "PATH": "C:\\GitRepos\\node-v24.12.0-win-x64;${env:PATH}"
+                }
+            },
             "problemMatcher": {
                 "owner": "custom",
                 "pattern": {
@@ -13,12 +18,13 @@
                 },
                 "background": {
                     "activeOnStart": true,
-                    "beginsPattern": "VITE v",
-                    "endsPattern": "Local:"
+                    "beginsPattern": ".*VITE.*",
+                    "endsPattern": ".*Local:.*"
                 }
             },
             "presentation": {
-                "reveal": "never"
+                "reveal": "always",
+                "panel": "dedicated"
             },
             "group": {
                 "kind": "build",

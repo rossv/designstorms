@@ -26,6 +26,7 @@
     type StormParams,
     type DistributionName,
   } from "./lib/stormEngine";
+  import HelpModal from "./lib/components/HelpModal.svelte";
   import {
     toHours,
     getSortedDurationRows,
@@ -83,6 +84,18 @@
 
   let map: L.Map;
   let marker: L.Marker;
+  let tileLayer: L.TileLayer | null = null;
+
+  const TILE_LAYERS = {
+    light: {
+      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      attribution: "© OpenStreetMap contributors",
+    },
+    dark: {
+      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      attribution: "© OpenStreetMap contributors, © CARTO",
+    },
+  } as const;
 
   const CONTINENTAL_US_CENTER = { lat: 39.8283, lon: -98.5795 };
   const CONTINENTAL_US_ZOOM = 4;
@@ -487,7 +500,6 @@
     : [];
   let showHelp = false;
   let showCurveModal = false;
-  let helpDialog: HTMLDivElement | null = null;
 
   let isLoadingNoaa = false;
   let noaaError = "";
@@ -3098,6 +3110,43 @@
     savePcswmmDat(lastStorm, "design_storm.dat", "System", start);
   }
 
+  async function copyToClipboard() {
+    if (!tableRows.length) return;
+
+    // Build header
+    const headers = [
+      timeColumnLabel,
+      "Intensity (in/hr)",
+      "Incremental (in)",
+      "Cumulative (in)",
+    ];
+    if (hasTimestamp) {
+      headers.push("Datetime");
+    }
+
+    // Build rows as tab-separated values for easy pasting into Excel
+    const rows = tableRows.map((row) => {
+      const values = [
+        row.time.toFixed(2),
+        row.intensity.toFixed(5),
+        row.incremental.toFixed(5),
+        row.cumulative.toFixed(5),
+      ];
+      if (hasTimestamp && row.timestamp) {
+        values.push(row.timestamp);
+      }
+      return values.join("\t");
+    });
+
+    const text = [headers.join("\t"), ...rows].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+    }
+  }
+
   async function openCustomCurveModal() {
     customCurveDraft = $customCurveCsv;
     showCustomCurveModal = true;
@@ -3459,9 +3508,10 @@
 
     map = L.map(mapDiv, { attributionControl: false, zoomControl: true });
     setMapViewToContinentalUs();
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    const tileConfig = TILE_LAYERS[theme];
+    tileLayer = L.tileLayer(tileConfig.url, {
       maxZoom: 18,
-      attribution: "© OpenStreetMap contributors",
+      attribution: tileConfig.attribution,
     }).addTo(map);
 
     marker = L.marker([$lat, $lon], { draggable: true }).addTo(map);
@@ -3551,6 +3601,16 @@
 
   $: if (marker) {
     marker.setLatLng([$lat, $lon]);
+  }
+
+  // Swap tile layer when theme changes
+  $: if (map && tileLayer) {
+    const tileConfig = TILE_LAYERS[theme];
+    map.removeLayer(tileLayer);
+    tileLayer = L.tileLayer(tileConfig.url, {
+      maxZoom: 18,
+      attribution: tileConfig.attribution,
+    }).addTo(map);
   }
 
   $: if (autoFetch) {
@@ -3644,6 +3704,14 @@
         <span class="theme-toggle__label"
           >{theme === "light" ? "Light" : "Dark"}</span
         >
+      </button>
+      <button
+        type="button"
+        class="theme-toggle"
+        on:click={() => (showHelp = true)}
+        aria-label="Open Help"
+      >
+        Help
       </button>
       <div class="badge">Beta</div>
     </div>
@@ -4257,8 +4325,8 @@
         <div class="actions">
           <button on:click={doCsv} disabled={!lastStorm}>Export CSV</button>
           <button on:click={doDat} disabled={!lastStorm}>Export DAT</button>
-          <button class="ghost help-button" type="button" on:click={openHelp}
-            >Help / Docs</button
+          <button on:click={copyToClipboard} disabled={!tableRows.length}
+            >Copy to Clipboard</button
           >
         </div>
 
@@ -4489,136 +4557,7 @@
   </div>
 {/if}
 
-{#if showHelp}
-  <div
-    class="modal-backdrop"
-    role="presentation"
-    tabindex="-1"
-    on:click={handleBackdropClick}
-    on:keydown={handleKeydown}
-  >
-    <div
-      class="modal"
-      transition:scale={{ start: 0.95, duration: 200 }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="help-title"
-      tabindex="-1"
-      bind:this={helpDialog}
-    >
-      <div class="modal-content">
-        <h2 id="help-title">Design Storm Generator</h2>
-        <p>
-          <strong>Purpose.</strong>
-          Build synthetic hyetographs from NOAA Atlas 14 rainfall tables paired with
-          NRCS and analytical temporal distributions. Atlas 14 lookups combine a
-          location search, draggable map marker, manual coordinate entry, and an
-          auto-refresh toggle so the latest Partial Duration Series depths are always
-          in view.
-        </p>
-        <h3>Quick Start</h3>
-        <ol>
-          <li>
-            Search for a place or drag the marker. Enable <em
-              >Auto refresh when location changes</em
-            >
-            to fetch a new table automatically, or click
-            <em>Refresh NOAA Data</em> to pull depths on demand.
-          </li>
-          <li>
-            Review the Atlas 14 table and the companion iso-line chart, then
-            click a table cell to apply its duration, Average Recurrence
-            Interval, and depth to the storm parameters.
-          </li>
-          <li>
-            Pick a distribution, toggle between <em>Standard</em> and
-            <em>Custom</em>
-            duration entry, and choose a computation mode.
-            <em>Compare Distributions</em>
-            opens normalized cumulative curves across 6-, 12-, and 24-hour presets,
-            while <em>Add Custom Curve</em> imports a CSV cumulative fraction table.
-          </li>
-          <li>
-            Adjust timestep and optional start time if you need timestamped
-            outputs. Charts and the storm table refresh automatically—export CSV
-            (timestamp, incremental, cumulative, intensity columns) or DAT
-            (intensities only, in/hr) when ready.
-          </li>
-        </ol>
-        <h3>Atlas 14 Distribution Limits</h3>
-        <div class="help-warning field-hint field-hint--danger" role="alert">
-          <strong
-            >Stay within NOAA's published 6-, 12-, and 24-hour tables.</strong
-          >
-          <ul>
-            <li>
-              Temporal ratios were validated only for those durations—using them
-              elsewhere assumes storm behavior that was never analyzed.
-            </li>
-            <li>
-              Sub-6-hour convective storms have sharper peaks; slicing a 6-hour
-              pattern smooths intensities unrealistically and understates
-              cloudburst rainfall rates.
-            </li>
-            <li>
-              Multi-day events rarely follow a single 24-hour shape; stretching
-              the curve can mask multiple peaks and skew runoff totals.
-            </li>
-          </ul>
-          <p>
-            Atlas 14 depths are statistical totals, not intra-storm patterns. If
-            you need other durations, pair the correct depth with a different
-            temporal pattern (Huff quartiles, SCS distributions, observed
-            hyetographs, or a vetted CSV) instead of interpolating the nested
-            ratios.
-          </p>
-          <p class="help-warning__bottom-line">
-            Document assumptions for reviews—regulators expect recognized
-            distributions and may reject homemade patterns.
-          </p>
-        </div>
-        <h3>Computation Modes</h3>
-        <p>
-          <em>Precise</em> traces every timestep for maximum fidelity.
-          <em>Fast (approx.)</em>
-          downsamples the storm to
-          {MAX_FAST_SAMPLES.toLocaleString()} evenly spaced timesteps so long events
-          stay responsive. When that cap triggers you'll see a hyetograph note with
-          the smoothed timestep so it's clear intensities are aggregated; switch
-          back to Precise if results need to be exact.
-        </p>
-        <h3>Hyetograph Display</h3>
-        <p>
-          Hyetographs are rendered as stepped intensity bars that align with the
-          computed timestep. Fast (approx.) mode may condense long storms to
-          coarser bars to stay responsive; switch back to Precise if you need
-          the requested timestep.
-        </p>
-        <h3>Interpolation</h3>
-        <p>
-          Manually editing <i>Return period</i> interpolates the <i>Depth</i>
-          along the selected duration row. Editing <i>Duration</i> or
-          <i>Total depth</i>
-          nudges the <i>Return period</i> so the trio of values stays consistent
-          with the NOAA table, and any interpolated Atlas 14 cells are highlighted.
-        </p>
-        <h3>Methods</h3>
-        <p>
-          Temporal patterns originate from NRCS dimensionless cumulative
-          rainfall tables (Types I, IA, II, III) resampled to the storm
-          duration—Type II/III include 6-, 12-, and 24-hour tables and custom
-          durations snap to the closest available curve before resampling—or
-          from parameterized Beta(α,β) distributions on [0, 1] for the remaining
-          presets. No circular shifting is applied. User CSV curves are trimmed,
-          normalized, and interpolated to match the storm duration.
-        </p>
-      </div>
-      <div class="modal-actions">
-        <button type="button" on:click={closeHelp}>Close</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<HelpModal show={showHelp} on:close={() => (showHelp = false)} />
 
 {#if showCurveModal}
   <div
@@ -6015,10 +5954,6 @@
 
   button.ghost:hover {
     background: var(--ghost-hover-bg);
-  }
-
-  .help-button {
-    margin-left: auto;
   }
 
   @media (max-width: 720px) {
